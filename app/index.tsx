@@ -12,6 +12,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
 
+const DECORATIONS = [
+  { emoji: '🎬', top: '6%',  left: '4%',   rotate: '-15deg', opacity: 0.1  },
+  { emoji: '🍿', top: '12%', right: '6%',  rotate: '10deg',  opacity: 0.09 },
+  { emoji: '⭐', top: '4%',  left: '45%',  rotate: '5deg',   opacity: 0.07 },
+  { emoji: '🎭', top: '68%', left: '2%',   rotate: '20deg',  opacity: 0.1  },
+  { emoji: '🎥', top: '72%', right: '4%',  rotate: '-12deg', opacity: 0.11 },
+  { emoji: '🌟', top: '40%', left: '48%',  rotate: '15deg',  opacity: 0.07 },
+  { emoji: '🎬', top: '82%', left: '28%',  rotate: '-8deg',  opacity: 0.08 },
+  { emoji: '🍿', top: '28%', left: '10%',  rotate: '22deg',  opacity: 0.07 },
+  { emoji: '⭐', top: '55%', right: '12%', rotate: '-5deg',  opacity: 0.08 },
+  { emoji: '🎭', top: '20%', left: '60%',  rotate: '30deg',  opacity: 0.07 },
+];
+
 export default function HomeScreen() {
   const router = useRouter();
   const { width, height } = useWindowDimensions();
@@ -47,6 +60,24 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {DECORATIONS.map((d, i) => (
+        <Text
+          key={i}
+          style={{
+            position: 'absolute',
+            fontSize: 36,
+            opacity: d.opacity,
+            top: d.top as any,
+            left: d.left as any,
+            right: d.right as any,
+            transform: [{ rotate: d.rotate }],
+          }}
+          pointerEvents="none"
+        >
+          {d.emoji}
+        </Text>
+      ))}
+
       {/* In landscape: title on the left, buttons on the right */}
       {isLandscape ? (
         <View style={styles.landscapeLayout}>
@@ -116,7 +147,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a0a0a',
+    backgroundColor: '#100a20',
     paddingHorizontal: 24,
   },
   // Portrait
@@ -131,6 +162,9 @@ const styles = StyleSheet.create({
     color: '#f5c518',
     letterSpacing: 6,
     textAlign: 'center',
+    textShadowColor: 'rgba(245,197,24,0.4)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 16,
   },
   tagline: {
     fontSize: 14,
@@ -138,6 +172,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     letterSpacing: 0.5,
     textAlign: 'center',
+    fontStyle: 'italic',
   },
   actions: {
     flex: 1.2,
@@ -172,16 +207,21 @@ const styles = StyleSheet.create({
   // Shared button styles
   button: {
     flex: 1,
-    borderRadius: 16,
+    borderRadius: 24,
     padding: 20,
     alignItems: 'center',
     gap: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 8,
   },
   buttonPrimary: {
     backgroundColor: '#f5c518',
   },
   buttonSecondary: {
-    backgroundColor: '#1e1e1e',
+    backgroundColor: '#1e1630',
     borderWidth: 1,
     borderColor: '#333',
   },
@@ -193,12 +233,14 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: '#0a0a0a',
+    letterSpacing: 0.5,
   },
   buttonTextSecondary: {
     color: '#f5c518',
   },
   buttonSub: {
     fontSize: 12,
-    color: '#555',
+    color: '#777',
+    fontStyle: 'italic',
   },
 });

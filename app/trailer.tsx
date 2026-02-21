@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   Alert,
+  Modal,
   useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -12,6 +13,17 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { TrailerPlayer, TrailerPlayerHandle } from '@/components/TrailerPlayer';
 import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
+
+const REPORT_OPTIONS = [
+  { id: 'spoiler',       label: '🎬  Title or info is revealed in the clip' },
+  { id: 'unavailable',   label: '📺  Video won\'t load or keeps buffering'  },
+  { id: 'ads',           label: '📢  An ad plays instead of the trailer'    },
+  { id: 'wrong_trailer', label: '🎭  Wrong trailer for this movie'          },
+  { id: 'no_audio',      label: '🔇  No audio or sound is too quiet'        },
+  { id: 'poor_quality',  label: '📱  Video quality is too poor to watch'    },
+  { id: 'loops',         label: '🔁  Trailer loops before the window ends'  },
+  { id: 'other',         label: '❓  Other'                                 },
+];
 
 export default function TrailerScreen() {
   const router = useRouter();
@@ -24,6 +36,7 @@ export default function TrailerScreen() {
   const [hasReplayed, setHasReplayed] = useState(false);
   const [ended, setEnded] = useState(false);
   const [userPaused, setUserPaused] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
 
   if (!currentMovie) {
     router.replace('/');
@@ -85,24 +98,16 @@ export default function TrailerScreen() {
   }
 
   function handleReport() {
-    Alert.alert(
-      'Report trailer',
-      'Does this trailer reveal the movie title, year, or director during the safe window?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Report',
-          style: 'destructive',
-          onPress: async () => {
-            await supabase.from('reports').insert({
-              movie_id: currentMovie!.id,
-              reason: 'Trailer reveals identifying information in safe window',
-            });
-            Alert.alert('Thanks', 'We will review this trailer.');
-          },
-        },
-      ]
-    );
+    setShowReportModal(true);
+  }
+
+  async function submitReport(reason: string) {
+    setShowReportModal(false);
+    await supabase.from('reports').insert({
+      movie_id: currentMovie!.id,
+      reason,
+    });
+    Alert.alert('Thanks! 🙏', 'We\'ll review this trailer soon.');
   }
 
   return (
@@ -193,6 +198,31 @@ export default function TrailerScreen() {
           </SafeAreaView>
         </View>
       )}
+
+      <Modal
+        visible={showReportModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowReportModal(false)}
+      >
+        <View style={styles.reportOverlay}>
+          <View style={styles.reportSheet}>
+            <Text style={styles.reportTitle}>What's wrong with this trailer?</Text>
+            {REPORT_OPTIONS.map((opt) => (
+              <TouchableOpacity
+                key={opt.id}
+                style={styles.reportOption}
+                onPress={() => submitReport(opt.label)}
+              >
+                <Text style={styles.reportOptionText}>{opt.label}</Text>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity style={styles.reportCancel} onPress={() => setShowReportModal(false)}>
+              <Text style={styles.reportCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -252,6 +282,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.15)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.3)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 6,
   },
   skipButtonText: {
     color: '#fff',
@@ -290,11 +325,14 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '700',
     textAlign: 'center',
+    fontStyle: 'italic',
+    letterSpacing: 0.5,
   },
   endedSubtitle: {
     color: '#aaa',
     fontSize: 16,
     textAlign: 'center',
+    fontStyle: 'italic',
   },
   endedActions: {
     flexDirection: 'row',
@@ -305,12 +343,17 @@ const styles = StyleSheet.create({
   actionButton: {
     paddingHorizontal: 32,
     paddingVertical: 16,
-    borderRadius: 12,
+    borderRadius: 22,
   },
   replayButton: {
     backgroundColor: 'rgba(255,255,255,0.1)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 6,
   },
   replayButtonText: {
     color: '#fff',
@@ -319,10 +362,57 @@ const styles = StyleSheet.create({
   },
   nextButton: {
     backgroundColor: '#f5c518',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 6,
   },
   nextButtonText: {
     color: '#0a0a0a',
     fontSize: 16,
     fontWeight: '700',
+  },
+  reportOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  reportSheet: {
+    backgroundColor: '#1a1a2e',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 20,
+    paddingBottom: 40,
+    paddingHorizontal: 16,
+  },
+  reportTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 16,
+    letterSpacing: 0.3,
+  },
+  reportOption: {
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+  },
+  reportOptionText: {
+    color: '#e0e0e0',
+    fontSize: 15,
+    letterSpacing: 0.2,
+  },
+  reportCancel: {
+    marginTop: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  reportCancelText: {
+    color: '#888',
+    fontSize: 15,
+    fontWeight: '600',
   },
 });
