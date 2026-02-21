@@ -4,9 +4,9 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Modal,
   useWindowDimensions,
 } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppStore } from '@/store/useAppStore';
@@ -17,13 +17,7 @@ export default function HomeScreen() {
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
 
-  const {
-    hasSeenLandscapeModal,
-    setHasSeenLandscapeModal,
-    setActiveMovies,
-    setCurrentMovie,
-    activeMovies,
-  } = useAppStore();
+  const { setActiveMovies, setCurrentMovie, activeMovies } = useAppStore();
 
   useEffect(() => {
     fetchActiveMovies();
@@ -53,29 +47,6 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Modal
-        visible={!hasSeenLandscapeModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setHasSeenLandscapeModal(true)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalEmoji}>📱</Text>
-            <Text style={styles.modalTitle}>Landscape recommended</Text>
-            <Text style={styles.modalBody}>
-              For the best experience, rotate your device to landscape when viewing trailers.
-            </Text>
-            <TouchableOpacity
-              style={styles.modalButton}
-              onPress={() => setHasSeenLandscapeModal(true)}
-            >
-              <Text style={styles.modalButtonText}>Got it</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
       {/* In landscape: title on the left, buttons on the right */}
       {isLandscape ? (
         <View style={styles.landscapeLayout}>
@@ -89,7 +60,7 @@ export default function HomeScreen() {
               onPress={() => router.push('/scanner')}
               activeOpacity={0.8}
             >
-              <Text style={styles.buttonIconText}>⬛</Text>
+              <MaterialCommunityIcons name="qrcode-scan" size={28} color="#0a0a0a" />
               <Text style={styles.buttonText}>Scan Card</Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -98,7 +69,7 @@ export default function HomeScreen() {
               activeOpacity={0.8}
             >
               <Text style={styles.buttonIconText}>🎲</Text>
-              <Text style={styles.buttonText}>Pick Movie</Text>
+              <Text style={[styles.buttonText, styles.buttonTextSecondary]}>Pick Movie</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -115,7 +86,7 @@ export default function HomeScreen() {
               onPress={() => router.push('/scanner')}
               activeOpacity={0.8}
             >
-              <Text style={styles.buttonIconText}>⬛</Text>
+              <MaterialCommunityIcons name="qrcode-scan" size={28} color="#0a0a0a" />
               <Text style={styles.buttonText}>Scan Card</Text>
               <Text style={styles.buttonSub}>QR code on your physical card</Text>
             </TouchableOpacity>
@@ -126,7 +97,7 @@ export default function HomeScreen() {
               activeOpacity={0.8}
             >
               <Text style={styles.buttonIconText}>🎲</Text>
-              <Text style={styles.buttonText}>Pick Movie</Text>
+              <Text style={[styles.buttonText, styles.buttonTextSecondary]}>Pick Movie</Text>
               <Text style={styles.buttonSub}>Random from the deck</Text>
             </TouchableOpacity>
           </View>
@@ -223,52 +194,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0a0a0a',
   },
+  buttonTextSecondary: {
+    color: '#f5c518',
+  },
   buttonSub: {
     fontSize: 12,
     color: '#555',
-  },
-  // Modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 32,
-  },
-  modalCard: {
-    backgroundColor: '#1e1e1e',
-    borderRadius: 20,
-    padding: 32,
-    alignItems: 'center',
-    gap: 12,
-    maxWidth: 340,
-    width: '100%',
-  },
-  modalEmoji: {
-    fontSize: 40,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#fff',
-    textAlign: 'center',
-  },
-  modalBody: {
-    fontSize: 15,
-    color: '#aaa',
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  modalButton: {
-    marginTop: 8,
-    backgroundColor: '#f5c518',
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 40,
-  },
-  modalButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0a0a0a',
   },
 });

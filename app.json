@@ -3,7 +3,7 @@
     "name": "Cinescenes",
     "slug": "cinescenes",
     "version": "1.0.0",
-    "orientation": "default",
+    "orientation": "landscape",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,

@@ -2,10 +2,6 @@ import { create } from 'zustand';
 import { Movie } from '@/lib/database.types';
 
 interface AppState {
-  // Onboarding
-  hasSeenLandscapeModal: boolean;
-  setHasSeenLandscapeModal: (seen: boolean) => void;
-
   // Current movie (trailer screen)
   currentMovie: Movie | null;
   setCurrentMovie: (movie: Movie | null) => void;
@@ -22,9 +18,6 @@ interface AppState {
 }
 
 export const useAppStore = create<AppState>((set) => ({
-  hasSeenLandscapeModal: false,
-  setHasSeenLandscapeModal: (seen) => set({ hasSeenLandscapeModal: seen }),
-
   currentMovie: null,
   setCurrentMovie: (movie) => set({ currentMovie: movie }),
 

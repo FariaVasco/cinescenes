@@ -23,6 +23,7 @@ export default function TrailerScreen() {
   const [key, setKey] = useState(0);
   const [hasReplayed, setHasReplayed] = useState(false);
   const [ended, setEnded] = useState(false);
+  const [userPaused, setUserPaused] = useState(false);
 
   if (!currentMovie) {
     router.replace('/');
@@ -31,12 +32,31 @@ export default function TrailerScreen() {
 
   const handleEnded = useCallback(() => {
     setEnded(true);
+    setUserPaused(false);
   }, []);
+
+  function handleTapToggle() {
+    if (!userPaused) {
+      trailerRef.current?.pause();
+      // snapshot remaining time via the ref the player updated internally
+      setUserPaused(true);
+    } else {
+      setUserPaused(false);
+      trailerRef.current?.resume();
+    }
+  }
+
+  function handleSkipToGuess() {
+    trailerRef.current?.stop();
+    setUserPaused(false);
+    setEnded(true);
+  }
 
   function handleReplay() {
     if (hasReplayed) return;
     setHasReplayed(true);
     setEnded(false);
+    setUserPaused(false);
     trailerRef.current?.replay();
   }
 
@@ -61,6 +81,7 @@ export default function TrailerScreen() {
     setKey((k) => k + 1);
     setHasReplayed(false);
     setEnded(false);
+    setUserPaused(false);
   }
 
   function handleReport() {
@@ -88,40 +109,90 @@ export default function TrailerScreen() {
     <View style={styles.container}>
       <TrailerPlayer key={key} ref={trailerRef} movie={currentMovie} onEnded={handleEnded} />
 
-      <SafeAreaView
-        style={styles.controls}
-        edges={isLandscape ? ['left', 'right'] : ['bottom']}
-      >
-        {/* Top bar */}
-        <View style={styles.topBar}>
-          <TouchableOpacity style={styles.closeButton} onPress={() => router.replace('/')}>
-            <Text style={styles.closeButtonText}>✕</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.reportButton} onPress={handleReport}>
-            <Text style={styles.reportButtonText}>⚑ Report</Text>
-          </TouchableOpacity>
-        </View>
+      {/* ── Playback layer (hidden once ended) ── */}
+      {!ended && (
+        <>
+          {/*
+            Touch blocker: sits above the WebView, intercepts all taps on blank areas.
+            Rendered before SafeAreaView so buttons inside SafeAreaView still win.
+          */}
+          {!userPaused && (
+            <TouchableOpacity
+              style={StyleSheet.absoluteFillObject}
+              activeOpacity={1}
+              onPress={handleTapToggle}
+            />
+          )}
 
-        {/* Bottom actions — row in landscape, row in portrait but right-aligned */}
-        <View style={[styles.bottomBar, isLandscape && styles.bottomBarLandscape]}>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.replayButton, hasReplayed && styles.disabled]}
-            onPress={handleReplay}
-            disabled={hasReplayed}
+          {/* Controls overlay — close, report, and skip buttons */}
+          <SafeAreaView
+            style={styles.controls}
+            edges={isLandscape ? ['left', 'right'] : ['bottom']}
+            pointerEvents="box-none"
           >
-            <Text style={styles.replayButtonText}>
-              {hasReplayed ? 'Replayed' : '↺ Replay'}
-            </Text>
-          </TouchableOpacity>
+            <View style={styles.topBar}>
+              <TouchableOpacity style={styles.closeButton} onPress={() => router.replace('/')}>
+                <Text style={styles.closeButtonText}>✕</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.reportButton} onPress={handleReport}>
+                <Text style={styles.reportButtonText}>⚑ Report</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={[styles.bottomBar, isLandscape && styles.bottomBarLandscape]}>
+              <TouchableOpacity style={[styles.actionButton, styles.skipButton]} onPress={handleSkipToGuess}>
+                <Text style={styles.skipButtonText}>I know it! →</Text>
+              </TouchableOpacity>
+            </View>
+          </SafeAreaView>
 
-          <TouchableOpacity
-            style={[styles.actionButton, styles.nextButton]}
-            onPress={handleNext}
-          >
-            <Text style={styles.nextButtonText}>Next →</Text>
-          </TouchableOpacity>
+          {/*
+            Pause overlay: rendered AFTER SafeAreaView so it covers everything.
+            Tapping it resumes playback.
+          */}
+          {userPaused && (
+            <TouchableOpacity
+              style={styles.pauseOverlay}
+              activeOpacity={1}
+              onPress={handleTapToggle}
+            >
+              <Text style={styles.pauseIcon}>▶</Text>
+            </TouchableOpacity>
+          )}
+        </>
+      )}
+
+      {/* ── Ended screen ── */}
+      {ended && (
+        <View style={styles.endedOverlay}>
+          <SafeAreaView style={styles.endedInner} edges={['top', 'bottom']}>
+            <TouchableOpacity style={styles.closeButton} onPress={() => router.replace('/')}>
+              <Text style={styles.closeButtonText}>✕</Text>
+            </TouchableOpacity>
+
+            <View style={styles.endedCenter}>
+              <Text style={styles.endedTitle}>Ready to guess? 🎬</Text>
+              <Text style={styles.endedSubtitle}>What year is this movie from?</Text>
+            </View>
+
+            <View style={styles.endedActions}>
+              {!hasReplayed && (
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.replayButton]}
+                  onPress={handleReplay}
+                >
+                  <Text style={styles.replayButtonText}>↺ Replay</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={[styles.actionButton, styles.nextButton]}
+                onPress={handleNext}
+              >
+                <Text style={styles.nextButtonText}>Let's guess! →</Text>
+              </TouchableOpacity>
+            </View>
+          </SafeAreaView>
         </View>
-      </SafeAreaView>
+      )}
     </View>
   );
 }
@@ -138,7 +209,6 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     justifyContent: 'space-between',
-    pointerEvents: 'box-none',
   },
   topBar: {
     flexDirection: 'row',
@@ -172,17 +242,69 @@ const styles = StyleSheet.create({
   },
   bottomBar: {
     flexDirection: 'row',
-    gap: 12,
     padding: 20,
-    justifyContent: 'flex-end',
-    alignItems: 'center',
+    justifyContent: 'center',
   },
   bottomBarLandscape: {
     justifyContent: 'center',
   },
+  skipButton: {
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  skipButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  pauseOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pauseIcon: {
+    color: '#fff',
+    fontSize: 72,
+    opacity: 0.9,
+  },
+  endedOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#000',
+    zIndex: 20,
+  },
+  endedInner: {
+    flex: 1,
+    justifyContent: 'space-between',
+    padding: 20,
+  },
+  endedCenter: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+  },
+  endedTitle: {
+    color: '#fff',
+    fontSize: 28,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  endedSubtitle: {
+    color: '#aaa',
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  endedActions: {
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'center',
+    paddingBottom: 16,
+  },
   actionButton: {
-    paddingHorizontal: 24,
-    paddingVertical: 14,
+    paddingHorizontal: 32,
+    paddingVertical: 16,
     borderRadius: 12,
   },
   replayButton: {
@@ -202,8 +324,5 @@ const styles = StyleSheet.create({
     color: '#0a0a0a',
     fontSize: 16,
     fontWeight: '700',
-  },
-  disabled: {
-    opacity: 0.4,
   },
 });
