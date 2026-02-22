@@ -1,16 +1,20 @@
-import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Dialog, Portal, Button as PaperButton } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { supabase } from '@/lib/supabase';
 import { useAppStore } from '@/store/useAppStore';
 
+type ErrorInfo = { title: string; body: string };
+
 export default function ScannerScreen() {
   const router = useRouter();
   const { setCurrentMovie } = useAppStore();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
+  const [error, setError] = useState<ErrorInfo | null>(null);
 
   if (!permission) {
     return <View style={styles.container} />;
@@ -25,16 +29,10 @@ export default function ScannerScreen() {
           <Text style={styles.permissionBody}>
             Point your camera at the QR code on the back of a Cinescenes card.
           </Text>
-          <TouchableOpacity
-            style={styles.permissionButton}
-            onPress={requestPermission}
-          >
+          <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
             <Text style={styles.permissionButtonText}>Allow camera</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
-          >
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
             <Text style={styles.backButtonText}>Go back</Text>
           </TouchableOpacity>
         </View>
@@ -46,45 +44,48 @@ export default function ScannerScreen() {
     if (scanned) return;
     setScanned(true);
 
-    // QR codes on cards encode a movie id, either bare UUID or as a URL:
-    // cinescenes://movie/<id>  or  https://cinescenes.app/movie/<id>  or just <id>
     const movieId = extractMovieId(data);
     if (!movieId) {
-      Alert.alert('Invalid card', 'This QR code is not a valid Cinescenes card.', [
-        { text: 'Try again', onPress: () => setScanned(false) },
-        { text: 'Go back', onPress: () => router.back() },
-      ]);
+      setError({
+        title: 'Invalid card',
+        body: "This QR code isn't a valid Cinescenes card. Try holding the camera closer and making sure the code is fully in frame.",
+      });
       return;
     }
 
-    const { data: movie, error } = await supabase
+    const { data: movie, error: dbError } = await supabase
       .from('movies')
       .select('*')
       .eq('id', movieId)
       .single();
 
-    if (error || !movie) {
-      Alert.alert('Movie not found', 'Could not find this movie in the database.', [
-        { text: 'Try again', onPress: () => setScanned(false) },
-        { text: 'Go back', onPress: () => router.back() },
-      ]);
+    if (dbError || !movie) {
+      setError({
+        title: 'Movie not found',
+        body: "We couldn't find this movie in the database. It may have been removed or the card might be from an older version.",
+      });
       return;
     }
 
     if (!movie.active || !movie.youtube_id) {
-      Alert.alert(
-        'Trailer unavailable',
-        'This movie trailer is not ready yet. Please use a different card.',
-        [
-          { text: 'Try again', onPress: () => setScanned(false) },
-          { text: 'Go back', onPress: () => router.back() },
-        ]
-      );
+      setError({
+        title: 'Trailer unavailable',
+        body: "This movie's trailer isn't ready yet. Try a different card for now — we'll have it ready soon!",
+      });
       return;
     }
 
     setCurrentMovie(movie);
     router.replace('/trailer');
+  }
+
+  function dismissError(andGoBack = false) {
+    setError(null);
+    if (andGoBack) {
+      router.back();
+    } else {
+      setScanned(false);
+    }
   }
 
   return (
@@ -114,19 +115,37 @@ export default function ScannerScreen() {
           <Text style={styles.hintText}>Align QR code with the frame</Text>
         </View>
       </SafeAreaView>
+
+      {/* Error dialog */}
+      <Portal>
+        <Dialog
+          visible={!!error}
+          onDismiss={() => dismissError(false)}
+          style={styles.dialog}
+        >
+          <Dialog.Title style={styles.dialogTitle}>{error?.title}</Dialog.Title>
+          <Dialog.Content>
+            <Text style={styles.dialogBody}>{error?.body}</Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <PaperButton textColor="#888" onPress={() => dismissError(true)}>
+              Go back
+            </PaperButton>
+            <PaperButton textColor="#f5c518" onPress={() => dismissError(false)}>
+              Try again
+            </PaperButton>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </View>
   );
 }
 
 function extractMovieId(data: string): string | null {
-  // Bare UUID
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   if (uuidRegex.test(data)) return data;
-
-  // URL formats: cinescenes://movie/<id> or https://.../movie/<id>
   const urlMatch = data.match(/\/movie\/([0-9a-f-]{36})/i);
   if (urlMatch) return urlMatch[1];
-
   return null;
 }
 
@@ -237,5 +256,20 @@ const styles = StyleSheet.create({
   backButtonText: {
     fontSize: 15,
     color: '#666',
+  },
+  // Paper dialog
+  dialog: {
+    backgroundColor: '#1a1a2e',
+    borderRadius: 20,
+  },
+  dialogTitle: {
+    color: '#fff',
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  dialogBody: {
+    color: '#aaa',
+    fontSize: 14,
+    lineHeight: 21,
   },
 });

@@ -4,11 +4,10 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Alert,
-  Modal,
   ScrollView,
   useWindowDimensions,
 } from 'react-native';
+import { Dialog, Portal, Snackbar, Button as PaperButton } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { TrailerPlayer, TrailerPlayerHandle } from '@/components/TrailerPlayer';
@@ -36,7 +35,11 @@ export default function TrailerScreen() {
   const [hasReplayed, setHasReplayed] = useState(false);
   const [ended, setEnded] = useState(false);
   const [userPaused, setUserPaused] = useState(false);
-  const [showReportModal, setShowReportModal] = useState(false);
+
+  // Dialog / feedback state
+  const [showExitDialog, setShowExitDialog] = useState(false);
+  const [showReportDialog, setShowReportDialog] = useState(false);
+  const [snackMessage, setSnackMessage] = useState('');
 
   if (!currentMovie) {
     router.replace('/');
@@ -59,15 +62,15 @@ export default function TrailerScreen() {
   }
 
   function handleSkipToGuess() {
-    trailerRef.current?.stop(); // clears internal timers before unmount
+    trailerRef.current?.stop();
     setUserPaused(false);
-    setEnded(true); // unmounts TrailerPlayer → audio stops
+    setEnded(true);
   }
 
   function handleReplay() {
     if (hasReplayed) return;
     setHasReplayed(true);
-    setEnded(false); // remounts TrailerPlayer → starts fresh from safeStart
+    setEnded(false);
     setUserPaused(false);
   }
 
@@ -83,7 +86,7 @@ export default function TrailerScreen() {
     }
 
     if (pool.length === 0) {
-      Alert.alert('No more movies', 'No other active movies available.');
+      setSnackMessage('No other active movies available right now.');
       return;
     }
 
@@ -95,33 +98,18 @@ export default function TrailerScreen() {
     setUserPaused(false);
   }
 
-  function handleClose() {
-    Alert.alert(
-      'Leave game?',
-      'Your current trailer will be lost.',
-      [
-        { text: 'Stay', style: 'cancel' },
-        { text: 'Leave', style: 'destructive', onPress: () => router.replace('/') },
-      ]
-    );
-  }
-
-  function handleReport() {
-    setShowReportModal(true);
-  }
-
   async function submitReport(reason: string) {
-    setShowReportModal(false);
+    setShowReportDialog(false);
     await supabase.from('reports').insert({
       movie_id: currentMovie!.id,
       reason,
     });
-    Alert.alert('Thanks! 🙏', 'We\'ll review this trailer soon.');
+    setSnackMessage("Thanks! 🙏  We'll review this trailer soon.");
   }
 
   return (
     <View style={styles.container}>
-      {/* TrailerPlayer only rendered while playing — unmounting it stops audio */}
+      {/* TrailerPlayer only rendered while playing — unmounting stops audio */}
       {!ended && (
         <TrailerPlayer key={key} ref={trailerRef} movie={currentMovie} onEnded={handleEnded} />
       )}
@@ -138,18 +126,18 @@ export default function TrailerScreen() {
             />
           )}
 
-          {/* Controls: ✕ top-right, report + skip bottom-right */}
+          {/* Controls: ✕ top-right, Report + "I know it!" bottom-right */}
           <SafeAreaView
             style={styles.controls}
             edges={['top', 'bottom', 'right']}
             pointerEvents="box-none"
           >
-            <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
+            <TouchableOpacity style={styles.closeButton} onPress={() => setShowExitDialog(true)}>
               <Text style={styles.closeButtonText}>✕</Text>
             </TouchableOpacity>
 
             <View style={styles.cornerActions}>
-              <TouchableOpacity style={styles.reportButton} onPress={handleReport}>
+              <TouchableOpacity style={styles.reportButton} onPress={() => setShowReportDialog(true)}>
                 <Text style={styles.reportButtonText}>⚑ Report</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.skipButton} onPress={handleSkipToGuess}>
@@ -176,7 +164,7 @@ export default function TrailerScreen() {
         <View style={styles.endedOverlay}>
           <SafeAreaView style={styles.endedInner} edges={['top', 'bottom']}>
             <View style={styles.endedTopRow}>
-              <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
+              <TouchableOpacity style={styles.closeButton} onPress={() => setShowExitDialog(true)}>
                 <Text style={styles.closeButtonText}>✕</Text>
               </TouchableOpacity>
             </View>
@@ -192,7 +180,7 @@ export default function TrailerScreen() {
                   style={[styles.actionButton, styles.replayButton]}
                   onPress={handleReplay}
                 >
-                  <Text style={styles.replayButtonText}>↺ Replay</Text>
+                  <Text style={styles.replayButtonText}>↺  Replay</Text>
                 </TouchableOpacity>
               )}
               <TouchableOpacity
@@ -206,16 +194,44 @@ export default function TrailerScreen() {
         </View>
       )}
 
-      <Modal
-        visible={showReportModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowReportModal(false)}
-      >
-        <View style={styles.reportOverlay}>
-          <View style={[styles.reportSheet, { maxHeight: height * 0.6 }]}>
-            <Text style={styles.reportTitle}>What's wrong with this trailer?</Text>
-            <ScrollView bounces={false} style={styles.reportScroll}>
+      {/* ── Paper overlays (Portal renders above everything) ── */}
+      <Portal>
+
+        {/* Exit confirmation dialog */}
+        <Dialog
+          visible={showExitDialog}
+          onDismiss={() => setShowExitDialog(false)}
+          style={styles.dialog}
+        >
+          <Dialog.Title style={styles.dialogTitle}>Leave game?</Dialog.Title>
+          <Dialog.Content>
+            <Text style={styles.dialogBody}>Your current trailer will be lost.</Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <PaperButton
+              textColor="#888"
+              onPress={() => setShowExitDialog(false)}
+            >
+              Stay
+            </PaperButton>
+            <PaperButton
+              textColor="#f5c518"
+              onPress={() => { setShowExitDialog(false); router.replace('/'); }}
+            >
+              Leave
+            </PaperButton>
+          </Dialog.Actions>
+        </Dialog>
+
+        {/* Report dialog */}
+        <Dialog
+          visible={showReportDialog}
+          onDismiss={() => setShowReportDialog(false)}
+          style={styles.dialog}
+        >
+          <Dialog.Title style={styles.dialogTitle}>What's wrong?</Dialog.Title>
+          <Dialog.ScrollArea style={[styles.reportScrollArea, { maxHeight: height * 0.45 }]}>
+            <ScrollView>
               {REPORT_OPTIONS.map((opt) => (
                 <TouchableOpacity
                   key={opt.id}
@@ -226,12 +242,26 @@ export default function TrailerScreen() {
                 </TouchableOpacity>
               ))}
             </ScrollView>
-            <TouchableOpacity style={styles.reportCancel} onPress={() => setShowReportModal(false)}>
-              <Text style={styles.reportCancelText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+          </Dialog.ScrollArea>
+          <Dialog.Actions>
+            <PaperButton textColor="#888" onPress={() => setShowReportDialog(false)}>
+              Cancel
+            </PaperButton>
+          </Dialog.Actions>
+        </Dialog>
+
+      </Portal>
+
+      {/* Success / info snackbar */}
+      <Snackbar
+        visible={snackMessage.length > 0}
+        onDismiss={() => setSnackMessage('')}
+        duration={3500}
+        style={styles.snack}
+        theme={{ colors: { inverseSurface: '#1e1630', inverseOnSurface: '#fff', inversePrimary: '#f5c518' } }}
+      >
+        {snackMessage}
+      </Snackbar>
     </View>
   );
 }
@@ -387,34 +417,29 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
 
-  // ── Report modal ──
-  reportOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'flex-end',
-  },
-  reportSheet: {
+  // ── Paper dialog ──
+  dialog: {
     backgroundColor: '#1a1a2e',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingTop: 14,
-    paddingBottom: 16,
-    paddingHorizontal: 16,
+    borderRadius: 20,
   },
-  reportScroll: {
-    flexGrow: 0,
-  },
-  reportTitle: {
+  dialogTitle: {
     color: '#fff',
-    fontSize: 15,
+    fontSize: 17,
     fontWeight: '700',
-    textAlign: 'center',
-    marginBottom: 10,
-    letterSpacing: 0.3,
+  },
+  dialogBody: {
+    color: '#aaa',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  reportScrollArea: {
+    paddingHorizontal: 0,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+    borderBottomColor: 'rgba(255,255,255,0.08)',
   },
   reportOption: {
-    paddingVertical: 11,
-    paddingHorizontal: 12,
+    paddingVertical: 13,
+    paddingHorizontal: 24,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(255,255,255,0.08)',
   },
@@ -423,14 +448,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     letterSpacing: 0.1,
   },
-  reportCancel: {
-    marginTop: 8,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  reportCancelText: {
-    color: '#888',
-    fontSize: 14,
-    fontWeight: '600',
+
+  // ── Snackbar ──
+  snack: {
+    backgroundColor: '#1e1630',
+    marginBottom: 16,
   },
 });
