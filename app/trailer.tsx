@@ -4,10 +4,10 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  ScrollView,
+  Modal,
   useWindowDimensions,
 } from 'react-native';
-import { Dialog, Portal, Snackbar, Button as PaperButton } from 'react-native-paper';
+import { Snackbar } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { TrailerPlayer, TrailerPlayerHandle } from '@/components/TrailerPlayer';
@@ -199,44 +199,58 @@ export default function TrailerScreen() {
         </View>
       )}
 
-      {/* ── Paper overlays (Portal renders above everything) ── */}
-      <Portal>
-
-        {/* Exit confirmation dialog */}
-        <Dialog
-          visible={showExitDialog}
-          onDismiss={() => setShowExitDialog(false)}
-          style={styles.dialog}
+      {/* ── Exit confirmation modal ── */}
+      <Modal
+        visible={showExitDialog}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowExitDialog(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setShowExitDialog(false)}
         >
-          <Dialog.Title style={styles.dialogTitle}>Leave game?</Dialog.Title>
-          <Dialog.Content>
-            <Text style={styles.dialogBody}>Your current trailer will be lost.</Text>
-          </Dialog.Content>
-          <Dialog.Actions>
-            <PaperButton
-              textColor="#888"
-              onPress={() => setShowExitDialog(false)}
-            >
-              Stay
-            </PaperButton>
-            <PaperButton
-              textColor="#f5c518"
-              onPress={() => { setShowExitDialog(false); setFromScanner(false); router.replace('/'); }}
-            >
-              Leave
-            </PaperButton>
-          </Dialog.Actions>
-        </Dialog>
+          <TouchableOpacity activeOpacity={1} style={styles.exitSheet}>
+            <View style={styles.exitSheetLeft}>
+              <Text style={styles.exitTitle}>Leave game?</Text>
+              <Text style={styles.exitBody}>Your current trailer will be lost.</Text>
+            </View>
+            <View style={styles.exitSheetRight}>
+              <TouchableOpacity style={styles.stayBtn} onPress={() => setShowExitDialog(false)}>
+                <Text style={styles.stayBtnText}>Stay</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.leaveBtn}
+                onPress={() => { setShowExitDialog(false); setFromScanner(false); router.replace('/'); }}
+              >
+                <Text style={styles.leaveBtnText}>Leave →</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
 
-        {/* Report dialog */}
-        <Dialog
-          visible={showReportDialog}
-          onDismiss={() => setShowReportDialog(false)}
-          style={styles.dialog}
+      {/* ── Report modal ── */}
+      <Modal
+        visible={showReportDialog}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowReportDialog(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setShowReportDialog(false)}
         >
-          <Dialog.Title style={styles.dialogTitle}>What's wrong?</Dialog.Title>
-          <Dialog.ScrollArea style={[styles.reportScrollArea, { maxHeight: height * 0.45 }]}>
-            <ScrollView>
+          <TouchableOpacity activeOpacity={1} style={styles.reportSheet}>
+            <View style={styles.reportHeader}>
+              <Text style={styles.reportTitle}>What's wrong?</Text>
+              <TouchableOpacity onPress={() => setShowReportDialog(false)} style={styles.reportCloseBtn}>
+                <Text style={styles.reportCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.reportGrid}>
               {REPORT_OPTIONS.map((opt) => (
                 <TouchableOpacity
                   key={opt.id}
@@ -246,16 +260,10 @@ export default function TrailerScreen() {
                   <Text style={styles.reportOptionText}>{opt.label}</Text>
                 </TouchableOpacity>
               ))}
-            </ScrollView>
-          </Dialog.ScrollArea>
-          <Dialog.Actions>
-            <PaperButton textColor="#888" onPress={() => setShowReportDialog(false)}>
-              Cancel
-            </PaperButton>
-          </Dialog.Actions>
-        </Dialog>
-
-      </Portal>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Success / info snackbar */}
       <Snackbar
@@ -422,36 +430,110 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
 
-  // ── Paper dialog ──
-  dialog: {
-    backgroundColor: '#1a1a2e',
-    borderRadius: 20,
+  // ── Modals (landscape-optimised) ──
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.72)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 28,
   },
-  dialogTitle: {
+
+  // Exit — single horizontal card
+  exitSheet: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 24,
+    backgroundColor: '#1a1a2e',
+    borderRadius: 18,
+    paddingVertical: 22,
+    paddingHorizontal: 28,
+    width: '100%',
+    maxWidth: 560,
+  },
+  exitSheetLeft: {
+    flex: 1,
+    gap: 5,
+  },
+  exitTitle: {
     color: '#fff',
     fontSize: 17,
     fontWeight: '700',
   },
-  dialogBody: {
-    color: '#aaa',
-    fontSize: 14,
-    lineHeight: 20,
+  exitBody: {
+    color: '#888',
+    fontSize: 13,
   },
-  reportScrollArea: {
-    paddingHorizontal: 0,
-    borderTopColor: 'rgba(255,255,255,0.08)',
-    borderBottomColor: 'rgba(255,255,255,0.08)',
+  exitSheetRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  stayBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+  },
+  stayBtnText: {
+    color: '#777',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  leaveBtn: {
+    backgroundColor: '#f5c518',
+    borderRadius: 22,
+    paddingVertical: 10,
+    paddingHorizontal: 22,
+  },
+  leaveBtnText: {
+    color: '#0a0a0a',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+
+  // Report — 2-column grid panel
+  reportSheet: {
+    backgroundColor: '#1a1a2e',
+    borderRadius: 18,
+    overflow: 'hidden',
+    width: '100%',
+    maxWidth: 640,
+  },
+  reportHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+  },
+  reportTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  reportCloseBtn: {
+    padding: 4,
+  },
+  reportCloseText: {
+    color: '#666',
+    fontSize: 16,
+  },
+  reportGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
   },
   reportOption: {
+    width: '50%',
     paddingVertical: 13,
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,0.08)',
+    borderBottomColor: 'rgba(255,255,255,0.07)',
   },
   reportOptionText: {
-    color: '#e0e0e0',
-    fontSize: 14,
-    letterSpacing: 0.1,
+    color: '#d0d0d0',
+    fontSize: 13,
+    lineHeight: 18,
   },
 
   // ── Snackbar ──
