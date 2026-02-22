@@ -6,6 +6,10 @@ interface AppState {
   currentMovie: Movie | null;
   setCurrentMovie: (movie: Movie | null) => void;
 
+  // Whether the current trailer was started by scanning a QR code
+  fromScanner: boolean;
+  setFromScanner: (v: boolean) => void;
+
   // Active movies pool cache
   activeMovies: Movie[];
   setActiveMovies: (movies: Movie[]) => void;
@@ -20,6 +24,9 @@ interface AppState {
 export const useAppStore = create<AppState>((set) => ({
   currentMovie: null,
   setCurrentMovie: (movie) => set({ currentMovie: movie }),
+
+  fromScanner: false,
+  setFromScanner: (v) => set({ fromScanner: v }),
 
   activeMovies: [],
   setActiveMovies: (movies) => set({ activeMovies: movies }),

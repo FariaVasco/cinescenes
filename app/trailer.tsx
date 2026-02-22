@@ -29,7 +29,7 @@ export default function TrailerScreen() {
   const router = useRouter();
   const { width, height } = useWindowDimensions();
 
-  const { currentMovie, setCurrentMovie, activeMovies, setActiveMovies } = useAppStore();
+  const { currentMovie, setCurrentMovie, activeMovies, setActiveMovies, fromScanner, setFromScanner } = useAppStore();
   const trailerRef = useRef<TrailerPlayerHandle>(null);
   const [key, setKey] = useState(0);
   const [hasReplayed, setHasReplayed] = useState(false);
@@ -75,6 +75,11 @@ export default function TrailerScreen() {
   }
 
   async function handleNext() {
+    if (fromScanner) {
+      router.replace('/scanner');
+      return;
+    }
+
     let pool = activeMovies.filter((m) => m.id !== currentMovie!.id);
 
     if (pool.length === 0) {
@@ -216,7 +221,7 @@ export default function TrailerScreen() {
             </PaperButton>
             <PaperButton
               textColor="#f5c518"
-              onPress={() => { setShowExitDialog(false); router.replace('/'); }}
+              onPress={() => { setShowExitDialog(false); setFromScanner(false); router.replace('/'); }}
             >
               Leave
             </PaperButton>

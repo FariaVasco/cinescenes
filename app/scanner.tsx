@@ -11,7 +11,7 @@ type ErrorInfo = { title: string; body: string };
 
 export default function ScannerScreen() {
   const router = useRouter();
-  const { setCurrentMovie } = useAppStore();
+  const { setCurrentMovie, setFromScanner } = useAppStore();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [error, setError] = useState<ErrorInfo | null>(null);
@@ -76,6 +76,7 @@ export default function ScannerScreen() {
     }
 
     setCurrentMovie(movie);
+    setFromScanner(true);
     router.replace('/trailer');
   }
 
