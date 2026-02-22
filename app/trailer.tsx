@@ -29,7 +29,6 @@ const REPORT_OPTIONS = [
 export default function TrailerScreen() {
   const router = useRouter();
   const { width, height } = useWindowDimensions();
-  const isLandscape = width > height;
 
   const { currentMovie, setCurrentMovie, activeMovies, setActiveMovies } = useAppStore();
   const trailerRef = useRef<TrailerPlayerHandle>(null);
@@ -52,7 +51,6 @@ export default function TrailerScreen() {
   function handleTapToggle() {
     if (!userPaused) {
       trailerRef.current?.pause();
-      // snapshot remaining time via the ref the player updated internally
       setUserPaused(true);
     } else {
       setUserPaused(false);
@@ -61,17 +59,16 @@ export default function TrailerScreen() {
   }
 
   function handleSkipToGuess() {
-    trailerRef.current?.stop();
+    trailerRef.current?.stop(); // clears internal timers before unmount
     setUserPaused(false);
-    setEnded(true);
+    setEnded(true); // unmounts TrailerPlayer → audio stops
   }
 
   function handleReplay() {
     if (hasReplayed) return;
     setHasReplayed(true);
-    setEnded(false);
+    setEnded(false); // remounts TrailerPlayer → starts fresh from safeStart
     setUserPaused(false);
-    trailerRef.current?.replay();
   }
 
   async function handleNext() {
@@ -124,15 +121,15 @@ export default function TrailerScreen() {
 
   return (
     <View style={styles.container}>
-      <TrailerPlayer key={key} ref={trailerRef} movie={currentMovie} onEnded={handleEnded} />
+      {/* TrailerPlayer only rendered while playing — unmounting it stops audio */}
+      {!ended && (
+        <TrailerPlayer key={key} ref={trailerRef} movie={currentMovie} onEnded={handleEnded} />
+      )}
 
-      {/* ── Playback layer (hidden once ended) ── */}
+      {/* ── Playback layer ── */}
       {!ended && (
         <>
-          {/*
-            Touch blocker: sits above the WebView, intercepts all taps on blank areas.
-            Rendered before SafeAreaView so buttons inside SafeAreaView still win.
-          */}
+          {/* Touch blocker — intercepts background taps */}
           {!userPaused && (
             <TouchableOpacity
               style={StyleSheet.absoluteFillObject}
@@ -141,31 +138,27 @@ export default function TrailerScreen() {
             />
           )}
 
-          {/* Controls overlay — close, report, and skip buttons */}
+          {/* Controls: ✕ top-right, report + skip bottom-right */}
           <SafeAreaView
             style={styles.controls}
-            edges={isLandscape ? ['left', 'right'] : ['bottom']}
+            edges={['top', 'bottom', 'right']}
             pointerEvents="box-none"
           >
-            <View style={styles.topBar}>
-              <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
-                <Text style={styles.closeButtonText}>✕</Text>
-              </TouchableOpacity>
+            <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
+              <Text style={styles.closeButtonText}>✕</Text>
+            </TouchableOpacity>
+
+            <View style={styles.cornerActions}>
               <TouchableOpacity style={styles.reportButton} onPress={handleReport}>
                 <Text style={styles.reportButtonText}>⚑ Report</Text>
               </TouchableOpacity>
-            </View>
-            <View style={[styles.bottomBar, isLandscape && styles.bottomBarLandscape]}>
-              <TouchableOpacity style={[styles.actionButton, styles.skipButton]} onPress={handleSkipToGuess}>
+              <TouchableOpacity style={styles.skipButton} onPress={handleSkipToGuess}>
                 <Text style={styles.skipButtonText}>I know it! →</Text>
               </TouchableOpacity>
             </View>
           </SafeAreaView>
 
-          {/*
-            Pause overlay: rendered AFTER SafeAreaView so it covers everything.
-            Tapping it resumes playback.
-          */}
+          {/* Pause overlay — tapping resumes */}
           {userPaused && (
             <TouchableOpacity
               style={styles.pauseOverlay}
@@ -182,9 +175,11 @@ export default function TrailerScreen() {
       {ended && (
         <View style={styles.endedOverlay}>
           <SafeAreaView style={styles.endedInner} edges={['top', 'bottom']}>
-            <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
-              <Text style={styles.closeButtonText}>✕</Text>
-            </TouchableOpacity>
+            <View style={styles.endedTopRow}>
+              <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
+                <Text style={styles.closeButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
 
             <View style={styles.endedCenter}>
               <Text style={styles.endedTitle}>Ready to guess? 🎬</Text>
@@ -218,9 +213,9 @@ export default function TrailerScreen() {
         onRequestClose={() => setShowReportModal(false)}
       >
         <View style={styles.reportOverlay}>
-          <View style={styles.reportSheet}>
+          <View style={[styles.reportSheet, { maxHeight: height * 0.6 }]}>
             <Text style={styles.reportTitle}>What's wrong with this trailer?</Text>
-            <ScrollView style={styles.reportScroll} bounces={false}>
+            <ScrollView bounces={false} style={styles.reportScroll}>
               {REPORT_OPTIONS.map((opt) => (
                 <TouchableOpacity
                   key={opt.id}
@@ -246,56 +241,51 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
+
+  // ── Playback controls ──
   controls: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
+    alignItems: 'flex-end',
     justifyContent: 'space-between',
-  },
-  topBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
     padding: 16,
-    paddingTop: 56,
   },
   closeButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.55)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   closeButtonText: {
     color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  cornerActions: {
+    alignItems: 'flex-end',
+    gap: 10,
   },
   reportButton: {
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.55)',
   },
   reportButtonText: {
-    color: '#aaa',
+    color: '#ccc',
     fontSize: 13,
-  },
-  bottomBar: {
-    flexDirection: 'row',
-    padding: 20,
-    justifyContent: 'center',
-  },
-  bottomBarLandscape: {
-    justifyContent: 'center',
+    fontWeight: '500',
   },
   skipButton: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 22,
+    backgroundColor: '#f5c518',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.3,
@@ -303,9 +293,9 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   skipButtonText: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: '700',
+    color: '#0a0a0a',
+    fontSize: 16,
+    fontWeight: '800',
     letterSpacing: 0.4,
   },
   pauseOverlay: {
@@ -319,6 +309,8 @@ const styles = StyleSheet.create({
     fontSize: 72,
     opacity: 0.9,
   },
+
+  // ── Ended screen ──
   endedOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: '#000',
@@ -329,11 +321,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: 20,
   },
+  endedTopRow: {
+    alignItems: 'flex-end',
+  },
   endedCenter: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
   endedTitle: {
     color: '#fff',
@@ -344,12 +339,11 @@ const styles = StyleSheet.create({
   },
   endedSubtitle: {
     color: '#f5c518',
-    fontSize: 15,
+    fontSize: 13,
     textAlign: 'center',
     fontWeight: '600',
-    letterSpacing: 2,
+    letterSpacing: 2.5,
     textTransform: 'uppercase',
-    marginTop: 4,
   },
   endedActions: {
     flexDirection: 'row',
@@ -392,6 +386,8 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0.3,
   },
+
+  // ── Report modal ──
   reportOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',
@@ -401,41 +397,40 @@ const styles = StyleSheet.create({
     backgroundColor: '#1a1a2e',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    paddingTop: 20,
-    paddingBottom: 40,
+    paddingTop: 14,
+    paddingBottom: 16,
     paddingHorizontal: 16,
-    maxHeight: '70%',
   },
   reportScroll: {
     flexGrow: 0,
   },
   reportTitle: {
     color: '#fff',
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: '700',
     textAlign: 'center',
-    marginBottom: 16,
-    letterSpacing: 0.4,
+    marginBottom: 10,
+    letterSpacing: 0.3,
   },
   reportOption: {
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+    paddingVertical: 11,
+    paddingHorizontal: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(255,255,255,0.08)',
   },
   reportOptionText: {
     color: '#e0e0e0',
-    fontSize: 15,
-    letterSpacing: 0.2,
+    fontSize: 14,
+    letterSpacing: 0.1,
   },
   reportCancel: {
-    marginTop: 12,
-    paddingVertical: 14,
+    marginTop: 8,
+    paddingVertical: 10,
     alignItems: 'center',
   },
   reportCancelText: {
     color: '#888',
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
   },
 });
