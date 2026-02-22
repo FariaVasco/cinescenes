@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Dialog, Portal, Button as PaperButton } from 'react-native-paper';
+import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -15,6 +14,7 @@ export default function ScannerScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [error, setError] = useState<ErrorInfo | null>(null);
+  const [showExitDialog, setShowExitDialog] = useState(false);
 
   if (!permission) {
     return <View style={styles.container} />;
@@ -109,7 +109,7 @@ export default function ScannerScreen() {
       </View>
 
       <SafeAreaView style={styles.ui}>
-        <TouchableOpacity style={styles.closeButton} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.closeButton} onPress={() => setShowExitDialog(true)}>
           <Text style={styles.closeButtonText}>✕</Text>
         </TouchableOpacity>
         <View style={styles.hint}>
@@ -117,27 +117,64 @@ export default function ScannerScreen() {
         </View>
       </SafeAreaView>
 
-      {/* Error dialog */}
-      <Portal>
-        <Dialog
-          visible={!!error}
-          onDismiss={() => dismissError(false)}
-          style={styles.dialog}
+      {/* Exit confirmation modal */}
+      <Modal
+        visible={showExitDialog}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowExitDialog(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setShowExitDialog(false)}
         >
-          <Dialog.Title style={styles.dialogTitle}>{error?.title}</Dialog.Title>
-          <Dialog.Content>
-            <Text style={styles.dialogBody}>{error?.body}</Text>
-          </Dialog.Content>
-          <Dialog.Actions>
-            <PaperButton textColor="#888" onPress={() => dismissError(true)}>
-              Go back
-            </PaperButton>
-            <PaperButton textColor="#f5c518" onPress={() => dismissError(false)}>
-              Try again
-            </PaperButton>
-          </Dialog.Actions>
-        </Dialog>
-      </Portal>
+          <TouchableOpacity activeOpacity={1} style={styles.exitSheet}>
+            <View style={styles.exitSheetLeft}>
+              <Text style={styles.exitTitle}>Stop scanning?</Text>
+              <Text style={styles.exitBody}>Your current card session will end.</Text>
+            </View>
+            <View style={styles.exitSheetRight}>
+              <TouchableOpacity style={styles.stayBtn} onPress={() => setShowExitDialog(false)}>
+                <Text style={styles.stayBtnText}>Keep scanning</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.leaveBtn}
+                onPress={() => { setShowExitDialog(false); router.back(); }}
+              >
+                <Text style={styles.leaveBtnText}>Stop →</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Error modal */}
+      <Modal
+        visible={!!error}
+        transparent
+        animationType="fade"
+        onRequestClose={() => dismissError(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => dismissError(false)}
+        >
+          <TouchableOpacity activeOpacity={1} style={styles.errorSheet}>
+            <Text style={styles.errorTitle}>{error?.title}</Text>
+            <Text style={styles.errorBody}>{error?.body}</Text>
+            <View style={styles.errorActions}>
+              <TouchableOpacity style={styles.stayBtn} onPress={() => dismissError(true)}>
+                <Text style={styles.stayBtnText}>Go back</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.leaveBtn} onPress={() => dismissError(false)}>
+                <Text style={styles.leaveBtnText}>Try again →</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -258,19 +295,88 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#666',
   },
-  // Paper dialog
-  dialog: {
-    backgroundColor: '#1a1a2e',
-    borderRadius: 20,
+  // ── Modals (landscape-optimised) ──
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.72)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 28,
   },
-  dialogTitle: {
+  // Exit — horizontal card
+  exitSheet: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 24,
+    backgroundColor: '#1a1a2e',
+    borderRadius: 18,
+    paddingVertical: 22,
+    paddingHorizontal: 28,
+    width: '100%',
+    maxWidth: 560,
+  },
+  exitSheetLeft: {
+    flex: 1,
+    gap: 5,
+  },
+  exitTitle: {
     color: '#fff',
     fontSize: 17,
     fontWeight: '700',
   },
-  dialogBody: {
+  exitBody: {
+    color: '#888',
+    fontSize: 13,
+  },
+  exitSheetRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  stayBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+  },
+  stayBtnText: {
+    color: '#777',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  leaveBtn: {
+    backgroundColor: '#f5c518',
+    borderRadius: 22,
+    paddingVertical: 10,
+    paddingHorizontal: 22,
+  },
+  leaveBtnText: {
+    color: '#0a0a0a',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  // Error — compact centred card
+  errorSheet: {
+    backgroundColor: '#1a1a2e',
+    borderRadius: 18,
+    padding: 24,
+    gap: 10,
+    width: '100%',
+    maxWidth: 420,
+  },
+  errorTitle: {
+    color: '#fff',
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  errorBody: {
     color: '#aaa',
     fontSize: 14,
-    lineHeight: 21,
+    lineHeight: 20,
+  },
+  errorActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
   },
 });

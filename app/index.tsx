@@ -1,10 +1,11 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   useWindowDimensions,
+  Modal,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -30,7 +31,8 @@ export default function HomeScreen() {
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
 
-  const { setActiveMovies, setCurrentMovie, activeMovies } = useAppStore();
+  const { setActiveMovies, setCurrentMovie, setFromScanner, activeMovies } = useAppStore();
+  const [showModeModal, setShowModeModal] = useState(false);
 
   useEffect(() => {
     fetchActiveMovies();
@@ -47,13 +49,23 @@ export default function HomeScreen() {
     }
   }
 
-  async function handlePickMovie() {
-    if (activeMovies.length === 0) {
+  const yearSpan = activeMovies.length > 0
+    ? new Date().getFullYear() - Math.min(...activeMovies.map((m) => m.year))
+    : 50;
+
+  function handlePickMovie() {
+    setShowModeModal(true);
+  }
+
+  async function handlePlayCurated() {
+    setShowModeModal(false);
+    let pool = activeMovies;
+    if (pool.length === 0) {
       await fetchActiveMovies();
       return;
     }
-    const randomIndex = Math.floor(Math.random() * activeMovies.length);
-    const movie = activeMovies[randomIndex];
+    const movie = pool[Math.floor(Math.random() * pool.length)];
+    setFromScanner(false);
     setCurrentMovie(movie);
     router.push('/trailer');
   }
@@ -140,6 +152,63 @@ export default function HomeScreen() {
           </View>
         </>
       )}
+      {/* ── Mode picker modal ── */}
+      <Modal
+        visible={showModeModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowModeModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalBackdrop}
+          activeOpacity={1}
+          onPress={() => setShowModeModal(false)}
+        >
+          <TouchableOpacity activeOpacity={1} style={styles.modeSheet}>
+            <View style={styles.modeHeader}>
+              <Text style={styles.modeHeaderTitle}>How do you want to play?</Text>
+              <TouchableOpacity onPress={() => setShowModeModal(false)} style={styles.modeCloseBtn}>
+                <Text style={styles.modeCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modeCards}>
+              {/* Curated mode */}
+              <View style={styles.modeCard}>
+                <Text style={styles.modeCardIcon}>🎬</Text>
+                <Text style={styles.modeCardTitle}>Curated</Text>
+                <Text style={styles.modeCardDesc}>
+                  {activeMovies.length} hand-picked movies spanning the last {yearSpan} years of cinema.
+                </Text>
+                <TouchableOpacity style={styles.modePlayBtn} onPress={handlePlayCurated}>
+                  <Text style={styles.modePlayBtnText}>Play →</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Insane mode */}
+              <View style={[styles.modeCard, styles.modeCardDimmed]}>
+                <View style={styles.modeCardTopRow}>
+                  <Text style={styles.modeCardIcon}>⚡</Text>
+                  <View style={styles.modeBadge}>
+                    <Text style={styles.modeBadgeText}>UNDER CONSTRUCTION</Text>
+                  </View>
+                </View>
+                <Text style={styles.modeCardTitle}>Insane Mode</Text>
+                <Text style={styles.modeCardDesc}>
+                  Any movie, any era — no curated list. Our AI removes names, faces and other
+                  spoilers from the audio and video in real time.
+                </Text>
+                <Text style={styles.modeCardDisclaimer}>
+                  ⚠️ AI processing is experimental. We cannot guarantee complete accuracy — the model may miss some details.
+                </Text>
+                <View style={styles.modeDisabledBtn}>
+                  <Text style={styles.modeDisabledBtnText}>Stay tuned</Text>
+                </View>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -243,5 +312,116 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#888',
     letterSpacing: 0.3,
+  },
+
+  // ── Mode picker modal ──
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.78)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 28,
+  },
+  modeSheet: {
+    backgroundColor: '#1a1a2e',
+    borderRadius: 20,
+    overflow: 'hidden',
+    width: '100%',
+    maxWidth: 680,
+  },
+  modeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    paddingHorizontal: 22,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+  },
+  modeHeaderTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  modeCloseBtn: {
+    padding: 4,
+  },
+  modeCloseText: {
+    color: '#666',
+    fontSize: 16,
+  },
+  modeCards: {
+    flexDirection: 'row',
+    padding: 16,
+    gap: 12,
+  },
+  modeCard: {
+    flex: 1,
+    backgroundColor: '#252040',
+    borderRadius: 14,
+    padding: 18,
+    gap: 8,
+  },
+  modeCardDimmed: {
+    opacity: 0.65,
+  },
+  modeCardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  modeCardIcon: {
+    fontSize: 26,
+  },
+  modeBadge: {
+    backgroundColor: 'rgba(245,197,24,0.15)',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  modeBadgeText: {
+    color: '#f5c518',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+  },
+  modeCardTitle: {
+    color: '#fff',
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  modeCardDesc: {
+    color: '#999',
+    fontSize: 12,
+    lineHeight: 17,
+    flex: 1,
+  },
+  modeCardDisclaimer: {
+    color: '#666',
+    fontSize: 10,
+    lineHeight: 14,
+    fontStyle: 'italic',
+  },
+  modePlayBtn: {
+    backgroundColor: '#f5c518',
+    borderRadius: 14,
+    paddingVertical: 11,
+    alignItems: 'center',
+  },
+  modePlayBtnText: {
+    color: '#0a0a0a',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  modeDisabledBtn: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 14,
+    paddingVertical: 11,
+    alignItems: 'center',
+  },
+  modeDisabledBtnText: {
+    color: '#555',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
