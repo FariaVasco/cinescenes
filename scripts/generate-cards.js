@@ -41,7 +41,11 @@ function loadEnv() {
   return env;
 }
 
-// ── Decade palette ────────────────────────────────────────────────────────────
+// ── Year colour palette ───────────────────────────────────────────────────────
+// Decade anchors define the "main" colour for each era. Every individual year
+// gets its own colour by linearly interpolating between the two surrounding
+// anchors, so the step from year N to year N+1 is always identical in size
+// (1/10 of the decade-to-decade distance) — no abrupt jumps at boundaries.
 
 const DECADE = {
   1920: '#3D2B1F', // warm sepia        — silent era
@@ -57,9 +61,32 @@ const DECADE = {
   2020: '#2D0A3D', // deep plum         — modern
 };
 
+function hexToRgb(hex) {
+  return [
+    parseInt(hex.slice(1, 3), 16),
+    parseInt(hex.slice(3, 5), 16),
+    parseInt(hex.slice(5, 7), 16),
+  ];
+}
+
+function rgbToHex([r, g, b]) {
+  return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
+}
+
 function bg(year) {
-  const d = Math.floor(year / 10) * 10;
-  return DECADE[d] || '#1a1a2e';
+  const d1 = Math.floor(year / 10) * 10;
+  const d2 = d1 + 10;
+  const c1 = DECADE[d1];
+  const c2 = DECADE[d2];
+
+  if (!c1 && !c2) return '#1a1a2e';
+  if (!c1) return c2;
+  if (!c2) return c1; // clamp — no anchor beyond last decade
+
+  const t = (year - d1) / 10;
+  const rgb1 = hexToRgb(c1);
+  const rgb2 = hexToRgb(c2);
+  return rgbToHex(rgb1.map((v, i) => Math.round(v + (rgb2[i] - v) * t)));
 }
 
 // ── Inline SVG icons ──────────────────────────────────────────────────────────
