@@ -334,24 +334,24 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   stayBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-  },
-  stayBtnText: {
-    color: '#777',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  leaveBtn: {
     backgroundColor: '#f5c518',
     borderRadius: 22,
     paddingVertical: 10,
     paddingHorizontal: 22,
   },
-  leaveBtnText: {
+  stayBtnText: {
     color: '#0a0a0a',
     fontSize: 15,
     fontWeight: '700',
+  },
+  leaveBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+  },
+  leaveBtnText: {
+    color: '#777',
+    fontSize: 15,
+    fontWeight: '600',
   },
   // Error — compact centred card
   errorSheet: {

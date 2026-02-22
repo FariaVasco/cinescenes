@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { CinescenesLogo } from '@/components/CinescenesLogo';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
@@ -94,7 +95,7 @@ export default function HomeScreen() {
       {isLandscape ? (
         <View style={styles.landscapeLayout}>
           <View style={styles.landscapeHeader}>
-            <Text style={styles.logo}>CINESCENES</Text>
+            <CinescenesLogo layout="horizontal" iconSize={42} />
             <Text style={styles.tagline}>Guess the movie.{'\n'}Build your timeline.</Text>
           </View>
           <View style={styles.landscapeActions}>
@@ -119,7 +120,7 @@ export default function HomeScreen() {
       ) : (
         <>
           <View style={styles.header}>
-            <Text style={styles.logo}>CINESCENES</Text>
+            <CinescenesLogo layout="vertical" iconSize={56} />
             <Text style={styles.tagline}>Guess the movie. Build your timeline.</Text>
           </View>
 
@@ -225,20 +226,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  logo: {
-    fontSize: 42,
-    fontWeight: '900',
-    color: '#f5c518',
-    letterSpacing: 8,
-    textAlign: 'center',
-    textShadowColor: 'rgba(245,197,24,0.45)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 20,
-  },
   tagline: {
     fontSize: 13,
     color: '#9a9aaa',
-    marginTop: 10,
+    marginTop: 14,
     letterSpacing: 2,
     textAlign: 'center',
     textTransform: 'uppercase',
