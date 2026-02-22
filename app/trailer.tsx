@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Alert,
   Modal,
+  ScrollView,
   useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -97,6 +98,17 @@ export default function TrailerScreen() {
     setUserPaused(false);
   }
 
+  function handleClose() {
+    Alert.alert(
+      'Leave game?',
+      'Your current trailer will be lost.',
+      [
+        { text: 'Stay', style: 'cancel' },
+        { text: 'Leave', style: 'destructive', onPress: () => router.replace('/') },
+      ]
+    );
+  }
+
   function handleReport() {
     setShowReportModal(true);
   }
@@ -136,7 +148,7 @@ export default function TrailerScreen() {
             pointerEvents="box-none"
           >
             <View style={styles.topBar}>
-              <TouchableOpacity style={styles.closeButton} onPress={() => router.replace('/')}>
+              <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
                 <Text style={styles.closeButtonText}>✕</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.reportButton} onPress={handleReport}>
@@ -170,7 +182,7 @@ export default function TrailerScreen() {
       {ended && (
         <View style={styles.endedOverlay}>
           <SafeAreaView style={styles.endedInner} edges={['top', 'bottom']}>
-            <TouchableOpacity style={styles.closeButton} onPress={() => router.replace('/')}>
+            <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
               <Text style={styles.closeButtonText}>✕</Text>
             </TouchableOpacity>
 
@@ -208,15 +220,17 @@ export default function TrailerScreen() {
         <View style={styles.reportOverlay}>
           <View style={styles.reportSheet}>
             <Text style={styles.reportTitle}>What's wrong with this trailer?</Text>
-            {REPORT_OPTIONS.map((opt) => (
-              <TouchableOpacity
-                key={opt.id}
-                style={styles.reportOption}
-                onPress={() => submitReport(opt.label)}
-              >
-                <Text style={styles.reportOptionText}>{opt.label}</Text>
-              </TouchableOpacity>
-            ))}
+            <ScrollView style={styles.reportScroll} bounces={false}>
+              {REPORT_OPTIONS.map((opt) => (
+                <TouchableOpacity
+                  key={opt.id}
+                  style={styles.reportOption}
+                  onPress={() => submitReport(opt.label)}
+                >
+                  <Text style={styles.reportOptionText}>{opt.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
             <TouchableOpacity style={styles.reportCancel} onPress={() => setShowReportModal(false)}>
               <Text style={styles.reportCancelText}>Cancel</Text>
             </TouchableOpacity>
@@ -290,8 +304,9 @@ const styles = StyleSheet.create({
   },
   skipButtonText: {
     color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 17,
+    fontWeight: '700',
+    letterSpacing: 0.4,
   },
   pauseOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -322,17 +337,19 @@ const styles = StyleSheet.create({
   },
   endedTitle: {
     color: '#fff',
-    fontSize: 28,
-    fontWeight: '700',
+    fontSize: 32,
+    fontWeight: '900',
     textAlign: 'center',
-    fontStyle: 'italic',
-    letterSpacing: 0.5,
+    letterSpacing: 1,
   },
   endedSubtitle: {
-    color: '#aaa',
-    fontSize: 16,
+    color: '#f5c518',
+    fontSize: 15,
     textAlign: 'center',
-    fontStyle: 'italic',
+    fontWeight: '600',
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+    marginTop: 4,
   },
   endedActions: {
     flexDirection: 'row',
@@ -358,7 +375,8 @@ const styles = StyleSheet.create({
   replayButtonText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   nextButton: {
     backgroundColor: '#f5c518',
@@ -370,8 +388,9 @@ const styles = StyleSheet.create({
   },
   nextButtonText: {
     color: '#0a0a0a',
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 17,
+    fontWeight: '800',
+    letterSpacing: 0.3,
   },
   reportOverlay: {
     flex: 1,
@@ -385,14 +404,18 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 40,
     paddingHorizontal: 16,
+    maxHeight: '70%',
+  },
+  reportScroll: {
+    flexGrow: 0,
   },
   reportTitle: {
     color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 17,
+    fontWeight: '700',
     textAlign: 'center',
     marginBottom: 16,
-    letterSpacing: 0.3,
+    letterSpacing: 0.4,
   },
   reportOption: {
     paddingVertical: 14,
