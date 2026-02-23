@@ -110,6 +110,18 @@ async function getTmdbMovieDetails(tmdbId, apiKey) {
   return tmdb(`/movie/${tmdbId}?language=en-US`, apiKey);
 }
 
+async function getTmdbMovieCredits(tmdbId, apiKey) {
+  return tmdb(`/movie/${tmdbId}/credits?language=en-US`, apiKey);
+}
+
+async function getTmdbPersonCredits(personId, apiKey) {
+  return tmdb(`/person/${personId}/movie_credits?language=en-US`, apiKey);
+}
+
+async function getTmdbCollection(collectionId, apiKey) {
+  return tmdb(`/collection/${collectionId}?language=en-US`, apiKey);
+}
+
 /**
  * Fetch official trailers from TMDb, ranked by studio-channel preference.
  * Returns an array of { name, youtubeId, quality, official, publishedAt }
@@ -294,8 +306,12 @@ async function transcribeAudio(audioPath, groq) {
 /**
  * Build a set of "spoiler words" to flag in the transcript.
  * Filters out common English stop-words to avoid false positives.
+ *
+ * When tmdbId + apiKey are supplied, also enriches with indirect references:
+ *  - Other films directed by the same director(s)
+ *  - Franchise / collection entries (e.g. all Bond films, all Marvel sequels)
  */
-function buildSpoilerWords(title, director, year) {
+async function buildSpoilerWords(title, director, year, tmdbId, apiKey) {
   const STOP = new Set(['the', 'a', 'an', 'of', 'in', 'on', 'at', 'to', 'for',
     'and', 'or', 'but', 'is', 'it', 'its', 'be', 'by', 'as', 'at', 'this',
     'that', 'with', 'from', 'into', 'was', 'are', 'not']);
@@ -314,6 +330,42 @@ function buildSpoilerWords(title, director, year) {
     words.add(String(year));
     // Common spoken forms: "nineteen seventy-two", "two thousand and three"
     words.add(String(year).slice(2)); // e.g. "72" from 1972
+  }
+
+  // ── Indirect spoiler enrichment via TMDb ──────────────────────────────────
+  if (tmdbId && apiKey) {
+    try {
+      // 1. Director filmography — other films they directed identify the director
+      const credits = await getTmdbMovieCredits(tmdbId, apiKey);
+      const directors = (credits.crew ?? []).filter(c => c.job === 'Director');
+
+      for (const dir of directors) {
+        addPhrase(dir.name); // in case director wasn't passed in
+        try {
+          const personCredits = await getTmdbPersonCredits(dir.id, apiKey);
+          for (const film of (personCredits.crew ?? [])) {
+            if (film.job === 'Director' && film.title && film.id !== tmdbId) {
+              addPhrase(film.title);
+            }
+          }
+        } catch {}
+      }
+
+      // 2. Franchise / collection — other entries give away the series name
+      const details = await getTmdbMovieDetails(tmdbId, apiKey);
+      const collection = details.belongs_to_collection;
+      if (collection) {
+        addPhrase(collection.name);
+        try {
+          const col = await getTmdbCollection(collection.id, apiKey);
+          for (const part of (col.parts ?? [])) {
+            if (part.id !== tmdbId) addPhrase(part.title);
+          }
+        } catch {}
+      }
+    } catch (e) {
+      console.warn(`    ⚠️  Extended spoiler enrichment failed: ${e.message}`);
+    }
   }
 
   return words;
@@ -441,7 +493,7 @@ async function main() {
 
   // ── Step 1: Resolve movie metadata ─────────────────────────────────────────
 
-  let movieTitle, movieYear, movieDirector, youtubeId, trailerName, channelName;
+  let movieTitle, movieYear, movieDirector, youtubeId, trailerName, channelName, tmdbId;
 
   if (cli.youtubeId) {
     // Manual YouTube ID provided — use supplied metadata
@@ -458,7 +510,7 @@ async function main() {
     console.log(`\n🎬  Using provided YouTube ID: ${youtubeId}`);
   } else {
     // Look up via TMDb
-    let tmdbId = cli.tmdbId;
+    tmdbId = cli.tmdbId;
 
     if (!tmdbId) {
       if (!cli.movie) { console.error('❌  Provide --movie "Title" --year YYYY  or  --tmdb-id ID'); process.exit(1); }
@@ -577,7 +629,8 @@ async function main() {
 
     // ── Step 7: Visual spoiler detection (Tesseract OCR) ─────────────────────
 
-    const spoilerWords = buildSpoilerWords(movieTitle, movieDirector, movieYear);
+    console.log(`\n🔍  Building spoiler word list…`);
+    const spoilerWords = await buildSpoilerWords(movieTitle, movieDirector, movieYear, tmdbId, tmdbKey);
 
     console.log(`\n👁️   Running Tesseract OCR on frames…`);
     visualFlagged = detectVisualSpoilers(frames, spoilerWords);
