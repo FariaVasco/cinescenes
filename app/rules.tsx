@@ -158,7 +158,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    paddingHorizontal: 24,
     paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(255,255,255,0.08)',
@@ -170,7 +170,7 @@ const styles = StyleSheet.create({
   },
   backArrow: {
     color: '#f5c518',
-    fontSize: 22,
+    fontSize: 30,
     fontWeight: '600',
     alignSelf: 'flex-start',
   },
