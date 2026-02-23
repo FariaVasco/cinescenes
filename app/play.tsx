@@ -12,11 +12,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
+import { CastModal } from '@/components/CastModal';
 
 export default function PlayScreen() {
   const router = useRouter();
-  const { setActiveMovies, setCurrentMovie, setFromScanner, activeMovies } = useAppStore();
+  const { setActiveMovies, setCurrentMovie, setFromScanner, setTvMode, activeMovies } = useAppStore();
   const [showModeModal, setShowModeModal] = useState(false);
+  const [castModalVisible, setCastModalVisible] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -59,12 +61,19 @@ export default function PlayScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Back button */}
-      <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-        <Text style={styles.backBtnText}>←</Text>
-      </TouchableOpacity>
+      {/* Top bar: back ← on left, cast icon on right */}
+      <View style={styles.topBar}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <Text style={styles.backBtnText}>←</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.castBtn} onPress={() => setCastModalVisible(true)}>
+          <MaterialCommunityIcons name="cast" size={20} color="rgba(255,255,255,0.4)" />
+          <Text style={styles.castBtnLabel}>Cast</Text>
+        </TouchableOpacity>
+      </View>
 
-      {/* Two main action cards */}
+      {/* Two main action cards — centred in remaining space */}
+      <View style={styles.cardArea}>
       <View style={styles.cards}>
         <TouchableOpacity
           style={[styles.card, styles.cardPrimary]}
@@ -86,6 +95,17 @@ export default function PlayScreen() {
           <Text style={styles.cardSub}>Random from the deck</Text>
         </TouchableOpacity>
       </View>
+      </View>
+
+      {/* ── Cast to TV modal ── */}
+      <CastModal
+        visible={castModalVisible}
+        onDismiss={() => setCastModalVisible(false)}
+        onConfirm={() => {
+          setTvMode(true);
+          setCastModalVisible(false);
+        }}
+      />
 
       {/* ── Mode picker modal ── */}
       <Modal
@@ -152,13 +172,21 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#100a20',
+    flexDirection: 'column',
+  },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  cardArea: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
   backBtn: {
-    position: 'absolute',
-    top: 16,
-    left: 20,
     width: 40,
     height: 40,
     justifyContent: 'center',
@@ -167,6 +195,20 @@ const styles = StyleSheet.create({
   backBtnText: {
     color: 'rgba(255,255,255,0.4)',
     fontSize: 24,
+  },
+  castBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+  },
+  castBtnLabel: {
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: 13,
+    fontWeight: '600',
   },
 
   // ── Action cards ──

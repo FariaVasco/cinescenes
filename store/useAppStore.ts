@@ -14,6 +14,10 @@ interface AppState {
   activeMovies: Movie[];
   setActiveMovies: (movies: Movie[]) => void;
 
+  // TV / Cast mode
+  tvMode: boolean;
+  setTvMode: (v: boolean) => void;
+
   // Phase 3+: game state (scaffolded, unused in Phase 1)
   gameId: string | null;
   playerId: string | null;
@@ -30,6 +34,9 @@ export const useAppStore = create<AppState>((set) => ({
 
   activeMovies: [],
   setActiveMovies: (movies) => set({ activeMovies: movies }),
+
+  tvMode: false,
+  setTvMode: (v) => set({ tvMode: v }),
 
   gameId: null,
   playerId: null,

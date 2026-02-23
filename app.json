@@ -15,12 +15,15 @@
     },
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.cinescenes.app",
       "infoPlist": {
         "NSCameraUsageDescription": "Cinescenes needs camera access to scan movie card QR codes.",
-        "NSMicrophoneUsageDescription": "Cinescenes needs microphone access for the camera."
+        "NSMicrophoneUsageDescription": "Cinescenes needs microphone access for the camera.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
+      "package": "com.cinescenes.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0a0a0a"
@@ -28,7 +31,8 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "permissions": [
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -43,6 +47,12 @@
           "cameraPermission": "Cinescenes needs camera access to scan movie card QR codes."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "eaf621a4-1c19-42e6-8401-fadee4c80211"
+      }
+    }
   }
 }

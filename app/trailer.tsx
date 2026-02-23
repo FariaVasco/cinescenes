@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,8 +6,10 @@ import {
   TouchableOpacity,
   Modal,
   useWindowDimensions,
+  Pressable,
 } from 'react-native';
 import { Snackbar } from 'react-native-paper';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -36,7 +38,10 @@ export default function TrailerScreen() {
     }, [])
   );
 
-  const { currentMovie, setCurrentMovie, activeMovies, setActiveMovies, fromScanner, setFromScanner } = useAppStore();
+  const { currentMovie, setCurrentMovie, activeMovies, setActiveMovies, fromScanner, setFromScanner, tvMode, setTvMode } = useAppStore();
+
+  useEffect(() => () => setTvMode(false), []);
+
   const trailerRef = useRef<TrailerPlayerHandle>(null);
   const [key, setKey] = useState(0);
   const [hasReplayed, setHasReplayed] = useState(false);
@@ -144,19 +149,42 @@ export default function TrailerScreen() {
             edges={['top', 'bottom', 'right']}
             pointerEvents="box-none"
           >
-            <TouchableOpacity style={styles.closeButton} onPress={() => setShowExitDialog(true)}>
-              <Text style={styles.closeButtonText}>✕</Text>
-            </TouchableOpacity>
+            {tvMode ? (
+              <Pressable
+                style={[styles.closeButton, styles.closeButtonTV]}
+                delayLongPress={500}
+                onLongPress={() => setShowExitDialog(true)}
+              >
+                <Text style={styles.closeButtonText}>✕</Text>
+              </Pressable>
+            ) : (
+              <TouchableOpacity style={styles.closeButton} onPress={() => setShowExitDialog(true)}>
+                <Text style={styles.closeButtonText}>✕</Text>
+              </TouchableOpacity>
+            )}
 
             <View style={styles.cornerActions}>
-              <TouchableOpacity style={styles.reportButton} onPress={() => setShowReportDialog(true)}>
-                <Text style={styles.reportButtonText}>⚑ Report</Text>
-              </TouchableOpacity>
+              {!tvMode && (
+                <TouchableOpacity style={styles.reportButton} onPress={() => setShowReportDialog(true)}>
+                  <Text style={styles.reportButtonText}>⚑ Report</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity style={styles.skipButton} onPress={handleSkipToGuess}>
                 <Text style={styles.skipButtonText}>I know it! →</Text>
               </TouchableOpacity>
             </View>
           </SafeAreaView>
+
+          {/* TV Mode: movie title bar at the bottom */}
+          {tvMode && (
+            <View style={styles.tvTitleBar} pointerEvents="none">
+              <Text style={styles.tvTitleText}>
+                {currentMovie.title}
+                {'  ·  '}
+                {currentMovie.year}
+              </Text>
+            </View>
+          )}
 
           {/* Pause overlay — tapping resumes */}
           {userPaused && (
@@ -541,6 +569,30 @@ const styles = StyleSheet.create({
     color: '#d0d0d0',
     fontSize: 13,
     lineHeight: 18,
+  },
+
+  // ── TV Mode ──
+  closeButtonTV: {
+    opacity: 0.2,
+  },
+  tvTitleBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+  },
+  tvTitleText: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
 
   // ── Snackbar ──
