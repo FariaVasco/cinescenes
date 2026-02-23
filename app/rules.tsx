@@ -1,57 +1,60 @@
-import { useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import { useCallback, useRef, useState } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
+  useWindowDimensions,
+} from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ScreenOrientation from 'expo-screen-orientation';
 
 const STEPS = [
   {
-    number: '1',
-    title: 'Draw a card',
-    body: 'Scan the QR code on a physical Cinescenes card, or tap "Pick Movie" to draw one randomly from the curated deck.',
-    detail: null,
+    icon: '🎬',
+    title: 'Draw a Card',
+    body: 'Scan the QR on a physical Cinescenes card, or pick one randomly from the digital deck.',
+    glow: 'rgba(245,197,24,0.14)',
   },
   {
-    number: '2',
-    title: 'Watch the clip',
-    body: "A short trailer plays — no title, no year on screen. Study every frame for clues: costumes, film grain, effects, hair, cars. Everything tells a story.",
-    detail: 'Tip: the cinematography style and technology visible on screen are your biggest hints.',
+    icon: '👀',
+    title: 'Watch the Clip',
+    body: 'No title. No year. Just the movie. Study every frame — each second is a clue.',
+    glow: 'rgba(24,197,197,0.12)',
   },
   {
-    number: '3',
-    title: 'Make your move',
-    body: 'Confident you know the movie? Tap "I know it!" to skip straight to placing. Not sure? Let the clip finish — every second counts.',
-    detail: null,
+    icon: '⚡',
+    title: 'Know It? Say It',
+    body: 'Tap "I know it!" to skip straight to guessing. Or let the clip run to the end — your call.',
+    glow: 'rgba(245,130,24,0.12)',
   },
   {
-    number: '4',
-    title: 'Place it on your timeline',
-    body: 'Decide where this movie sits in history among your other cards. Your timeline runs from oldest (left) to newest (right). Place the card in the correct slot.',
-    detail: 'The more cards on your timeline, the more precise your placement must be.',
+    icon: '📅',
+    title: 'Place It Right',
+    body: 'Slot the card into your timeline — oldest on the left, newest on the right.',
+    glow: 'rgba(24,130,245,0.12)',
   },
   {
-    number: '5',
-    title: 'Keep it or lose it',
-    body: 'Correct placement? The card stays on your timeline. Wrong year? It goes back to the deck — another player can claim it on their turn.',
-    detail: null,
+    icon: '🎯',
+    title: 'Keep or Lose',
+    body: 'Correct year? The card stays on your timeline. Wrong? It goes back to the deck.',
+    glow: 'rgba(245,24,80,0.10)',
   },
   {
-    number: '6',
-    title: 'First to finish wins',
-    body: 'Agree on a target number of cards before the game starts. The first player to correctly place that many movies on their timeline wins the round!',
-    detail: 'Recommended: 10 cards for a standard game, 6 for a quick round.',
+    icon: '🏆',
+    title: 'Race to Win',
+    body: 'Agree on a card target before you start. First player to place that many correctly wins!',
+    glow: 'rgba(245,197,24,0.20)',
   },
-];
-
-const TIPS = [
-  { icon: '🎞️', text: "Decade aesthetics are unmistakable — 70s grain, 80s neon, 90s desaturated tones." },
-  { icon: '🌐', text: "Special effects quality is a dead giveaway. Practical vs. CGI sets hard limits on the era." },
-  { icon: '👗', text: "Fashion and hairstyles are often more accurate than you think — trust your instincts." },
-  { icon: '🎵', text: "The musical score can instantly reveal a decade. Listen carefully even when paused." },
 ];
 
 export default function RulesScreen() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const [page, setPage] = useState(0);
+  const scrollRef = useRef<ScrollView>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -59,77 +62,87 @@ export default function RulesScreen() {
     }, [])
   );
 
+  function handleScroll(e: any) {
+    const newPage = Math.round(e.nativeEvent.contentOffset.x / width);
+    if (newPage !== page) setPage(newPage);
+  }
+
+  function goTo(index: number) {
+    scrollRef.current?.scrollTo({ x: index * width, animated: true });
+    setPage(index);
+  }
+
+  const isLast = page === STEPS.length - 1;
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      {/* Header */}
+
+      {/* ── Header ── */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.headerBtn} onPress={() => router.back()}>
           <Text style={styles.backArrow}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>CINESCENES</Text>
-        <View style={styles.backBtn} />
+        <Text style={styles.headerTitle}>HOW TO PLAY</Text>
+        <View style={styles.headerBtn}>
+          <Text style={styles.pageCounter}>{page + 1} / {STEPS.length}</Text>
+        </View>
       </View>
 
+      {/* ── Swipeable slides ── */}
       <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
+        ref={scrollRef}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+        style={styles.pager}
       >
-        {/* Page title */}
-        <Text style={styles.pageTitle}>How to Play</Text>
-        <Text style={styles.pageSubtitle}>
-          Watch the trailer. Guess the year. Build the perfect timeline.
-        </Text>
+        {STEPS.map((step, i) => (
+          <View key={i} style={[styles.slide, { width }]}>
+            {/* Emoji glow */}
+            <View style={[styles.emojiGlow, { backgroundColor: step.glow }]} />
+            <Text style={styles.emoji}>{step.icon}</Text>
+            <Text style={styles.stepTitle}>{step.title}</Text>
+            <Text style={styles.stepBody}>{step.body}</Text>
+          </View>
+        ))}
+      </ScrollView>
 
-        {/* Steps */}
-        <View style={styles.steps}>
-          {STEPS.map((step) => (
-            <View key={step.number} style={styles.stepCard}>
-              <View style={styles.stepLeft}>
-                <View style={styles.stepBadge}>
-                  <Text style={styles.stepNumber}>{step.number}</Text>
-                </View>
-                {/* Connector line between steps */}
-                <View style={styles.stepConnector} />
-              </View>
-              <View style={styles.stepRight}>
-                <Text style={styles.stepTitle}>{step.title}</Text>
-                <Text style={styles.stepBody}>{step.body}</Text>
-                {step.detail && (
-                  <View style={styles.stepDetailRow}>
-                    <Text style={styles.stepDetailText}>{step.detail}</Text>
-                  </View>
-                )}
-              </View>
-            </View>
-          ))}
-        </View>
+      {/* ── Dot indicators ── */}
+      <View style={styles.dots}>
+        {STEPS.map((_, i) => (
+          <TouchableOpacity key={i} onPress={() => goTo(i)}>
+            <View style={[styles.dot, i === page && styles.dotActive]} />
+          </TouchableOpacity>
+        ))}
+      </View>
 
-        {/* Divider */}
-        <View style={styles.divider} />
-
-        {/* Pro tips */}
-        <Text style={styles.tipsTitle}>Pro Tips</Text>
-        <View style={styles.tipsGrid}>
-          {TIPS.map((tip, i) => (
-            <View key={i} style={styles.tipCard}>
-              <Text style={styles.tipIcon}>{tip.icon}</Text>
-              <Text style={styles.tipText}>{tip.text}</Text>
-            </View>
-          ))}
-        </View>
-
-        {/* CTA */}
+      {/* ── Navigation + CTA ── */}
+      <View style={styles.nav}>
         <TouchableOpacity
-          style={styles.ctaButton}
-          onPress={() => router.push('/play')}
-          activeOpacity={0.85}
+          style={[styles.navBtn, page === 0 && styles.navBtnHidden]}
+          onPress={() => goTo(page - 1)}
+          disabled={page === 0}
         >
-          <Text style={styles.ctaText}>Let's Play  →</Text>
+          <Text style={styles.navBtnText}>← Prev</Text>
         </TouchableOpacity>
 
-        <View style={{ height: 8 }} />
-      </ScrollView>
+        {isLast ? (
+          <TouchableOpacity
+            style={styles.ctaButton}
+            onPress={() => router.push('/play')}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.ctaText}>Let's Play  →</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity style={styles.nextBtn} onPress={() => goTo(page + 1)}>
+            <Text style={styles.nextBtnText}>Next →</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
     </SafeAreaView>
   );
 }
@@ -146,170 +159,138 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'rgba(255,255,255,0.08)',
   },
-  backBtn: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
+  headerBtn: {
+    width: 56,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   backArrow: {
     color: '#f5c518',
     fontSize: 22,
     fontWeight: '600',
+    alignSelf: 'flex-start',
   },
   headerTitle: {
-    color: '#f5c518',
-    fontSize: 13,
+    color: '#fff',
+    fontSize: 12,
     fontWeight: '900',
     letterSpacing: 4,
   },
-
-  // ── Scroll ──
-  scroll: { flex: 1 },
-  scrollContent: {
-    paddingHorizontal: 24,
-    paddingTop: 28,
+  pageCounter: {
+    color: '#555',
+    fontSize: 13,
+    fontWeight: '600',
   },
 
-  // ── Page title ──
-  pageTitle: {
-    color: '#fff',
-    fontSize: 32,
-    fontWeight: '900',
-    letterSpacing: 0.5,
-    marginBottom: 8,
+  // ── Pager ──
+  pager: {
+    flex: 1,
   },
-  pageSubtitle: {
-    color: '#9a9aaa',
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 32,
-  },
-
-  // ── Steps ──
-  steps: {
-    gap: 0,
-  },
-  stepCard: {
-    flexDirection: 'row',
-    gap: 16,
-    marginBottom: 0,
-  },
-  stepLeft: {
+  slide: {
+    flex: 1,
     alignItems: 'center',
-    width: 36,
-  },
-  stepBadge: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#f5c518',
     justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1,
+    paddingHorizontal: 36,
+    gap: 20,
+    paddingBottom: 20,
   },
-  stepNumber: {
-    color: '#0a0a0a',
-    fontSize: 16,
-    fontWeight: '900',
+  emojiGlow: {
+    position: 'absolute',
+    width: 220,
+    height: 220,
+    borderRadius: 110,
   },
-  stepConnector: {
-    flex: 1,
-    width: 2,
-    backgroundColor: 'rgba(245,197,24,0.2)',
-    marginVertical: 4,
-    minHeight: 20,
-  },
-  stepRight: {
-    flex: 1,
-    paddingBottom: 28,
+  emoji: {
+    fontSize: 96,
+    textAlign: 'center',
   },
   stepTitle: {
     color: '#fff',
-    fontSize: 17,
-    fontWeight: '800',
-    marginTop: 6,
-    marginBottom: 6,
+    fontSize: 28,
+    fontWeight: '900',
+    textAlign: 'center',
+    letterSpacing: 0.3,
   },
   stepBody: {
-    color: '#aaa',
-    fontSize: 14,
-    lineHeight: 21,
-  },
-  stepDetailRow: {
-    marginTop: 8,
-    backgroundColor: 'rgba(245,197,24,0.08)',
-    borderLeftWidth: 2,
-    borderLeftColor: '#f5c518',
-    borderRadius: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  stepDetailText: {
-    color: '#c8a800',
-    fontSize: 12,
-    lineHeight: 17,
-    fontStyle: 'italic',
+    color: '#9a9aaa',
+    fontSize: 16,
+    lineHeight: 24,
+    textAlign: 'center',
   },
 
-  // ── Divider ──
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    marginVertical: 28,
-  },
-
-  // ── Pro tips ──
-  tipsTitle: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: '800',
-    marginBottom: 16,
-  },
-  tipsGrid: {
-    gap: 10,
-    marginBottom: 32,
-  },
-  tipCard: {
+  // ── Dots ──
+  dots: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 14,
-    backgroundColor: '#1a1a2e',
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 12,
   },
-  tipIcon: {
-    fontSize: 20,
-    marginTop: 1,
+  dot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.15)',
   },
-  tipText: {
-    flex: 1,
-    color: '#bbb',
-    fontSize: 13,
-    lineHeight: 19,
+  dotActive: {
+    width: 22,
+    backgroundColor: '#f5c518',
   },
 
-  // ── CTA ──
+  // ── Navigation ──
+  nav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 24,
+    paddingBottom: 8,
+    gap: 12,
+  },
+  navBtn: {
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+  },
+  navBtnHidden: {
+    opacity: 0,
+    pointerEvents: 'none',
+  },
+  navBtnText: {
+    color: '#666',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  nextBtn: {
+    flex: 1,
+    backgroundColor: '#1e1630',
+    borderRadius: 22,
+    paddingVertical: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  nextBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
   ctaButton: {
+    flex: 1,
     backgroundColor: '#f5c518',
     borderRadius: 22,
-    paddingVertical: 18,
+    paddingVertical: 16,
     alignItems: 'center',
     shadowColor: '#f5c518',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.3,
     shadowRadius: 12,
     elevation: 8,
-    marginBottom: 8,
   },
   ctaText: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '900',
     color: '#0a0a0a',
     letterSpacing: 0.5,
