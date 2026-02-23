@@ -8,7 +8,8 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { Snackbar } from 'react-native-paper';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { TrailerPlayer, TrailerPlayerHandle } from '@/components/TrailerPlayer';
 import { useAppStore } from '@/store/useAppStore';
@@ -29,6 +30,12 @@ export default function TrailerScreen() {
   const router = useRouter();
   const { width, height } = useWindowDimensions();
 
+  useFocusEffect(
+    useCallback(() => {
+      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+    }, [])
+  );
+
   const { currentMovie, setCurrentMovie, activeMovies, setActiveMovies, fromScanner, setFromScanner } = useAppStore();
   const trailerRef = useRef<TrailerPlayerHandle>(null);
   const [key, setKey] = useState(0);
@@ -42,7 +49,7 @@ export default function TrailerScreen() {
   const [snackMessage, setSnackMessage] = useState('');
 
   if (!currentMovie) {
-    router.replace('/');
+    router.replace('/play');
     return null;
   }
 
@@ -222,7 +229,7 @@ export default function TrailerScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.leaveBtn}
-                onPress={() => { setShowExitDialog(false); setFromScanner(false); router.replace('/'); }}
+                onPress={() => { setShowExitDialog(false); setFromScanner(false); router.replace('/play'); }}
               >
                 <Text style={styles.leaveBtnText}>Leave →</Text>
               </TouchableOpacity>
