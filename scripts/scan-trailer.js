@@ -258,6 +258,7 @@ function checkTesseract() {
  * Returns flagged intervals in the same shape as audio flagged intervals.
  */
 function detectVisualSpoilers(frames, spoilerWords) {
+  const regexes = buildSpoilerRegexes(spoilerWords);
   const flagged = [];
 
   for (const { framePath, timestamp } of frames) {
@@ -267,8 +268,7 @@ function detectVisualSpoilers(frames, spoilerWords) {
     const text = (result.stdout ?? '').trim();
     if (!text) continue;
 
-    const textLower = text.toLowerCase();
-    const matched = [...spoilerWords].filter(w => textLower.includes(w));
+    const matched = regexes.filter(({ regex }) => regex.test(text)).map(({ word }) => word);
     if (matched.length > 0) {
       flagged.push({
         start:   timestamp,
@@ -371,12 +371,21 @@ async function buildSpoilerWords(title, director, year, tmdbId, apiKey) {
   return words;
 }
 
+// Pre-compile a word-boundary regex for each spoiler word so that e.g.
+// "war" doesn't match inside "warning" or "award".
+function buildSpoilerRegexes(spoilerWords) {
+  return [...spoilerWords].map(w => ({
+    word:  w,
+    regex: new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i'),
+  }));
+}
+
 function findFlaggedIntervals(segments, spoilerWords) {
+  const regexes = buildSpoilerRegexes(spoilerWords);
   const flagged = [];
 
   for (const seg of segments) {
-    const text = seg.text.toLowerCase();
-    const matched = [...spoilerWords].filter(w => text.includes(w));
+    const matched = regexes.filter(({ regex }) => regex.test(seg.text)).map(({ word }) => word);
     if (matched.length > 0) {
       flagged.push({
         start:   seg.start,
