@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   useWindowDimensions,
+  Animated,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -31,9 +32,33 @@ const STEPS = [
     glow: 'rgba(245,130,24,0.12)',
   },
   {
+    icon: '🪙',
+    title: 'Earn Coins',
+    body: 'Everyone starts with 2 coins. Correctly name the movie AND its director out loud before the reveal and earn a coin from each player who got it wrong.',
+    glow: 'rgba(245,197,24,0.18)',
+  },
+  {
+    icon: '🎴',
+    title: 'Your Starting Card',
+    body: 'Every player begins with one card already on their timeline. On your first turn it\'s simple — the new card goes either before or after that one.',
+    glow: 'rgba(24,197,130,0.12)',
+  },
+  {
     icon: '📅',
     title: 'Place It Right',
-    body: 'Slot the card into your timeline — oldest on the left, newest on the right.',
+    body: 'Slot the card into your timeline — oldest on the left, newest on the right. The more cards you collect, the trickier it gets!',
+    glow: 'rgba(24,130,245,0.12)',
+  },
+  {
+    icon: '⚔️',
+    title: 'Challenge!',
+    body: "After the active player places their card, everyone else has 5 seconds to challenge. Think they got it wrong? Tap Challenge and pick where YOU think the card belongs.",
+    glow: 'rgba(230,57,70,0.14)',
+  },
+  {
+    icon: '🃏',
+    title: 'The Reveal',
+    body: "The card flips and the correct year is shown. If the active player was right, they keep the card. If a challenger was right, the card goes to them instead. If nobody was right, the card is trashed.",
     glow: 'rgba(24,130,245,0.12)',
   },
   {
@@ -55,6 +80,7 @@ export default function RulesScreen() {
   const { width } = useWindowDimensions();
   const [page, setPage] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
+  const scrollX = useRef(new Animated.Value(0)).current;
 
   useFocusEffect(
     useCallback(() => {
@@ -94,7 +120,10 @@ export default function RulesScreen() {
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
-        onScroll={handleScroll}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+          { useNativeDriver: false, listener: handleScroll }
+        )}
         scrollEventThrottle={16}
         style={styles.pager}
       >
@@ -111,11 +140,20 @@ export default function RulesScreen() {
 
       {/* ── Dot indicators ── */}
       <View style={styles.dots}>
-        {STEPS.map((_, i) => (
-          <TouchableOpacity key={i} onPress={() => goTo(i)}>
-            <View style={[styles.dot, i === page && styles.dotActive]} />
-          </TouchableOpacity>
-        ))}
+        {STEPS.map((_, i) => {
+          const inputRange = [(i - 1) * width, i * width, (i + 1) * width];
+          const dotWidth = scrollX.interpolate({ inputRange, outputRange: [7, 22, 7], extrapolate: 'clamp' });
+          const dotColor = scrollX.interpolate({
+            inputRange,
+            outputRange: ['rgba(255,255,255,0.15)', '#f5c518', 'rgba(255,255,255,0.15)'],
+            extrapolate: 'clamp',
+          });
+          return (
+            <TouchableOpacity key={i} onPress={() => goTo(i)}>
+              <Animated.View style={[styles.dot, { width: dotWidth, backgroundColor: dotColor }]} />
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       {/* ── Navigation + CTA ── */}
