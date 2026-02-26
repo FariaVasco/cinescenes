@@ -8,6 +8,7 @@ import {
   useWindowDimensions,
   Animated,
 } from 'react-native';
+import { C, R, FS } from '@/constants/theme';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ScreenOrientation from 'expo-screen-orientation';
@@ -188,7 +189,7 @@ export default function RulesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#100a20',
+    backgroundColor: C.bg,
   },
 
   // ── Header ──
@@ -199,7 +200,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,0.08)',
+    borderBottomColor: C.borderSubtle,
   },
   headerBtn: {
     width: 56,
@@ -207,20 +208,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   backArrow: {
-    color: '#f5c518',
+    color: C.gold,
     fontSize: 30,
     fontWeight: '600',
     alignSelf: 'flex-start',
   },
   headerTitle: {
-    color: '#fff',
-    fontSize: 12,
+    color: C.textPrimary,
+    fontSize: FS.xs,
     fontWeight: '900',
     letterSpacing: 4,
   },
   pageCounter: {
-    color: '#555',
-    fontSize: 13,
+    color: C.textMuted,
+    fontSize: FS.sm,
     fontWeight: '600',
   },
 
@@ -247,15 +248,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   stepTitle: {
-    color: '#fff',
-    fontSize: 28,
+    color: C.textPrimary,
+    fontSize: FS['2xl'],
     fontWeight: '900',
     textAlign: 'center',
     letterSpacing: 0.3,
   },
   stepBody: {
-    color: '#9a9aaa',
-    fontSize: 16,
+    color: C.textSub,
+    fontSize: FS.md,
     lineHeight: 24,
     textAlign: 'center',
   },
@@ -272,11 +273,11 @@ const styles = StyleSheet.create({
     width: 7,
     height: 7,
     borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: C.borderSubtle,
   },
   dotActive: {
     width: 22,
-    backgroundColor: '#f5c518',
+    backgroundColor: C.gold,
   },
 
   // ── Navigation ──
@@ -297,40 +298,40 @@ const styles = StyleSheet.create({
     pointerEvents: 'none',
   },
   navBtnText: {
-    color: '#666',
-    fontSize: 15,
+    color: C.textMuted,
+    fontSize: FS.base,
     fontWeight: '600',
   },
   nextBtn: {
     flex: 1,
-    backgroundColor: '#1e1630',
-    borderRadius: 22,
+    backgroundColor: C.surface,
+    borderRadius: R.card,
     paddingVertical: 16,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: C.border,
   },
   nextBtnText: {
-    color: '#fff',
-    fontSize: 16,
+    color: C.textPrimary,
+    fontSize: FS.md,
     fontWeight: '700',
   },
   ctaButton: {
     flex: 1,
-    backgroundColor: '#f5c518',
-    borderRadius: 22,
+    backgroundColor: C.gold,
+    borderRadius: R.card,
     paddingVertical: 16,
     alignItems: 'center',
-    shadowColor: '#f5c518',
+    shadowColor: C.gold,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 12,
     elevation: 8,
   },
   ctaText: {
-    fontSize: 16,
+    fontSize: FS.md,
     fontWeight: '900',
-    color: '#0a0a0a',
+    color: C.textOnGold,
     letterSpacing: 0.5,
   },
 });

@@ -8,6 +8,7 @@ import {
   Animated,
 } from 'react-native';
 import { Movie } from '@/lib/database.types';
+import { C, R, FS } from '@/constants/theme';
 
 interface TimelineProps {
   timeline: number[];
@@ -19,6 +20,7 @@ interface TimelineProps {
   placedInterval?: number | null;
   placedMovies?: Array<{ year: number; title: string }>;
   hideFloatingCard?: boolean;
+  blockedIntervals?: number[];
 }
 
 export function Timeline({
@@ -31,6 +33,7 @@ export function Timeline({
   placedInterval,
   placedMovies,
   hideFloatingCard,
+  blockedIntervals,
 }: TimelineProps) {
   // Build the display list: sorted years from timeline
   const sortedYears = [...timeline].sort((a, b) => a - b);
@@ -46,6 +49,15 @@ export function Timeline({
 
   function renderGap(index: number) {
     const isActive = showAtInterval === index;
+    const isBlocked = interactive && blockedIntervals?.includes(index);
+
+    if (isBlocked) {
+      return (
+        <View key={`gap-${index}`} style={styles.gapBlocked}>
+          <Text style={styles.gapBlockedText}>✕</Text>
+        </View>
+      );
+    }
 
     if (!interactive) {
       // Show unknown card at this position if placedInterval matches
@@ -152,28 +164,39 @@ const styles = StyleSheet.create({
   card: {
     width: 80,
     minHeight: 100,
-    backgroundColor: '#1e1630',
-    borderRadius: 10,
+    backgroundColor: C.surface,
+    borderRadius: R.md,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: C.border,
     padding: 8,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
   },
   cardYear: {
-    color: '#f5c518',
-    fontSize: 16,
+    color: C.gold,
+    fontSize: FS.md,
     fontWeight: '800',
   },
   cardTitle: {
-    color: '#999',
-    fontSize: 9,
+    color: C.textSub,
+    fontSize: FS.micro,
     textAlign: 'center',
     lineHeight: 12,
   },
   gapSpacer: {
     width: 20,
+  },
+  gapBlocked: {
+    width: 28,
+    height: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gapBlockedText: {
+    color: 'rgba(230,57,70,0.45)',
+    fontSize: FS.xs,
+    fontWeight: '700',
   },
   gapTap: {
     width: 32,
@@ -184,14 +207,14 @@ const styles = StyleSheet.create({
   gapArrow: {
     width: 24,
     height: 24,
-    borderRadius: 12,
-    backgroundColor: 'rgba(245,197,24,0.15)',
+    borderRadius: R.full,
+    backgroundColor: C.goldFaint,
     alignItems: 'center',
     justifyContent: 'center',
   },
   gapArrowText: {
-    color: '#f5c518',
-    fontSize: 14,
+    color: C.gold,
+    fontSize: FS.base,
     lineHeight: 18,
   },
   activeGap: {
@@ -202,10 +225,10 @@ const styles = StyleSheet.create({
   unknownCard: {
     width: 80,
     height: 100,
-    backgroundColor: '#2a1f4a',
-    borderRadius: 10,
+    backgroundColor: C.surfaceHigh,
+    borderRadius: R.md,
     borderWidth: 2,
-    borderColor: '#f5c518',
+    borderColor: C.gold,
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
@@ -215,7 +238,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
   },
   unknownCardLabel: {
-    color: '#f5c518',
+    color: C.gold,
     fontSize: 22,
     fontWeight: '900',
   },
@@ -225,14 +248,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   confirmBtn: {
-    backgroundColor: '#f5c518',
-    borderRadius: 8,
+    backgroundColor: C.gold,
+    borderRadius: R.sm,
     paddingHorizontal: 12,
     paddingVertical: 7,
   },
   confirmBtnText: {
-    color: '#0a0a0a',
-    fontSize: 12,
+    color: C.textOnGold,
+    fontSize: FS.sm,
     fontWeight: '800',
   },
 });

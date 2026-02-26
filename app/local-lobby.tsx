@@ -9,6 +9,7 @@ import {
   Alert,
   Clipboard,
 } from 'react-native';
+import { C, R, FS } from '@/constants/theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
@@ -402,79 +403,79 @@ export default function LocalLobbyScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#100a20' },
+  container: { flex: 1, backgroundColor: C.bg },
   backBtn: { paddingHorizontal: 20, paddingVertical: 12 },
-  backBtnText: { color: 'rgba(255,255,255,0.4)', fontSize: 15 },
+  backBtnText: { color: 'rgba(255,255,255,0.4)', fontSize: FS.base },
 
   choiceCenter: {
     flex: 1, justifyContent: 'center', alignItems: 'center',
     paddingHorizontal: 32, gap: 24,
   },
-  title: { color: '#fff', fontSize: 28, fontWeight: '900', textAlign: 'center' },
-  subtitle: { color: '#888', fontSize: 14, textAlign: 'center' },
+  title: { color: C.textPrimary, fontSize: FS['2xl'], fontWeight: '900', textAlign: 'center' },
+  subtitle: { color: C.textSub, fontSize: FS.base, textAlign: 'center' },
   choiceCards: { width: '100%', gap: 14 },
   choiceCard: {
-    backgroundColor: '#1e1630', borderRadius: 20, padding: 28,
-    alignItems: 'center', gap: 8, borderWidth: 1, borderColor: '#333',
+    backgroundColor: C.surface, borderRadius: R.card, padding: 28,
+    alignItems: 'center', gap: 8, borderWidth: 1, borderColor: C.border,
   },
-  choiceCardSecondary: { borderColor: 'rgba(245,197,24,0.2)' },
-  choiceCardTitle: { color: '#fff', fontSize: 18, fontWeight: '800' },
-  choiceCardSub: { color: '#666', fontSize: 13 },
+  choiceCardSecondary: { borderColor: C.goldFaint },
+  choiceCardTitle: { color: C.textPrimary, fontSize: FS.lg, fontWeight: '800' },
+  choiceCardSub: { color: C.textMuted, fontSize: FS.sm },
 
   formCenter: { flex: 1, justifyContent: 'center', paddingHorizontal: 32, gap: 20 },
   inputWrapper: { gap: 6 },
   inputLabel: {
-    color: '#888', fontSize: 12, fontWeight: '600',
+    color: C.textSub, fontSize: FS.sm, fontWeight: '600',
     letterSpacing: 0.8, textTransform: 'uppercase',
   },
   input: {
-    backgroundColor: '#1e1630', borderRadius: 12, borderWidth: 1,
-    borderColor: '#333', color: '#fff', fontSize: 17,
+    backgroundColor: C.surface, borderRadius: R.md, borderWidth: 1,
+    borderColor: C.border, color: C.textPrimary, fontSize: FS.md + 1,
     paddingHorizontal: 16, paddingVertical: 14,
   },
   actionBtn: {
-    backgroundColor: '#f5c518', borderRadius: 14,
+    backgroundColor: C.gold, borderRadius: R.btn,
     paddingVertical: 16, alignItems: 'center', marginTop: 8,
   },
   actionBtnDisabled: { opacity: 0.4 },
-  actionBtnText: { color: '#0a0a0a', fontSize: 16, fontWeight: '800' },
+  actionBtnText: { color: C.textOnGold, fontSize: FS.md, fontWeight: '800' },
 
   waitingHeader: { alignItems: 'center', paddingTop: 24, paddingBottom: 16, gap: 6 },
   waitingLabel: {
-    color: '#888', fontSize: 12, fontWeight: '600',
+    color: C.textSub, fontSize: FS.sm, fontWeight: '600',
     letterSpacing: 1, textTransform: 'uppercase',
   },
   codeRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   gameCode: {
-    color: '#f5c518', fontSize: 42, fontWeight: '900',
+    color: C.gold, fontSize: 42, fontWeight: '900',
     letterSpacing: 8, fontVariant: ['tabular-nums'],
   },
-  codeHint: { color: '#555', fontSize: 12 },
+  codeHint: { color: C.textMuted, fontSize: FS.sm },
   playerCountRow: { alignItems: 'center', paddingVertical: 8 },
-  playerCountText: { color: '#888', fontSize: 13 },
+  playerCountText: { color: C.textSub, fontSize: FS.sm },
   playerList: { flex: 1, paddingHorizontal: 24 },
   playerListContent: { gap: 10, paddingBottom: 16 },
   playerChip: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#1e1630',
-    borderRadius: 12, padding: 12, gap: 12, borderWidth: 1, borderColor: '#2a2040',
+    flexDirection: 'row', alignItems: 'center', backgroundColor: C.surface,
+    borderRadius: R.md, padding: 12, gap: 12, borderWidth: 1, borderColor: C.border,
   },
   playerAvatar: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: '#f5c518', alignItems: 'center', justifyContent: 'center',
+    width: 36, height: 36, borderRadius: R.full,
+    backgroundColor: C.gold, alignItems: 'center', justifyContent: 'center',
   },
-  playerAvatarText: { color: '#0a0a0a', fontSize: 13, fontWeight: '800' },
-  playerName: { color: '#fff', fontSize: 15, fontWeight: '600', flex: 1 },
+  playerAvatarText: { color: C.textOnGold, fontSize: FS.sm, fontWeight: '800' },
+  playerName: { color: C.textPrimary, fontSize: FS.base, fontWeight: '600', flex: 1 },
   youBadge: {
-    color: '#f5c518', fontSize: 11, fontWeight: '700',
-    backgroundColor: 'rgba(245,197,24,0.12)',
-    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6,
+    color: C.gold, fontSize: FS.xs, fontWeight: '700',
+    backgroundColor: C.goldFaint,
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: R.xs,
   },
   startBtn: {
-    backgroundColor: '#f5c518', margin: 24,
-    borderRadius: 16, paddingVertical: 18, alignItems: 'center',
+    backgroundColor: C.gold, margin: 24,
+    borderRadius: R.btn, paddingVertical: 18, alignItems: 'center',
   },
   startBtnDisabled: { opacity: 0.4 },
-  startBtnText: { color: '#0a0a0a', fontSize: 16, fontWeight: '900' },
+  startBtnText: { color: C.textOnGold, fontSize: FS.md, fontWeight: '900' },
   waitingForHost: { margin: 24, paddingVertical: 18, alignItems: 'center' },
-  waitingForHostText: { color: '#888', fontSize: 14 },
+  waitingForHostText: { color: C.textSub, fontSize: FS.base },
 });

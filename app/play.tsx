@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   StyleSheet,
 } from 'react-native';
+import { C, R, FS } from '@/constants/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -91,7 +92,7 @@ export default function PlayScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#100a20',
+    backgroundColor: C.bg,
     flexDirection: 'column',
   },
   topBar: {
@@ -122,12 +123,12 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 16,
+    borderRadius: R.btn,
     backgroundColor: 'rgba(255,255,255,0.07)',
   },
   castBtnLabel: {
     color: 'rgba(255,255,255,0.4)',
-    fontSize: 13,
+    fontSize: FS.sm,
     fontWeight: '600',
   },
 
@@ -139,7 +140,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   card: {
-    borderRadius: 24,
+    borderRadius: R.card,
     padding: 28,
     alignItems: 'center',
     gap: 6,
@@ -150,27 +151,26 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   cardPrimary: {
-    backgroundColor: '#f5c518',
+    backgroundColor: C.gold,
   },
   cardSecondary: {
-    backgroundColor: '#1e1630',
+    backgroundColor: C.surface,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: C.border,
   },
   cardTitle: {
-    fontSize: 20,
+    fontSize: FS.lg + 1,
     fontWeight: '900',
-    color: '#0a0a0a',
+    color: C.textOnGold,
     letterSpacing: 0.4,
   },
   cardTitleSecondary: {
-    color: '#f5c518',
+    color: C.gold,
   },
   cardSub: {
-    fontSize: 12,
-    color: '#666',
+    fontSize: FS.sm,
+    color: C.textMuted,
     letterSpacing: 0.3,
     textAlign: 'center',
   },
-
 });

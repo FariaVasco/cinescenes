@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -8,10 +8,13 @@ import {
   ScrollView,
   Modal,
   Animated,
+  Easing,
+  useWindowDimensions,
 } from 'react-native';
+import { C, R, FS } from '@/constants/theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Snackbar } from 'react-native-paper';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
@@ -57,6 +60,7 @@ export default function GameScreen() {
   const [snackMessage, setSnackMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [showIntro, setShowIntro] = useState(false);
+  const [showLandscapePrompt, setShowLandscapePrompt] = useState(false);
 
   const [selectedInterval, setSelectedInterval] = useState<number | null>(null);
   const [hasPassed, setHasPassed] = useState(false);
@@ -75,11 +79,14 @@ export default function GameScreen() {
   const currentTurnRef = useRef<Turn | null>(null);
   const gameIdRef = useRef<string | null>(null);
 
-  useFocusEffect(
-    useCallback(() => {
+  // Portrait during intro/loading, landscape for the actual game
+  useEffect(() => {
+    if (loading || showIntro) {
+      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+    } else {
       ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
-    }, [])
-  );
+    }
+  }, [loading, showIntro]);
 
   useEffect(() => {
     if (!game) { router.replace('/'); return; }
@@ -206,11 +213,23 @@ export default function GameScreen() {
   function getMovie() { return activeMovies.find((m) => m.id === currentTurn?.movie_id) ?? null; }
   function getActivePlayerTimeline(): number[] { return getActivePlayer()?.timeline ?? []; }
 
+  // Returns the single correct interval for a year in a timeline (no duplicate).
   function computeCorrectInterval(year: number, timeline: number[]): number {
     const sorted = [...timeline].sort((a, b) => a - b);
     let idx = 0;
     while (idx < sorted.length && sorted[idx] < year) idx++;
     return idx;
+  }
+
+  // When the placed year already exists in the timeline, BOTH adjacent intervals are valid
+  // (before or after the existing card with the same year).
+  function computeValidIntervals(year: number, timeline: number[]): number[] {
+    const sorted = [...timeline].sort((a, b) => a - b);
+    const dupIdx = sorted.indexOf(year);
+    if (dupIdx !== -1) {
+      return [dupIdx, dupIdx + 1];
+    }
+    return [computeCorrectInterval(year, timeline)];
   }
 
   // ── Actions (with optimistic updates so UI responds instantly) ──
@@ -284,15 +303,19 @@ export default function GameScreen() {
     if (!movie) return;
 
     const activeTimeline = getActivePlayerTimeline();
-    const correctInterval = computeCorrectInterval(movie.year, activeTimeline);
-    const activeCorrect = currentTurn.placed_interval === correctInterval;
-    const correctChallenger = challenges.find(
-      (c) => c.interval_index === correctInterval && c.interval_index !== -1
-    );
+    const validIntervals = computeValidIntervals(movie.year, activeTimeline);
+    const activeCorrect =
+      currentTurn.placed_interval !== null &&
+      currentTurn.placed_interval !== undefined &&
+      validIntervals.includes(currentTurn.placed_interval);
+    // A challenger wins only if the active player was wrong and they placed in a valid interval
+    const winningChallenger = activeCorrect
+      ? null
+      : challenges.find((c) => c.interval_index !== -1 && validIntervals.includes(c.interval_index));
 
     let winnerId: string | null = null;
     if (activeCorrect) winnerId = currentTurn.active_player_id;
-    else if (correctChallenger) winnerId = correctChallenger.challenger_id;
+    else if (winningChallenger) winnerId = winningChallenger.challenger_id;
 
     if (winnerId) {
       const winner = getPlayer(winnerId);
@@ -341,9 +364,13 @@ export default function GameScreen() {
       <GameIntroScreen
         startingMovie={startingMovie}
         playerName={myPlayer?.display_name ?? 'Player'}
-        onDone={() => setShowIntro(false)}
+        onDone={() => { setShowIntro(false); setShowLandscapePrompt(true); }}
       />
     );
+  }
+
+  if (showLandscapePrompt) {
+    return <LandscapePromptScreen onDone={() => setShowLandscapePrompt(false)} />;
   }
 
   const movie = getMovie();
@@ -584,6 +611,16 @@ export default function GameScreen() {
   if (currentTurn.status === 'challenging') {
     const alreadyDecided = hasPassed || myChallenge !== null;
 
+    // Intervals already claimed: active player's pick + any confirmed challenger picks
+    const takenSet = new Set<number>();
+    if (currentTurn.placed_interval !== null && currentTurn.placed_interval !== undefined) {
+      takenSet.add(currentTurn.placed_interval);
+    }
+    challenges.forEach(c => { if (c.interval_index !== -1) takenSet.add(c.interval_index); });
+    const blockedIntervals = Array.from(takenSet);
+    const totalIntervals = timeline.length + 1;
+    const canChallenge = totalIntervals - takenSet.size > 0;
+
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.challengingLayout}>
@@ -630,6 +667,7 @@ export default function GameScreen() {
                 onIntervalSelect={setChallengeInterval}
                 onConfirm={handleConfirmChallengeInterval}
                 placedMovies={placedMovies}
+                blockedIntervals={blockedIntervals}
               />
               {challengeInterval === null && (
                 <Text style={styles.tapHint}>Tap ⌄ to pick a spot</Text>
@@ -653,18 +691,30 @@ export default function GameScreen() {
             </View>
           ) : (
             <View style={styles.challengePanel}>
-              <Text style={styles.challengePanelTitle}>Challenge?</Text>
-              <View style={styles.challengeTimerRow}>
-                <ChallengeTimer seconds={5} onExpire={() => setHasPassed(true)} />
-              </View>
-              <View style={styles.challengeButtons}>
-                <TouchableOpacity style={styles.challengeBtn} onPress={handleChallenge}>
-                  <Text style={styles.challengeBtnText}>Challenge</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.passBtn} onPress={() => setHasPassed(true)}>
-                  <Text style={styles.passBtnText}>Pass</Text>
-                </TouchableOpacity>
-              </View>
+              {canChallenge ? (
+                <>
+                  <Text style={styles.challengePanelTitle}>Challenge?</Text>
+                  <View style={styles.challengeTimerRow}>
+                    <ChallengeTimer seconds={5} onExpire={() => setHasPassed(true)} />
+                  </View>
+                  <View style={styles.challengeButtons}>
+                    <TouchableOpacity style={styles.challengeBtn} onPress={handleChallenge}>
+                      <Text style={styles.challengeBtnText}>Challenge</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.passBtn} onPress={() => setHasPassed(true)}>
+                      <Text style={styles.passBtnText}>Pass</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.challengePanelTitle}>No spots left</Text>
+                  <Text style={styles.noChallengesText}>All intervals are taken</Text>
+                  <TouchableOpacity style={styles.passBtn} onPress={() => setHasPassed(true)}>
+                    <Text style={styles.passBtnText}>Got it</Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           )}
         </View>
@@ -678,46 +728,79 @@ export default function GameScreen() {
     const m = movie;
     if (!m) return <LoadingScreen />;
 
-    const correctInterval = computeCorrectInterval(m.year, timeline);
-    const activeCorrect = currentTurn.placed_interval === correctInterval;
-    const correctChallenger = challenges.find(
-      (c) => c.interval_index === correctInterval && c.interval_index !== -1
-    );
+    const validIntervals = computeValidIntervals(m.year, timeline);
+    const activeCorrect =
+      currentTurn.placed_interval !== null &&
+      currentTurn.placed_interval !== undefined &&
+      validIntervals.includes(currentTurn.placed_interval);
+    // A challenger wins only when the active player was wrong
+    const winningChallenger = activeCorrect
+      ? null
+      : challenges.find((c) => c.interval_index !== -1 && validIntervals.includes(c.interval_index));
+    // Coin-back: active was correct AND a challenger also picked the OTHER valid interval
+    // (duplicate-year case — both adjacent intervals are valid, challenger wasn't wrong)
+    const coinBackChallengers = (validIntervals.length === 2 && activeCorrect)
+      ? challenges.filter(
+          (c) =>
+            c.interval_index !== -1 &&
+            validIntervals.includes(c.interval_index) &&
+            c.interval_index !== currentTurn.placed_interval
+        )
+      : [];
+    const coinBackNames = coinBackChallengers
+      .map((c) => getPlayer(c.challenger_id)?.display_name)
+      .filter(Boolean) as string[];
+
     let resultText = 'Nobody got it — card trashed 🗑️';
     let resultName = '';
     if (activeCorrect) {
       resultName = activePlayer?.display_name ?? '';
       resultText = 'got it right! 🎉';
-    } else if (correctChallenger) {
-      resultName = getPlayer(correctChallenger.challenger_id)?.display_name ?? '';
+    } else if (winningChallenger) {
+      resultName = getPlayer(winningChallenger.challenger_id)?.display_name ?? '';
       resultText = 'challenged correctly! 🎯';
     }
+
+    const resultEmoji = activeCorrect ? '🎉' : winningChallenger ? '🎯' : '🗑️';
 
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.revealLayout}>
-          <View style={styles.revealCard}>
-            <Text style={styles.revealYear}>{m.year}</Text>
-            <Text style={styles.revealTitle}>{m.title}</Text>
-            <Text style={styles.revealDirector}>{m.director}</Text>
+
+          {/* Left: movie card */}
+          <View style={styles.revealMovieCard}>
+            <Text style={styles.revealMovieYear}>{m.year}</Text>
+            <View style={styles.revealMovieDivider} />
+            <Text style={styles.revealMovieTitle}>{m.title}</Text>
+            {m.director ? <Text style={styles.revealMovieDirector}>dir. {m.director}</Text> : null}
           </View>
-          <View style={styles.revealInfo}>
-            <Text style={styles.revealInfoLabel}>Correct position: interval {correctInterval}</Text>
-            <Text style={styles.revealInfoLabel}>Placed at: interval {currentTurn.placed_interval}</Text>
-          </View>
-          <View style={styles.resultBanner}>
-            {resultName ? (
-              <Text style={styles.resultText}>
-                <Text style={styles.resultName}>{resultName}</Text> {resultText}
+
+          {/* Right: result info */}
+          <View style={styles.revealResultCol}>
+            <Text style={styles.revealResultEmoji}>{resultEmoji}</Text>
+            <Text style={styles.revealResultText}>
+              {resultName
+                ? <><Text style={styles.revealResultPlayer}>{resultName}</Text>{' '}{resultText}</>
+                : resultText}
+            </Text>
+            {coinBackNames.length > 0 && (
+              <Text style={styles.revealCoinBack}>
+                {'🪙 '}
+                <Text style={styles.revealCoinBackName}>{coinBackNames.join(', ')}</Text>
+                {' also had it right — coin returned'}
               </Text>
-            ) : (
-              <Text style={styles.resultText}>{resultText}</Text>
             )}
           </View>
-          <TouchableOpacity style={styles.primaryBtn} onPress={handleNextTurn}>
-            <Text style={styles.primaryBtnText}>Next Player →</Text>
+
+        </View>
+
+        {/* Full-width button strip above score bar */}
+        <View style={styles.revealFooter}>
+          <TouchableOpacity style={styles.revealNextBtn} onPress={handleNextTurn} activeOpacity={0.85}>
+            <Text style={styles.revealNextBtnText}>Next Player →</Text>
           </TouchableOpacity>
         </View>
+
         <ScoreBar players={players} myId={myPlayerId} />
       </SafeAreaView>
     );
@@ -752,19 +835,72 @@ function LoadingScreen() {
   );
 }
 
-// ── Game intro: starting card reveal ──
+// ── Game intro: Price Is Right spinning wheel ──
 
 const NUM_INTRO_CARDS = 5;
-const HIGHLIGHT_IDX = 2; // center card is the player's
-const FAN_CONFIGS = [
-  { angle: -22, x: -105, y: 18 },
-  { angle: -11, x: -52,  y: 6  },
-  { angle: 0,   x: 0,    y: 0  },
-  { angle: 11,  x: 52,   y: 6  },
-  { angle: 22,  x: 105,  y: 18 },
-];
-// Render order: non-highlight first so highlight card is on top in DOM order
-const RENDER_ORDER = [0, 1, 3, 4, HIGHLIGHT_IDX];
+const HIGHLIGHT_IDX = 2; // this card lands at the 3 o'clock position (right side, where the arrow is)
+const WHEEL_RADIUS = 130;
+const CARD_W = 72;
+const CARD_H = 100;
+
+// Pre-compute each card's position inside the 260×260 wheel container (card 0 starts at top)
+const WHEEL_POSITIONS = Array.from({ length: NUM_INTRO_CARDS }, (_, i) => {
+  const rad = (i / NUM_INTRO_CARDS) * 2 * Math.PI;
+  return {
+    left: WHEEL_RADIUS + Math.sin(rad) * WHEEL_RADIUS - CARD_W / 2,
+    top:  WHEEL_RADIUS - Math.cos(rad) * WHEEL_RADIUS - CARD_H / 2,
+  };
+});
+
+// Card i's screen angle after spin = (angle_i + TOTAL_SPIN) mod 360.
+// Card 2 starts at (2/5)*360 = 144°. Arrow is at 90° (3 o'clock, right side).
+// Need: (144 + TOTAL_SPIN) mod 360 = 90  →  TOTAL_SPIN = -54 + 360k  →  k=5 gives 1746°.
+const WHEEL_TOTAL_SPIN = 5 * 360 + 90 - (HIGHLIGHT_IDX / NUM_INTRO_CARDS) * 360; // 1746°
+
+// ── Landscape orientation prompt ──
+
+function LandscapePromptScreen({ onDone }: { onDone: () => void }) {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(fadeAnim, { toValue: 1, duration: 350, useNativeDriver: true }).start();
+    const t = setTimeout(onDone, 2400);
+    return () => clearTimeout(t);
+  }, []);
+
+  return (
+    <Animated.View style={[lsStyles.screen, { opacity: fadeAnim }]}>
+      <Text style={lsStyles.icon}>📱</Text>
+      <Text style={lsStyles.title}>Rotate your device</Text>
+      <Text style={lsStyles.subtitle}>The rest of the game is played in landscape mode</Text>
+    </Animated.View>
+  );
+}
+
+const lsStyles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: C.bg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 14,
+    paddingHorizontal: 40,
+  },
+  icon: { fontSize: 56 },
+  title: {
+    color: C.textPrimary,
+    fontSize: FS.xl,
+    fontWeight: '900',
+    textAlign: 'center',
+    letterSpacing: 0.3,
+  },
+  subtitle: {
+    color: C.textMuted,
+    fontSize: FS.base,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+});
 
 function GameIntroScreen({
   startingMovie,
@@ -775,121 +911,156 @@ function GameIntroScreen({
   playerName: string;
   onDone: () => void;
 }) {
-  const cardAnims = useRef(
-    Array.from({ length: NUM_INTRO_CARDS }, () => ({
-      x: new Animated.Value(0),
-      y: new Animated.Value(0),
-      rotate: new Animated.Value(0),
-      scale: new Animated.Value(1),
-    }))
-  ).current;
+  const { width: screenWidth } = useWindowDimensions();
+  // Arrow sits just past the right edge of the 3 o'clock card
+  const arrowRight = screenWidth / 2 - WHEEL_RADIUS - CARD_W / 2 - 4;
 
-  const revealOpacity = useRef(new Animated.Value(0)).current;
-  const buttonOpacity = useRef(new Animated.Value(0)).current;
-  const screenOpacity = useRef(new Animated.Value(0)).current;
+  // Allow tap-to-advance once the wheel has stopped
+  const canDismiss = useRef(false);
 
+  const wheelRotation  = useRef(new Animated.Value(0)).current;
+  const otherOpacity   = useRef(new Animated.Value(1)).current;
+  const arrowOpacity   = useRef(new Animated.Value(1)).current;
+  // After wheel stops: card slides toward screen center (translateX = -WHEEL_RADIUS)
+  const highlightX     = useRef(new Animated.Value(0)).current;
+  const highlightScale = useRef(new Animated.Value(1)).current;
+  const revealOpacity  = useRef(new Animated.Value(0)).current;
+  const screenOpacity  = useRef(new Animated.Value(0)).current;
+
+  const wheelRotStr   = wheelRotation.interpolate({
+    inputRange:  [0, WHEEL_TOTAL_SPIN],
+    outputRange: ['0deg', `${WHEEL_TOTAL_SPIN}deg`],
+  });
+  const counterRotStr = wheelRotation.interpolate({
+    inputRange:  [0, WHEEL_TOTAL_SPIN],
+    outputRange: ['0deg', `-${WHEEL_TOTAL_SPIN}deg`],
+  });
   const backOpacity = revealOpacity.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
 
   useEffect(() => {
-    const fadeIn = Animated.timing(screenOpacity, { toValue: 1, duration: 350, useNativeDriver: true });
-
-    const fanOut = Animated.parallel(
-      cardAnims.map((anim, i) =>
-        Animated.parallel([
-          Animated.spring(anim.x, { toValue: FAN_CONFIGS[i].x, useNativeDriver: true, tension: 55, friction: 9 }),
-          Animated.spring(anim.y, { toValue: FAN_CONFIGS[i].y, useNativeDriver: true, tension: 55, friction: 9 }),
-          Animated.spring(anim.rotate, { toValue: FAN_CONFIGS[i].angle, useNativeDriver: true, tension: 55, friction: 9 }),
-        ])
-      )
-    );
-
-    const liftCard = Animated.parallel([
-      Animated.spring(cardAnims[HIGHLIGHT_IDX].y,      { toValue: -72, useNativeDriver: true, tension: 65, friction: 7 }),
-      Animated.spring(cardAnims[HIGHLIGHT_IDX].scale,  { toValue: 1.38, useNativeDriver: true, tension: 65, friction: 7 }),
-      Animated.spring(cardAnims[HIGHLIGHT_IDX].rotate, { toValue: 0, useNativeDriver: true, tension: 65, friction: 7 }),
-    ]);
-
-    const revealFace = Animated.timing(revealOpacity, { toValue: 1, duration: 480, useNativeDriver: true });
-    const showBtn   = Animated.timing(buttonOpacity,  { toValue: 1, duration: 350, useNativeDriver: true });
-
+    // Phase 1: fade in + wheel spin
     Animated.sequence([
-      fadeIn,
-      Animated.delay(150),
-      fanOut,
-      Animated.delay(550),
-      liftCard,
-      Animated.delay(180),
-      revealFace,
-      Animated.delay(280),
-      showBtn,
-    ]).start();
+      Animated.timing(screenOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
+      Animated.delay(200),
+      Animated.timing(wheelRotation, {
+        toValue: WHEEL_TOTAL_SPIN,
+        duration: 3000,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.delay(100),
+    ]).start(() => {
+      canDismiss.current = true;
+
+      // Phase 2: arrow + others vanish, highlight card glides to center and flips
+      Animated.sequence([
+        Animated.parallel([
+          Animated.timing(otherOpacity,   { toValue: 0,            duration: 300, useNativeDriver: true }),
+          Animated.timing(arrowOpacity,   { toValue: 0,            duration: 200, useNativeDriver: true }),
+          // translateX after counter-rotation = moves in screen-space X (toward center)
+          Animated.timing(highlightX,     { toValue: -WHEEL_RADIUS, duration: 520, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+          Animated.timing(highlightScale, { toValue: 1.8,           duration: 520, easing: Easing.out(Easing.back(1.1)), useNativeDriver: true }),
+        ]),
+        Animated.delay(80),
+        Animated.timing(revealOpacity, { toValue: 1, duration: 500, useNativeDriver: true }),
+        // Hold so player can read the card, then auto-advance
+        Animated.delay(2500),
+      ]).start(() => onDone());
+    });
   }, []);
 
   return (
     <Animated.View style={[introStyles.screen, { opacity: screenOpacity }]}>
-      <SafeAreaView style={introStyles.inner} edges={['top', 'bottom']}>
+      {/* Whole screen is tappable — advances once wheel has stopped */}
+      <TouchableOpacity
+        activeOpacity={1}
+        onPress={() => { if (canDismiss.current) onDone(); }}
+        style={{ flex: 1 }}
+      >
+        <SafeAreaView style={introStyles.inner} edges={['top', 'bottom']}>
 
-        <View style={introStyles.header}>
-          <Text style={introStyles.headline}>Your starting card</Text>
-          <Text style={introStyles.subtext}>Draw from the deck, {playerName}</Text>
-        </View>
+          <View style={introStyles.header}>
+            <Text style={introStyles.headline}>Your starting card</Text>
+            <Text style={introStyles.subtext}>Draw from the deck, {playerName}</Text>
+          </View>
 
-        <View style={introStyles.cardArea}>
-          {RENDER_ORDER.map((i) => {
-            const anim = cardAnims[i];
-            const isHighlight = i === HIGHLIGHT_IDX;
-            const rotate = anim.rotate.interpolate({ inputRange: [-30, 30], outputRange: ['-30deg', '30deg'] });
+          <View style={introStyles.wheelArea}>
+            {/* Arrow fades out after wheel stops */}
+            <Animated.View style={[introStyles.pointerRow, { right: arrowRight, opacity: arrowOpacity }]}>
+              <Text style={introStyles.pointer}>◄</Text>
+            </Animated.View>
 
-            return (
-              <Animated.View
-                key={i}
-                style={[
-                  StyleSheet.absoluteFill,
-                  introStyles.cardWrapper,
-                  { zIndex: isHighlight ? 10 : i },
-                  { transform: [{ translateX: anim.x }, { translateY: anim.y }, { rotate }, { scale: anim.scale }] },
-                ]}
-              >
-                <View style={[introStyles.card, isHighlight && introStyles.cardHighlight]}>
-                  {isHighlight ? (
-                    <>
-                      <Animated.View style={[StyleSheet.absoluteFill, introStyles.cardSide, { opacity: backOpacity }]}>
-                        <Text style={introStyles.cardBackIcon}>🎬</Text>
-                        <Text style={introStyles.cardBackQ}>?</Text>
-                      </Animated.View>
-                      <Animated.View style={[StyleSheet.absoluteFill, introStyles.cardSide, { opacity: revealOpacity }]}>
-                        <Text style={introStyles.revealYear}>{startingMovie?.year ?? '????'}</Text>
-                        <Text style={introStyles.revealTitle} numberOfLines={3}>{startingMovie?.title ?? '—'}</Text>
-                        <Text style={introStyles.revealDirector} numberOfLines={1}>{startingMovie?.director ?? ''}</Text>
-                      </Animated.View>
-                    </>
-                  ) : (
-                    <View style={introStyles.cardSide}>
-                      <Text style={introStyles.cardBackIcon}>🎬</Text>
+            <Animated.View style={[introStyles.wheelContainer, { transform: [{ rotate: wheelRotStr }] }]}>
+              {WHEEL_POSITIONS.map((pos, i) => {
+                const isHighlight = i === HIGHLIGHT_IDX;
+                // After counter-rotation the coordinate frame is screen-space,
+                // so translateX moves the card horizontally toward screen center.
+                const cardTransform: any[] = isHighlight
+                  ? [{ rotate: counterRotStr }, { translateX: highlightX }, { scale: highlightScale }]
+                  : [{ rotate: counterRotStr }];
+
+                return (
+                  <Animated.View
+                    key={i}
+                    style={[
+                      introStyles.cardWrapper,
+                      {
+                        left:      pos.left,
+                        top:       pos.top,
+                        opacity:   isHighlight ? 1 : otherOpacity,
+                        zIndex:    isHighlight ? 10 : i,
+                        transform: cardTransform,
+                      },
+                    ]}
+                  >
+                    {/* All cards are visually identical during the spin */}
+                    <View style={introStyles.card}>
+                      {isHighlight ? (
+                        <>
+                          <Animated.View style={[StyleSheet.absoluteFill, introStyles.cardSide, { opacity: backOpacity }]}>
+                            <Text style={introStyles.cardBackIcon}>🎬</Text>
+                          </Animated.View>
+                          <Animated.View style={[StyleSheet.absoluteFill, introStyles.cardSide, { opacity: revealOpacity }]}>
+                            <Text style={introStyles.revealYear}>{startingMovie?.year ?? '????'}</Text>
+                            <Text style={introStyles.revealTitle} numberOfLines={3}>{startingMovie?.title ?? '—'}</Text>
+                            <Text style={introStyles.revealDirector} numberOfLines={1}>{startingMovie?.director ?? ''}</Text>
+                          </Animated.View>
+                        </>
+                      ) : (
+                        <View style={introStyles.cardSide}>
+                          <Text style={introStyles.cardBackIcon}>🎬</Text>
+                        </View>
+                      )}
                     </View>
-                  )}
-                </View>
-              </Animated.View>
-            );
-          })}
-        </View>
+                    {/* Golden ring fades in only when the winning card is revealed */}
+                    {isHighlight && (
+                      <Animated.View
+                        style={[StyleSheet.absoluteFill, introStyles.cardRing, { opacity: revealOpacity }]}
+                        pointerEvents="none"
+                      />
+                    )}
+                  </Animated.View>
+                );
+              })}
+            </Animated.View>
+          </View>
 
-        <Animated.View style={[introStyles.footer, { opacity: buttonOpacity }]}>
-          <TouchableOpacity style={introStyles.doneButton} onPress={onDone} activeOpacity={0.85}>
-            <Text style={introStyles.doneButtonText}>Got it!  →</Text>
-          </TouchableOpacity>
-        </Animated.View>
+          <View style={introStyles.footer}>
+            <Animated.Text style={[introStyles.tapHint, { opacity: revealOpacity }]}>
+              Tap anywhere to continue
+            </Animated.Text>
+          </View>
 
-      </SafeAreaView>
+        </SafeAreaView>
+      </TouchableOpacity>
     </Animated.View>
   );
 }
 
 const introStyles = StyleSheet.create({
   screen: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#100a20',
-    zIndex: 100,
+    flex: 1,
+    backgroundColor: C.bg,
   },
   inner: {
     flex: 1,
@@ -901,41 +1072,59 @@ const introStyles = StyleSheet.create({
     gap: 5,
   },
   headline: {
-    color: '#fff',
-    fontSize: 20,
+    color: C.textPrimary,
+    fontSize: FS.lg,
     fontWeight: '900',
     letterSpacing: 0.3,
   },
   subtext: {
-    color: '#666',
-    fontSize: 13,
+    color: C.textMuted,
+    fontSize: FS.sm,
     fontWeight: '500',
   },
-  cardArea: {
-    height: 190,
+  // Full wheel visible — tall enough for all cards including their overhang
+  wheelArea: {
+    height: WHEEL_RADIUS * 2 + CARD_H, // 360
     alignSelf: 'stretch',
-    overflow: 'visible',
+  },
+  // `right` is set dynamically in JSX via useWindowDimensions
+  pointerRow: {
+    position: 'absolute',
+    top: CARD_H / 2 + WHEEL_RADIUS - 14, // vertically centered on the 3 o'clock card
+    zIndex: 30,
+  },
+  pointer: {
+    color: C.gold,
+    fontSize: 26,
+  },
+  // 260×260 wheel container; top pad = CARD_H/2 so top card doesn't clip
+  wheelContainer: {
+    position: 'absolute',
+    width: WHEEL_RADIUS * 2,
+    height: WHEEL_RADIUS * 2,
+    top: CARD_H / 2,  // center at y = CARD_H/2 + WHEEL_RADIUS from top of wheelArea
+    left: '50%',
+    marginLeft: -WHEEL_RADIUS,
   },
   cardWrapper: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    position: 'absolute',
+    width: CARD_W,
+    height: CARD_H,
   },
   card: {
-    width: 90,
-    height: 125,
-    borderRadius: 12,
+    width: CARD_W,
+    height: CARD_H,
+    borderRadius: R.sm,
     overflow: 'hidden',
     borderWidth: 2,
-    borderColor: '#2a2040',
-    backgroundColor: '#1a1430',
+    borderColor: C.border,
+    backgroundColor: C.surface,
   },
-  cardHighlight: {
-    borderColor: '#f5c518',
-    shadowColor: '#f5c518',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.45,
-    shadowRadius: 16,
-    elevation: 12,
+  // Golden ring overlay — fades in with revealOpacity so all cards look the same during spin
+  cardRing: {
+    borderRadius: R.sm,
+    borderWidth: 2.5,
+    borderColor: C.gold,
   },
   cardSide: {
     flex: 1,
@@ -943,56 +1132,44 @@ const introStyles = StyleSheet.create({
     justifyContent: 'center',
     gap: 4,
     padding: 8,
-    backgroundColor: '#2a1f4a',
+    backgroundColor: C.surfaceHigh,
   },
-  cardBackIcon: { fontSize: 22 },
-  cardBackQ: { color: '#f5c518', fontSize: 22, fontWeight: '900' },
-  revealYear: { color: '#f5c518', fontSize: 21, fontWeight: '900' },
+  cardBackIcon: { fontSize: 20 },
+  revealYear: { color: C.gold, fontSize: 19, fontWeight: '900' },
   revealTitle: {
-    color: '#fff',
-    fontSize: 9,
+    color: C.textPrimary,
+    fontSize: FS.micro,
     textAlign: 'center',
-    lineHeight: 13,
+    lineHeight: 12,
     fontWeight: '600',
   },
-  revealDirector: { color: '#888', fontSize: 8, textAlign: 'center' },
+  revealDirector: { color: C.textMuted, fontSize: FS.micro - 2, textAlign: 'center' },
   footer: {
     alignItems: 'center',
     paddingBottom: 14,
+    minHeight: 40,
   },
-  doneButton: {
-    backgroundColor: '#f5c518',
-    borderRadius: 22,
-    paddingVertical: 14,
-    paddingHorizontal: 52,
-    shadowColor: '#f5c518',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  doneButtonText: {
-    color: '#0a0a0a',
-    fontSize: 16,
-    fontWeight: '900',
-    letterSpacing: 0.5,
+  tapHint: {
+    color: 'rgba(255,255,255,0.35)',
+    fontSize: FS.sm,
+    fontWeight: '500',
   },
 });
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#100a20' },
+  container: { flex: 1, backgroundColor: C.bg },
   phaseCenter: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 24, paddingHorizontal: 40 },
-  bigTurnText: { color: '#fff', fontSize: 28, fontWeight: '900', textAlign: 'center' },
-  waitingText: { color: '#aaa', fontSize: 18, textAlign: 'center' },
+  bigTurnText: { color: C.textPrimary, fontSize: FS['2xl'], fontWeight: '900', textAlign: 'center' },
+  waitingText: { color: C.textSub, fontSize: FS.lg, textAlign: 'center' },
   avatarLarge: {
-    width: 72, height: 72, borderRadius: 36,
-    backgroundColor: '#f5c518', alignItems: 'center', justifyContent: 'center',
+    width: 72, height: 72, borderRadius: R.full,
+    backgroundColor: C.gold, alignItems: 'center', justifyContent: 'center',
   },
-  avatarLargeText: { color: '#0a0a0a', fontSize: 24, fontWeight: '900' },
-  primaryBtn: { backgroundColor: '#f5c518', borderRadius: 14, paddingHorizontal: 32, paddingVertical: 14 },
-  primaryBtnText: { color: '#0a0a0a', fontSize: 16, fontWeight: '900' },
-  phaseLabel: { color: '#aaa', fontSize: 14, fontWeight: '600', textAlign: 'center' },
-  tapHint: { color: '#555', fontSize: 12, textAlign: 'center', marginTop: 4 },
+  avatarLargeText: { color: C.textOnGold, fontSize: FS.xl, fontWeight: '900' },
+  primaryBtn: { backgroundColor: C.gold, borderRadius: R.btn, paddingHorizontal: 32, paddingVertical: 14 },
+  primaryBtnText: { color: C.textOnGold, fontSize: FS.md, fontWeight: '900' },
+  phaseLabel: { color: C.textSub, fontSize: FS.base, fontWeight: '600', textAlign: 'center' },
+  tapHint: { color: C.textMuted, fontSize: FS.sm, textAlign: 'center', marginTop: 4 },
 
   placingLayout: { flex: 1, justifyContent: 'center', gap: 12, paddingVertical: 12 },
   placingHeader: { alignItems: 'center' },
@@ -1002,7 +1179,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
     paddingTop: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,0.06)',
+    borderBottomColor: C.borderSubtle,
   },
   placingBottomHalf: {
     flex: 1,
@@ -1017,34 +1194,34 @@ const styles = StyleSheet.create({
   floatingCard: {
     width: 90,
     height: 120,
-    backgroundColor: '#2a1f4a',
-    borderRadius: 12,
+    backgroundColor: C.surfaceHigh,
+    borderRadius: R.md,
     borderWidth: 2,
-    borderColor: '#f5c518',
+    borderColor: C.gold,
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
-    shadowColor: '#f5c518',
+    shadowColor: C.gold,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 12,
     elevation: 8,
   },
   floatingCardIcon: { fontSize: 24 },
-  floatingCardQ: { color: '#f5c518', fontSize: 28, fontWeight: '900' },
+  floatingCardQ: { color: C.gold, fontSize: 28, fontWeight: '900' },
   watchingBadge: {
     alignSelf: 'flex-start',
     backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 16,
+    borderRadius: R.btn,
     paddingHorizontal: 12,
     paddingVertical: 6,
     margin: 12,
   },
-  watchingBadgeText: { color: 'rgba(255,255,255,0.6)', fontSize: 12, fontWeight: '500' },
+  watchingBadgeText: { color: 'rgba(255,255,255,0.6)', fontSize: FS.sm, fontWeight: '500' },
   endedWaiting: {
-    color: '#888',
-    fontSize: 16,
+    color: C.textSub,
+    fontSize: FS.md,
     textAlign: 'center',
     marginTop: 12,
     paddingHorizontal: 40,
@@ -1053,34 +1230,75 @@ const styles = StyleSheet.create({
   challengingLayout: { flex: 1, flexDirection: 'row', gap: 16, padding: 12 },
   timelineSection: { flex: 1, justifyContent: 'center' },
   challengePanel: {
-    width: 220, backgroundColor: '#1e1630', borderRadius: 16,
+    width: 220, backgroundColor: C.surface, borderRadius: R.card,
     padding: 16, gap: 10, justifyContent: 'center',
   },
-  challengePanelTitle: { color: '#fff', fontSize: 15, fontWeight: '700' },
-  noChallengesText: { color: '#666', fontSize: 13 },
-  challengeEntry: { color: '#ccc', fontSize: 12 },
+  challengePanelTitle: { color: C.textPrimary, fontSize: FS.base + 1, fontWeight: '700' },
+  noChallengesText: { color: C.textMuted, fontSize: FS.sm },
+  challengeEntry: { color: C.textSub, fontSize: FS.xs },
   challengeTimerRow: { alignItems: 'center', marginVertical: 4 },
   challengeButtons: { gap: 8 },
-  challengeBtn: { backgroundColor: '#e63946', borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
-  challengeBtnText: { color: '#fff', fontSize: 14, fontWeight: '800' },
-  passBtn: { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
-  passBtnText: { color: '#666', fontSize: 14, fontWeight: '600' },
+  challengeBtn: { backgroundColor: C.danger, borderRadius: R.sm, paddingVertical: 10, alignItems: 'center' },
+  challengeBtnText: { color: C.textPrimary, fontSize: FS.base, fontWeight: '800' },
+  passBtn: { backgroundColor: C.border, borderRadius: R.sm, paddingVertical: 10, alignItems: 'center' },
+  passBtnText: { color: C.textMuted, fontSize: FS.base, fontWeight: '600' },
 
-  revealLayout: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 16, paddingHorizontal: 40 },
-  revealCard: {
-    backgroundColor: '#1e1630', borderRadius: 16, padding: 24,
-    alignItems: 'center', gap: 6, borderWidth: 2, borderColor: '#f5c518', minWidth: 180,
+  // ── Revealing phase ──
+  revealLayout: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 8,
+    gap: 24,
   },
-  revealYear: { color: '#f5c518', fontSize: 36, fontWeight: '900' },
-  revealTitle: { color: '#fff', fontSize: 16, fontWeight: '700', textAlign: 'center' },
-  revealDirector: { color: '#888', fontSize: 12 },
-  revealInfo: { gap: 4, alignItems: 'center' },
-  revealInfoLabel: { color: '#666', fontSize: 12 },
-  resultBanner: {
-    backgroundColor: 'rgba(245,197,24,0.12)', borderRadius: 12, paddingHorizontal: 20, paddingVertical: 12,
+  revealMovieCard: {
+    backgroundColor: C.bg,
+    borderRadius: R.card,
+    borderWidth: 2,
+    borderColor: C.gold,
+    padding: 20,
+    alignItems: 'center',
+    gap: 6,
+    shadowColor: C.gold,
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 8,
+    width: 150,
   },
-  resultText: { color: '#fff', fontSize: 16, textAlign: 'center' },
-  resultName: { color: '#f5c518', fontWeight: '800' },
+  revealMovieYear: { color: C.gold, fontSize: FS.hero, fontWeight: '900', letterSpacing: -0.5 },
+  revealMovieDivider: {
+    width: 40, height: 1, backgroundColor: C.border, marginVertical: 2,
+  },
+  revealMovieTitle: {
+    color: C.textPrimary, fontSize: FS.sm + 1, fontWeight: '700',
+    textAlign: 'center', lineHeight: 18,
+  },
+  revealMovieDirector: { color: C.textMuted, fontSize: FS.xs, textAlign: 'center', marginTop: 2 },
+  revealResultCol: {
+    flex: 1,
+    justifyContent: 'center',
+    gap: 10,
+  },
+  revealResultEmoji: { fontSize: 44 },
+  revealResultText: { color: C.textPrimary, fontSize: FS.lg, fontWeight: '700', lineHeight: 26 },
+  revealResultPlayer: { color: C.gold, fontWeight: '900' },
+  revealCoinBack: { color: C.textSub, fontSize: FS.sm, lineHeight: 17 },
+  revealCoinBackName: { color: C.gold, fontWeight: '700' },
+  revealFooter: { paddingHorizontal: 24, paddingBottom: 10 },
+  revealNextBtn: {
+    backgroundColor: C.gold,
+    borderRadius: R.btn,
+    paddingVertical: 14,
+    alignItems: 'center',
+    shadowColor: C.gold,
+    shadowOpacity: 0.28,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  revealNextBtnText: { color: C.textOnGold, fontSize: FS.md, fontWeight: '900', letterSpacing: 0.4 },
 
   // ── Trailer overlay ──
   trailerContainer: { flex: 1, backgroundColor: '#000' },
@@ -1091,15 +1309,15 @@ const styles = StyleSheet.create({
   cornerActions: { alignItems: 'flex-end', gap: 10 },
   reportButton: {
     paddingHorizontal: 14, paddingVertical: 8,
-    borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: R.btn, backgroundColor: 'rgba(0,0,0,0.55)',
   },
-  reportButtonText: { color: '#ccc', fontSize: 13, fontWeight: '500' },
+  reportButtonText: { color: C.textSub, fontSize: FS.sm, fontWeight: '500' },
   skipButton: {
-    paddingHorizontal: 20, paddingVertical: 12, borderRadius: 22, backgroundColor: '#f5c518',
+    paddingHorizontal: 20, paddingVertical: 12, borderRadius: R.card, backgroundColor: C.gold,
     shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3,
     shadowRadius: 6, elevation: 6,
   },
-  skipButtonText: { color: '#0a0a0a', fontSize: 16, fontWeight: '800', letterSpacing: 0.4 },
+  skipButtonText: { color: C.textOnGold, fontSize: FS.md, fontWeight: '800', letterSpacing: 0.4 },
   pauseOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center',
@@ -1110,50 +1328,50 @@ const styles = StyleSheet.create({
   endedOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: '#000', zIndex: 20 },
   endedInner: { flex: 1, justifyContent: 'space-between', padding: 20 },
   endedCenter: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 10 },
-  endedTitle: { color: '#fff', fontSize: 32, fontWeight: '900', textAlign: 'center', letterSpacing: 1 },
+  endedTitle: { color: C.textPrimary, fontSize: 32, fontWeight: '900', textAlign: 'center', letterSpacing: 1 },
   endedSubtitle: {
-    color: '#f5c518', fontSize: 13, textAlign: 'center',
+    color: C.gold, fontSize: FS.sm, textAlign: 'center',
     fontWeight: '600', letterSpacing: 2.5, textTransform: 'uppercase',
   },
   endedActions: { flexDirection: 'row', gap: 12, justifyContent: 'center', paddingBottom: 16 },
-  actionButton: { paddingHorizontal: 32, paddingVertical: 16, borderRadius: 22 },
+  actionButton: { paddingHorizontal: 32, paddingVertical: 16, borderRadius: R.card },
   replayButton: {
-    backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: C.border, borderWidth: 1,
+    borderColor: C.borderSubtle,
   },
-  replayButtonText: { color: '#fff', fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
-  nextButton: { backgroundColor: '#f5c518' },
-  nextButtonText: { color: '#0a0a0a', fontSize: 17, fontWeight: '800', letterSpacing: 0.3 },
+  replayButtonText: { color: C.textPrimary, fontSize: FS.md, fontWeight: '700', letterSpacing: 0.3 },
+  nextButton: { backgroundColor: C.gold },
+  nextButtonText: { color: C.textOnGold, fontSize: FS.md + 1, fontWeight: '800', letterSpacing: 0.3 },
 
   // ── Report modal ──
   modalBackdrop: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.72)',
     justifyContent: 'center', alignItems: 'center', padding: 28,
   },
-  reportSheet: { backgroundColor: '#1a1a2e', borderRadius: 18, overflow: 'hidden', width: '100%', maxWidth: 640 },
+  reportSheet: { backgroundColor: C.surface, borderRadius: R.card, overflow: 'hidden', width: '100%', maxWidth: 640 },
   reportHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingVertical: 14, paddingHorizontal: 20,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(255,255,255,0.1)',
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border,
   },
-  reportTitle: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  reportTitle: { color: C.textPrimary, fontSize: FS.md, fontWeight: '700' },
   reportCloseBtn: { padding: 4 },
-  reportCloseText: { color: '#666', fontSize: 16 },
+  reportCloseText: { color: C.textMuted, fontSize: FS.md },
   reportGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   reportOption: {
     width: '50%', paddingVertical: 13, paddingHorizontal: 20,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(255,255,255,0.07)',
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.borderSubtle,
   },
-  reportOptionText: { color: '#d0d0d0', fontSize: 13, lineHeight: 18 },
-  snack: { backgroundColor: '#1e1630', marginBottom: 16 },
+  reportOptionText: { color: C.textSub, fontSize: FS.sm, lineHeight: 18 },
+  snack: { backgroundColor: C.surface, marginBottom: 16 },
 
   scoreBar: { flexGrow: 0, backgroundColor: 'rgba(0,0,0,0.4)' },
   scoreBarContent: { paddingHorizontal: 12, paddingVertical: 6, gap: 8, flexDirection: 'row', alignItems: 'center' },
   scoreChip: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: '#1e1630', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4,
+    backgroundColor: C.surface, borderRadius: R.full, paddingHorizontal: 10, paddingVertical: 4,
   },
-  scoreChipMe: { borderWidth: 1, borderColor: '#f5c518' },
-  scoreChipName: { color: '#ccc', fontSize: 12, fontWeight: '600' },
-  scoreChipCount: { color: '#f5c518', fontSize: 12, fontWeight: '800' },
+  scoreChipMe: { borderWidth: 1, borderColor: C.gold },
+  scoreChipName: { color: C.textSub, fontSize: FS.sm, fontWeight: '600' },
+  scoreChipCount: { color: C.gold, fontSize: FS.sm, fontWeight: '800' },
 });
