@@ -22,6 +22,7 @@ import { Challenge, Movie, Player, Turn } from '@/lib/database.types';
 import { TrailerPlayer, TrailerPlayerHandle } from '@/components/TrailerPlayer';
 import { Timeline } from '@/components/Timeline';
 import { ChallengeTimer } from '@/components/ChallengeTimer';
+import { CardBack, CardFront } from '@/components/MovieCard';
 
 const REPORT_OPTIONS = [
   { id: 'spoiler',       label: '🎬  Title or info is revealed in the clip' },
@@ -143,6 +144,8 @@ export default function GameScreen() {
           cardAnimY.setValue(0);
           cardAnimScale.setValue(1);
           cardAnimOpacity.setValue(1);
+          setShowReportDialog(false);
+          setSnackMessage('');
         }
       }
 
@@ -328,11 +331,11 @@ export default function GameScreen() {
     const currentIdx = players.findIndex((p) => p.id === currentTurn.active_player_id);
     const nextPlayer = players[(currentIdx + 1) % players.length];
 
-    const usedMovieIds = new Set<string>();
-    players.forEach((p) => p.timeline.forEach((year) => {
-      const m = activeMovies.find((mv) => mv.year === year);
-      if (m) usedMovieIds.add(m.id);
-    }));
+    const { data: pastTurns } = await db
+      .from('turns')
+      .select('movie_id')
+      .eq('game_id', g.id);
+    const usedMovieIds = new Set<string>(pastTurns?.map((t: { movie_id: string }) => t.movie_id) ?? []);
     const pool = activeMovies.filter((m) => !usedMovieIds.has(m.id));
     const nextMovie = pool.length > 0
       ? pool[Math.floor(Math.random() * pool.length)]
@@ -365,6 +368,7 @@ export default function GameScreen() {
         startingMovie={startingMovie}
         playerName={myPlayer?.display_name ?? 'Player'}
         onDone={() => { setShowIntro(false); setShowLandscapePrompt(true); }}
+        allMovies={activeMovies}
       />
     );
   }
@@ -377,11 +381,10 @@ export default function GameScreen() {
   const activePlayer = getActivePlayer();
   const amActive = isActivePlayer();
   const timeline = getActivePlayerTimeline();
-  const placedMovies = players.flatMap((p) =>
-    p.timeline.map((year) => {
-      const m = activeMovies.find((mv) => mv.year === year);
-      return { year, title: m?.title ?? '' };
-    })
+  const placedMovies: Movie[] = players.flatMap((p) =>
+    p.timeline
+      .map((year) => activeMovies.find((mv) => mv.year === year))
+      .filter((m): m is Movie => m !== undefined)
   );
 
   // ── DRAWING ──
@@ -436,8 +439,7 @@ export default function GameScreen() {
                   },
                 ]}
               >
-                <Text style={styles.floatingCardIcon}>🎬</Text>
-                <Text style={styles.floatingCardQ}>?</Text>
+                <CardBack width={CARD_W} height={CARD_H} />
               </Animated.View>
             </View>
           </View>
@@ -765,19 +767,25 @@ export default function GameScreen() {
 
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.revealLayout}>
+        {/* Timeline with card flip animation at placed_interval */}
+        <View style={styles.revealTimelineWrapper}>
+          <Timeline
+            timeline={timeline}
+            currentCardMovie={m}
+            interactive={false}
+            selectedInterval={null}
+            onIntervalSelect={() => {}}
+            onConfirm={() => {}}
+            placedInterval={currentTurn.placed_interval}
+            placedMovies={placedMovies}
+            revealingMovie={m}
+          />
+        </View>
 
-          {/* Left: movie card */}
-          <View style={styles.revealMovieCard}>
-            <Text style={styles.revealMovieYear}>{m.year}</Text>
-            <View style={styles.revealMovieDivider} />
-            <Text style={styles.revealMovieTitle}>{m.title}</Text>
-            {m.director ? <Text style={styles.revealMovieDirector}>dir. {m.director}</Text> : null}
-          </View>
-
-          {/* Right: result info */}
-          <View style={styles.revealResultCol}>
-            <Text style={styles.revealResultEmoji}>{resultEmoji}</Text>
+        {/* Result strip */}
+        <View style={styles.revealResultStrip}>
+          <Text style={styles.revealResultEmoji}>{resultEmoji}</Text>
+          <View style={styles.revealResultTextBlock}>
             <Text style={styles.revealResultText}>
               {resultName
                 ? <><Text style={styles.revealResultPlayer}>{resultName}</Text>{' '}{resultText}</>
@@ -791,7 +799,6 @@ export default function GameScreen() {
               </Text>
             )}
           </View>
-
         </View>
 
         {/* Full-width button strip above score bar */}
@@ -837,25 +844,24 @@ function LoadingScreen() {
 
 // ── Game intro: Price Is Right spinning wheel ──
 
-const NUM_INTRO_CARDS = 5;
-const HIGHLIGHT_IDX = 2; // this card lands at the 3 o'clock position (right side, where the arrow is)
-const WHEEL_RADIUS = 130;
 const CARD_W = 72;
 const CARD_H = 100;
-
-// Pre-compute each card's position inside the 260×260 wheel container (card 0 starts at top)
-const WHEEL_POSITIONS = Array.from({ length: NUM_INTRO_CARDS }, (_, i) => {
-  const rad = (i / NUM_INTRO_CARDS) * 2 * Math.PI;
+// Always exactly 12 slots — enough to fill the wheel visually without gaps.
+const WHEEL_CARD_COUNT = 12;
+const WHEEL_RADIUS = 150;
+// HIGHLIGHT_IDX = 4 starts at (4/12)*360 = 120°.
+// After WHEEL_TOTAL_SPIN, it lands at 90° (3 o'clock):
+//   (120 + WHEEL_TOTAL_SPIN) mod 360 = 90  →  WHEEL_TOTAL_SPIN = 5*360 + 90 - 120 = 1770°
+const WHEEL_HIGHLIGHT_IDX = 4;
+const WHEEL_TOTAL_SPIN = 5 * 360 + 90 - (WHEEL_HIGHLIGHT_IDX / WHEEL_CARD_COUNT) * 360; // 1770°
+// Pre-compute card positions once (static — doesn't depend on allMovies)
+const WHEEL_POSITIONS = Array.from({ length: WHEEL_CARD_COUNT }, (_, i) => {
+  const rad = (i / WHEEL_CARD_COUNT) * 2 * Math.PI;
   return {
     left: WHEEL_RADIUS + Math.sin(rad) * WHEEL_RADIUS - CARD_W / 2,
     top:  WHEEL_RADIUS - Math.cos(rad) * WHEEL_RADIUS - CARD_H / 2,
   };
 });
-
-// Card i's screen angle after spin = (angle_i + TOTAL_SPIN) mod 360.
-// Card 2 starts at (2/5)*360 = 144°. Arrow is at 90° (3 o'clock, right side).
-// Need: (144 + TOTAL_SPIN) mod 360 = 90  →  TOTAL_SPIN = -54 + 360k  →  k=5 gives 1746°.
-const WHEEL_TOTAL_SPIN = 5 * 360 + 90 - (HIGHLIGHT_IDX / NUM_INTRO_CARDS) * 360; // 1746°
 
 // ── Landscape orientation prompt ──
 
@@ -906,17 +912,20 @@ function GameIntroScreen({
   startingMovie,
   playerName,
   onDone,
+  allMovies: _allMovies,
 }: {
   startingMovie: Movie | null;
   playerName: string;
   onDone: () => void;
+  allMovies: Movie[];
 }) {
   const { width: screenWidth } = useWindowDimensions();
-  // Arrow sits just past the right edge of the 3 o'clock card
   const arrowRight = screenWidth / 2 - WHEEL_RADIUS - CARD_W / 2 - 4;
 
   // Allow tap-to-advance once the wheel has stopped
   const canDismiss = useRef(false);
+  // All cards look identical during the spin; only the highlight reveals after stopping
+  const [spinDone, setSpinDone] = useState(false);
 
   const wheelRotation  = useRef(new Animated.Value(0)).current;
   const otherOpacity   = useRef(new Animated.Value(1)).current;
@@ -951,6 +960,7 @@ function GameIntroScreen({
       Animated.delay(100),
     ]).start(() => {
       canDismiss.current = true;
+      setSpinDone(true); // swap SpinCard → CardBack on highlight card
 
       // Phase 2: arrow + others vanish, highlight card glides to center and flips
       Animated.sequence([
@@ -984,17 +994,25 @@ function GameIntroScreen({
             <Text style={introStyles.subtext}>Draw from the deck, {playerName}</Text>
           </View>
 
-          <View style={introStyles.wheelArea}>
-            {/* Arrow fades out after wheel stops */}
-            <Animated.View style={[introStyles.pointerRow, { right: arrowRight, opacity: arrowOpacity }]}>
+          <View style={{ height: WHEEL_RADIUS * 2 + CARD_H, alignSelf: 'stretch' }}>
+            {/* Pointer arrow */}
+            <Animated.View style={[introStyles.pointerRow, {
+              top: CARD_H / 2 + WHEEL_RADIUS - 14,
+              right: arrowRight,
+              opacity: arrowOpacity,
+            }]}>
               <Text style={introStyles.pointer}>◄</Text>
             </Animated.View>
 
-            <Animated.View style={[introStyles.wheelContainer, { transform: [{ rotate: wheelRotStr }] }]}>
+            <Animated.View style={[introStyles.wheelContainer, {
+              width: WHEEL_RADIUS * 2,
+              height: WHEEL_RADIUS * 2,
+              top: CARD_H / 2,
+              marginLeft: -WHEEL_RADIUS,
+              transform: [{ rotate: wheelRotStr }],
+            }]}>
               {WHEEL_POSITIONS.map((pos, i) => {
-                const isHighlight = i === HIGHLIGHT_IDX;
-                // After counter-rotation the coordinate frame is screen-space,
-                // so translateX moves the card horizontally toward screen center.
+                const isHighlight = i === WHEEL_HIGHLIGHT_IDX;
                 const cardTransform: any[] = isHighlight
                   ? [{ rotate: counterRotStr }, { translateX: highlightX }, { scale: highlightScale }]
                   : [{ rotate: counterRotStr }];
@@ -1013,26 +1031,23 @@ function GameIntroScreen({
                       },
                     ]}
                   >
-                    {/* All cards are visually identical during the spin */}
                     <View style={introStyles.card}>
-                      {isHighlight ? (
+                      {isHighlight && spinDone ? (
+                        // Wheel has stopped: reveal CardBack → fade to CardFront
                         <>
-                          <Animated.View style={[StyleSheet.absoluteFill, introStyles.cardSide, { opacity: backOpacity }]}>
-                            <Text style={introStyles.cardBackIcon}>🎬</Text>
+                          <Animated.View style={[StyleSheet.absoluteFill, { opacity: backOpacity }]}>
+                            <CardBack width={CARD_W} height={CARD_H} />
                           </Animated.View>
-                          <Animated.View style={[StyleSheet.absoluteFill, introStyles.cardSide, { opacity: revealOpacity }]}>
-                            <Text style={introStyles.revealYear}>{startingMovie?.year ?? '????'}</Text>
-                            <Text style={introStyles.revealTitle} numberOfLines={3}>{startingMovie?.title ?? '—'}</Text>
-                            <Text style={introStyles.revealDirector} numberOfLines={1}>{startingMovie?.director ?? ''}</Text>
+                          <Animated.View style={[StyleSheet.absoluteFill, { opacity: revealOpacity }]}>
+                            {startingMovie
+                              ? <CardFront movie={startingMovie} width={CARD_W} height={CARD_H} />
+                              : <CardBack width={CARD_W} height={CARD_H} />}
                           </Animated.View>
                         </>
                       ) : (
-                        <View style={introStyles.cardSide}>
-                          <Text style={introStyles.cardBackIcon}>🎬</Text>
-                        </View>
+                        <CardBack width={CARD_W} height={CARD_H} />
                       )}
                     </View>
-                    {/* Golden ring fades in only when the winning card is revealed */}
                     {isHighlight && (
                       <Animated.View
                         style={[StyleSheet.absoluteFill, introStyles.cardRing, { opacity: revealOpacity }]}
@@ -1082,29 +1097,19 @@ const introStyles = StyleSheet.create({
     fontSize: FS.sm,
     fontWeight: '500',
   },
-  // Full wheel visible — tall enough for all cards including their overhang
-  wheelArea: {
-    height: WHEEL_RADIUS * 2 + CARD_H, // 360
-    alignSelf: 'stretch',
-  },
-  // `right` is set dynamically in JSX via useWindowDimensions
+  // `right` and `top` are set dynamically in JSX (WHEEL_RADIUS is now dynamic)
   pointerRow: {
     position: 'absolute',
-    top: CARD_H / 2 + WHEEL_RADIUS - 14, // vertically centered on the 3 o'clock card
     zIndex: 30,
   },
   pointer: {
     color: C.gold,
     fontSize: 26,
   },
-  // 260×260 wheel container; top pad = CARD_H/2 so top card doesn't clip
+  // wheel container; size + margin are set dynamically in JSX
   wheelContainer: {
     position: 'absolute',
-    width: WHEEL_RADIUS * 2,
-    height: WHEEL_RADIUS * 2,
-    top: CARD_H / 2,  // center at y = CARD_H/2 + WHEEL_RADIUS from top of wheelArea
     left: '50%',
-    marginLeft: -WHEEL_RADIUS,
   },
   cardWrapper: {
     position: 'absolute',
@@ -1126,24 +1131,6 @@ const introStyles = StyleSheet.create({
     borderWidth: 2.5,
     borderColor: C.gold,
   },
-  cardSide: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    padding: 8,
-    backgroundColor: C.surfaceHigh,
-  },
-  cardBackIcon: { fontSize: 20 },
-  revealYear: { color: C.gold, fontSize: 19, fontWeight: '900' },
-  revealTitle: {
-    color: C.textPrimary,
-    fontSize: FS.micro,
-    textAlign: 'center',
-    lineHeight: 12,
-    fontWeight: '600',
-  },
-  revealDirector: { color: C.textMuted, fontSize: FS.micro - 2, textAlign: 'center' },
   footer: {
     alignItems: 'center',
     paddingBottom: 14,
@@ -1192,24 +1179,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   floatingCard: {
-    width: 90,
-    height: 120,
-    backgroundColor: C.surfaceHigh,
-    borderRadius: R.md,
-    borderWidth: 2,
-    borderColor: C.gold,
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
     shadowColor: C.gold,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 12,
     elevation: 8,
   },
-  floatingCardIcon: { fontSize: 24 },
-  floatingCardQ: { color: C.gold, fontSize: 28, fontWeight: '900' },
   watchingBadge: {
     alignSelf: 'flex-start',
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -1244,45 +1219,26 @@ const styles = StyleSheet.create({
   passBtnText: { color: C.textMuted, fontSize: FS.base, fontWeight: '600' },
 
   // ── Revealing phase ──
-  revealLayout: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 8,
-    gap: 24,
-  },
-  revealMovieCard: {
-    backgroundColor: C.bg,
-    borderRadius: R.card,
-    borderWidth: 2,
-    borderColor: C.gold,
-    padding: 20,
-    alignItems: 'center',
-    gap: 6,
-    shadowColor: C.gold,
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 8,
-    width: 150,
-  },
-  revealMovieYear: { color: C.gold, fontSize: FS.hero, fontWeight: '900', letterSpacing: -0.5 },
-  revealMovieDivider: {
-    width: 40, height: 1, backgroundColor: C.border, marginVertical: 2,
-  },
-  revealMovieTitle: {
-    color: C.textPrimary, fontSize: FS.sm + 1, fontWeight: '700',
-    textAlign: 'center', lineHeight: 18,
-  },
-  revealMovieDirector: { color: C.textMuted, fontSize: FS.xs, textAlign: 'center', marginTop: 2 },
-  revealResultCol: {
+  revealTimelineWrapper: {
     flex: 1,
     justifyContent: 'center',
-    gap: 10,
   },
-  revealResultEmoji: { fontSize: 44 },
-  revealResultText: { color: C.textPrimary, fontSize: FS.lg, fontWeight: '700', lineHeight: 26 },
+  revealResultStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    gap: 12,
+    backgroundColor: C.surface,
+    borderTopWidth: 1,
+    borderTopColor: C.border,
+  },
+  revealResultTextBlock: {
+    flex: 1,
+    gap: 4,
+  },
+  revealResultEmoji: { fontSize: 36 },
+  revealResultText: { color: C.textPrimary, fontSize: FS.md, fontWeight: '700', lineHeight: 22 },
   revealResultPlayer: { color: C.gold, fontWeight: '900' },
   revealCoinBack: { color: C.textSub, fontSize: FS.sm, lineHeight: 17 },
   revealCoinBackName: { color: C.gold, fontWeight: '700' },

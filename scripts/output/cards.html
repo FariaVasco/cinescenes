@@ -1,0 +1,1044 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cinescenes — Printable Cards</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Screen ───────────────────────────────────── */
+    body {
+      font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
+      background: #06040e;
+      color: #fff;
+      padding: 32px 20px;
+    }
+    .hdr { text-align: center; margin-bottom: 40px; }
+    .hdr h1 {
+      font-size: 28px; font-weight: 900; letter-spacing: 8px; color: #f5c518;
+      text-shadow: 0 0 20px rgba(245,197,24,0.35); margin-bottom: 10px;
+    }
+    .hdr p { font-size: 13px; color: #555; line-height: 2; }
+    .hdr strong { color: #999; }
+    .lbl {
+      font-size: 10px; letter-spacing: 3px; text-transform: uppercase;
+      color: #333; text-align: center; margin: 40px 0 14px;
+    }
+
+    /* ── Card grid page (4 rows × 3 cols = 12 per A4) ── */
+    .page {
+      display: grid;
+      grid-template-columns: repeat(3, 63mm);
+      grid-auto-rows: 63mm;
+      gap: 2mm;
+      padding: 6mm;
+      background: #e8e8e8;
+      width: fit-content;
+      margin: 0 auto 24px;
+    }
+
+    /* ── Card shell (square) ──────────────────────── */
+    .card {
+      width: 63mm;
+      height: 63mm;
+      border-radius: 3.5mm;
+      overflow: hidden;
+      position: relative;
+      font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
+      outline: 0.25mm solid rgba(0,0,0,0.2);
+    }
+
+    /* ── Corner icons (shared) ────────────────────── */
+    .ci {
+      position: absolute;
+      width: 7.5mm; height: 7.5mm;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.2);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 2;
+    }
+    .ci svg { width: 4.5mm; height: 4.5mm; display: block; }
+    .ci-tl { top: 2mm;   left: 2mm;  }
+    .ci-tr { top: 2mm;   right: 2mm; }
+    /* bottom icons sit just above the strip / label */
+    .ci-bl { bottom: 6mm; left: 2mm;  }
+    .ci-br { bottom: 6mm; right: 2mm; }
+
+    /* ── Front ────────────────────────────────────── */
+    .front {
+      display: flex;
+      flex-direction: column;
+    }
+    .front-glow {
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse at 50% 50%, rgba(255,255,255,0.12) 0%, transparent 68%);
+      pointer-events: none; z-index: 0;
+    }
+    .front-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      /* top: clear icons (2mm + 7.5mm + 0.5mm gap = 10mm)
+         bottom: clear bottom icons (6mm) + strip (4.5mm) + 0.5mm gap = 11mm */
+      padding: 10mm 4mm 11mm;
+      position: relative; z-index: 1;
+    }
+    .f-dir {
+      font-size: 8pt;
+      font-weight: 600;
+      font-style: italic;
+      color: rgba(255,255,255,0.85);
+      text-align: center;
+      line-height: 1.35;
+    }
+    .f-year {
+      font-size: 44pt;
+      font-weight: 900;
+      color: #fff;
+      line-height: 1;
+      letter-spacing: -0.5pt;
+      text-align: center;
+      text-shadow: 0 3px 12px rgba(0,0,0,0.3);
+    }
+    .f-title {
+      font-size: 10pt;
+      font-weight: 700;
+      font-style: italic;
+      color: rgba(255,255,255,0.9);
+      text-align: center;
+      line-height: 1.35;
+    }
+    .front-strip {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 4.5mm;
+      background: rgba(0,0,0,0.28);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 4pt;
+      font-weight: 700;
+      color: rgba(255,255,255,0.45);
+      letter-spacing: 3pt;
+      border-radius: 0 0 3.5mm 3.5mm;
+      z-index: 1;
+    }
+
+    /* ── Back ─────────────────────────────────────── */
+    .back {
+      background: #100a20;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    /* back corner icons: subtle gold-tinted circle */
+    .back .ci { background: rgba(245,197,24,0.1); }
+    /* back bottom icons sit just above the number label */
+    .back .ci-bl, .back .ci-br { bottom: 3.5mm; }
+    .qr-box {
+      width: 40mm; height: 40mm;
+      background: #fff;
+      border-radius: 4mm;
+      padding: 2mm;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.5);
+      position: relative; z-index: 1;
+      /* shift up slightly to make room for number label */
+      margin-bottom: 4mm;
+    }
+    .qr-img { width: 36mm; height: 36mm; display: block; }
+    .back-num {
+      position: absolute;
+      bottom: 1.5mm; left: 0; right: 0;
+      text-align: center;
+      font-size: 4pt;
+      font-weight: 600;
+      color: rgba(255,255,255,0.28);
+      letter-spacing: 1.5pt;
+      text-transform: uppercase;
+      z-index: 1;
+    }
+
+    /* ── Print ────────────────────────────────────── */
+    @media print {
+      @page { size: A4 portrait; margin: 0; }
+      body   { background: white; padding: 0; }
+      .hdr, .lbl { display: none; }
+      .page {
+        margin: 0; padding: 6mm;
+        background: white;
+        page-break-after: always;
+      }
+      .page:last-child { page-break-after: avoid; }
+      .qr-img { image-rendering: crisp-edges; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="hdr">
+  <h1>CINESCENES</h1>
+  <p>
+    <strong>16 cards</strong> &nbsp;·&nbsp; 4 pages<br>
+    Print pages 1–2 (fronts) &nbsp;→&nbsp; flip paper (long edge) &nbsp;→&nbsp; print pages 3–4 (backs)
+  </p>
+</div>
+
+<div class="lbl">▶ Card fronts — pages 1 to 2</div>
+<div class="page fronts">
+<div class="card front" style="background-color:#6d3014">
+  <div class="front-glow"></div>
+  <div class="ci ci-tl" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M4 5a1 1 0 0 0-1 1v1h18V6a1 1 0 0 0-1-1H4zM3 9v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9H3z"/>
+  <path d="M5 5h2l1.5 3H6.5L5 5zm4 0h2l1.5 3h-2L9 5zm4 0h2l1.5 3h-2L13 5z" fill="rgba(255,255,255,0.55)"/>
+</svg></div>
+  <div class="ci ci-tr" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 2a8 8 0 0 1 8 8 8 8 0 0 1-8 8 8 8 0 0 1-8-8 8 8 0 0 1 8-8zm0 3a5 5 0 0 0-5 5 5 5 0 0 0 5 5 5 5 0 0 0 5-5 5 5 0 0 0-5-5zm0 3a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2z"/>
+  <circle cx="12" cy="4.5" r="1.2"/>
+  <circle cx="19.1" cy="8.5" r="1.2"/>
+  <circle cx="19.1" cy="15.5" r="1.2"/>
+  <circle cx="12" cy="19.5" r="1.2"/>
+  <circle cx="4.9" cy="15.5" r="1.2"/>
+  <circle cx="4.9" cy="8.5" r="1.2"/>
+</svg></div>
+  <div class="ci ci-bl" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4V6.5l-4 4z"/>
+</svg></div>
+  <div class="ci ci-br" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+</svg></div>
+  <div class="front-body">
+    <p class="f-dir">Francis Ford Coppola</p>
+    <p class="f-year">1972</p>
+    <p class="f-title">The Godfather</p>
+  </div>
+  <div class="front-strip">CINESCENES</div>
+</div>
+<div class="card front" style="background-color:#4c1247">
+  <div class="front-glow"></div>
+  <div class="ci ci-tl" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M4 5a1 1 0 0 0-1 1v1h18V6a1 1 0 0 0-1-1H4zM3 9v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9H3z"/>
+  <path d="M5 5h2l1.5 3H6.5L5 5zm4 0h2l1.5 3h-2L9 5zm4 0h2l1.5 3h-2L13 5z" fill="rgba(255,255,255,0.55)"/>
+</svg></div>
+  <div class="ci ci-tr" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 2a8 8 0 0 1 8 8 8 8 0 0 1-8 8 8 8 0 0 1-8-8 8 8 0 0 1 8-8zm0 3a5 5 0 0 0-5 5 5 5 0 0 0 5 5 5 5 0 0 0 5-5 5 5 0 0 0-5-5zm0 3a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2z"/>
+  <circle cx="12" cy="4.5" r="1.2"/>
+  <circle cx="19.1" cy="8.5" r="1.2"/>
+  <circle cx="19.1" cy="15.5" r="1.2"/>
+  <circle cx="12" cy="19.5" r="1.2"/>
+  <circle cx="4.9" cy="15.5" r="1.2"/>
+  <circle cx="4.9" cy="8.5" r="1.2"/>
+</svg></div>
+  <div class="ci ci-bl" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4V6.5l-4 4z"/>
+</svg></div>
+  <div class="ci ci-br" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+</svg></div>
+  <div class="front-body">
+    <p class="f-dir">George Lucas</p>
+    <p class="f-year">1977</p>
+    <p class="f-title">Star Wars</p>
+  </div>
+  <div class="front-strip">CINESCENES</div>
+</div>
+<div class="card front" style="background-color:#3f065c">
+  <div class="front-glow"></div>
+  <div class="ci ci-tl" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M4 5a1 1 0 0 0-1 1v1h18V6a1 1 0 0 0-1-1H4zM3 9v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9H3z"/>
+  <path d="M5 5h2l1.5 3H6.5L5 5zm4 0h2l1.5 3h-2L9 5zm4 0h2l1.5 3h-2L13 5z" fill="rgba(255,255,255,0.55)"/>
+</svg></div>
+  <div class="ci ci-tr" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 2a8 8 0 0 1 8 8 8 8 0 0 1-8 8 8 8 0 0 1-8-8 8 8 0 0 1 8-8zm0 3a5 5 0 0 0-5 5 5 5 0 0 0 5 5 5 5 0 0 0 5-5 5 5 0 0 0-5-5zm0 3a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2z"/>
+  <circle cx="12" cy="4.5" r="1.2"/>
+  <circle cx="19.1" cy="8.5" r="1.2"/>
+  <circle cx="19.1" cy="15.5" r="1.2"/>
+  <circle cx="12" cy="19.5" r="1.2"/>
+  <circle cx="4.9" cy="15.5" r="1.2"/>
+  <circle cx="4.9" cy="8.5" r="1.2"/>
+</svg></div>
+  <div class="ci ci-bl" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4V6.5l-4 4z"/>
+</svg></div>
+  <div class="ci ci-br" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+</svg></div>
+  <div class="front-body">
+    <p class="f-dir">Ridley Scott</p>
+    <p class="f-year">1979</p>
+    <p class="f-title">Alien</p>
+  </div>
+  <div class="front-strip">CINESCENES</div>
+</div>
+<div class="card front" style="background-color:#320665">
+  <div class="front-glow"></div>
+  <div class="ci ci-tl" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M4 5a1 1 0 0 0-1 1v1h18V6a1 1 0 0 0-1-1H4zM3 9v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9H3z"/>
+  <path d="M5 5h2l1.5 3H6.5L5 5zm4 0h2l1.5 3h-2L9 5zm4 0h2l1.5 3h-2L13 5z" fill="rgba(255,255,255,0.55)"/>
+</svg></div>
+  <div class="ci ci-tr" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 2a8 8 0 0 1 8 8 8 8 0 0 1-8 8 8 8 0 0 1-8-8 8 8 0 0 1 8-8zm0 3a5 5 0 0 0-5 5 5 5 0 0 0 5 5 5 5 0 0 0 5-5 5 5 0 0 0-5-5zm0 3a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2z"/>
+  <circle cx="12" cy="4.5" r="1.2"/>
+  <circle cx="19.1" cy="8.5" r="1.2"/>
+  <circle cx="19.1" cy="15.5" r="1.2"/>
+  <circle cx="12" cy="19.5" r="1.2"/>
+  <circle cx="4.9" cy="15.5" r="1.2"/>
+  <circle cx="4.9" cy="8.5" r="1.2"/>
+</svg></div>
+  <div class="ci ci-bl" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4V6.5l-4 4z"/>
+</svg></div>
+  <div class="ci ci-br" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+</svg></div>
+  <div class="front-body">
+    <p class="f-dir">Steven Spielberg</p>
+    <p class="f-year">1981</p>
+    <p class="f-title">Raiders of the Lost Ark</p>
+  </div>
+  <div class="front-strip">CINESCENES</div>
+</div>
+<div class="card front" style="background-color:#2d0c64">
+  <div class="front-glow"></div>
+  <div class="ci ci-tl" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M4 5a1 1 0 0 0-1 1v1h18V6a1 1 0 0 0-1-1H4zM3 9v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9H3z"/>
+  <path d="M5 5h2l1.5 3H6.5L5 5zm4 0h2l1.5 3h-2L9 5zm4 0h2l1.5 3h-2L13 5z" fill="rgba(255,255,255,0.55)"/>
+</svg></div>
+  <div class="ci ci-tr" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 2a8 8 0 0 1 8 8 8 8 0 0 1-8 8 8 8 0 0 1-8-8 8 8 0 0 1 8-8zm0 3a5 5 0 0 0-5 5 5 5 0 0 0 5 5 5 5 0 0 0 5-5 5 5 0 0 0-5-5zm0 3a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2z"/>
+  <circle cx="12" cy="4.5" r="1.2"/>
+  <circle cx="19.1" cy="8.5" r="1.2"/>
+  <circle cx="19.1" cy="15.5" r="1.2"/>
+  <circle cx="12" cy="19.5" r="1.2"/>
+  <circle cx="4.9" cy="15.5" r="1.2"/>
+  <circle cx="4.9" cy="8.5" r="1.2"/>
+</svg></div>
+  <div class="ci ci-bl" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4V6.5l-4 4z"/>
+</svg></div>
+  <div class="ci ci-br" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+</svg></div>
+  <div class="front-body">
+    <p class="f-dir">Steven Spielberg</p>
+    <p class="f-year">1982</p>
+    <p class="f-title">E.T. the Extra-Terrestrial</p>
+  </div>
+  <div class="front-strip">CINESCENES</div>
+</div>
+<div class="card front" style="background-color:#1c1f61">
+  <div class="front-glow"></div>
+  <div class="ci ci-tl" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M4 5a1 1 0 0 0-1 1v1h18V6a1 1 0 0 0-1-1H4zM3 9v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9H3z"/>
+  <path d="M5 5h2l1.5 3H6.5L5 5zm4 0h2l1.5 3h-2L9 5zm4 0h2l1.5 3h-2L13 5z" fill="rgba(255,255,255,0.55)"/>
+</svg></div>
+  <div class="ci ci-tr" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 2a8 8 0 0 1 8 8 8 8 0 0 1-8 8 8 8 0 0 1-8-8 8 8 0 0 1 8-8zm0 3a5 5 0 0 0-5 5 5 5 0 0 0 5 5 5 5 0 0 0 5-5 5 5 0 0 0-5-5zm0 3a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2z"/>
+  <circle cx="12" cy="4.5" r="1.2"/>
+  <circle cx="19.1" cy="8.5" r="1.2"/>
+  <circle cx="19.1" cy="15.5" r="1.2"/>
+  <circle cx="12" cy="19.5" r="1.2"/>
+  <circle cx="4.9" cy="15.5" r="1.2"/>
+  <circle cx="4.9" cy="8.5" r="1.2"/>
+</svg></div>
+  <div class="ci ci-bl" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4V6.5l-4 4z"/>
+</svg></div>
+  <div class="ci ci-br" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+</svg></div>
+  <div class="front-body">
+    <p class="f-dir">Robert Zemeckis</p>
+    <p class="f-year">1985</p>
+    <p class="f-title">Back to the Future</p>
+  </div>
+  <div class="front-strip">CINESCENES</div>
+</div>
+<div class="card front" style="background-color:#0b325e">
+  <div class="front-glow"></div>
+  <div class="ci ci-tl" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M4 5a1 1 0 0 0-1 1v1h18V6a1 1 0 0 0-1-1H4zM3 9v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9H3z"/>
+  <path d="M5 5h2l1.5 3H6.5L5 5zm4 0h2l1.5 3h-2L9 5zm4 0h2l1.5 3h-2L13 5z" fill="rgba(255,255,255,0.55)"/>
+</svg></div>
+  <div class="ci ci-tr" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 2a8 8 0 0 1 8 8 8 8 0 0 1-8 8 8 8 0 0 1-8-8 8 8 0 0 1 8-8zm0 3a5 5 0 0 0-5 5 5 5 0 0 0 5 5 5 5 0 0 0 5-5 5 5 0 0 0-5-5zm0 3a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2z"/>
+  <circle cx="12" cy="4.5" r="1.2"/>
+  <circle cx="19.1" cy="8.5" r="1.2"/>
+  <circle cx="19.1" cy="15.5" r="1.2"/>
+  <circle cx="12" cy="19.5" r="1.2"/>
+  <circle cx="4.9" cy="15.5" r="1.2"/>
+  <circle cx="4.9" cy="8.5" r="1.2"/>
+</svg></div>
+  <div class="ci ci-bl" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4V6.5l-4 4z"/>
+</svg></div>
+  <div class="ci ci-br" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+</svg></div>
+  <div class="front-body">
+    <p class="f-dir">John McTiernan</p>
+    <p class="f-year">1988</p>
+    <p class="f-title">Die Hard</p>
+  </div>
+  <div class="front-strip">CINESCENES</div>
+</div>
+<div class="card front" style="background-color:#003e5c">
+  <div class="front-glow"></div>
+  <div class="ci ci-tl" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M4 5a1 1 0 0 0-1 1v1h18V6a1 1 0 0 0-1-1H4zM3 9v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9H3z"/>
+  <path d="M5 5h2l1.5 3H6.5L5 5zm4 0h2l1.5 3h-2L9 5zm4 0h2l1.5 3h-2L13 5z" fill="rgba(255,255,255,0.55)"/>
+</svg></div>
+  <div class="ci ci-tr" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 2a8 8 0 0 1 8 8 8 8 0 0 1-8 8 8 8 0 0 1-8-8 8 8 0 0 1 8-8zm0 3a5 5 0 0 0-5 5 5 5 0 0 0 5 5 5 5 0 0 0 5-5 5 5 0 0 0-5-5zm0 3a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2z"/>
+  <circle cx="12" cy="4.5" r="1.2"/>
+  <circle cx="19.1" cy="8.5" r="1.2"/>
+  <circle cx="19.1" cy="15.5" r="1.2"/>
+  <circle cx="12" cy="19.5" r="1.2"/>
+  <circle cx="4.9" cy="15.5" r="1.2"/>
+  <circle cx="4.9" cy="8.5" r="1.2"/>
+</svg></div>
+  <div class="ci ci-bl" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4V6.5l-4 4z"/>
+</svg></div>
+  <div class="ci ci-br" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+</svg></div>
+  <div class="front-body">
+    <p class="f-dir">Martin Scorsese</p>
+    <p class="f-year">1990</p>
+    <p class="f-title">GoodFellas</p>
+  </div>
+  <div class="front-strip">CINESCENES</div>
+</div>
+<div class="card front" style="background-color:#033e56">
+  <div class="front-glow"></div>
+  <div class="ci ci-tl" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M4 5a1 1 0 0 0-1 1v1h18V6a1 1 0 0 0-1-1H4zM3 9v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9H3z"/>
+  <path d="M5 5h2l1.5 3H6.5L5 5zm4 0h2l1.5 3h-2L9 5zm4 0h2l1.5 3h-2L13 5z" fill="rgba(255,255,255,0.55)"/>
+</svg></div>
+  <div class="ci ci-tr" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 2a8 8 0 0 1 8 8 8 8 0 0 1-8 8 8 8 0 0 1-8-8 8 8 0 0 1 8-8zm0 3a5 5 0 0 0-5 5 5 5 0 0 0 5 5 5 5 0 0 0 5-5 5 5 0 0 0-5-5zm0 3a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2z"/>
+  <circle cx="12" cy="4.5" r="1.2"/>
+  <circle cx="19.1" cy="8.5" r="1.2"/>
+  <circle cx="19.1" cy="15.5" r="1.2"/>
+  <circle cx="12" cy="19.5" r="1.2"/>
+  <circle cx="4.9" cy="15.5" r="1.2"/>
+  <circle cx="4.9" cy="8.5" r="1.2"/>
+</svg></div>
+  <div class="ci ci-bl" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4V6.5l-4 4z"/>
+</svg></div>
+  <div class="ci ci-br" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+</svg></div>
+  <div class="front-body">
+    <p class="f-dir">Jonathan Demme</p>
+    <p class="f-year">1991</p>
+    <p class="f-title">The Silence of the Lambs</p>
+  </div>
+  <div class="front-strip">CINESCENES</div>
+</div>
+<div class="card front" style="background-color:#083e49">
+  <div class="front-glow"></div>
+  <div class="ci ci-tl" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M4 5a1 1 0 0 0-1 1v1h18V6a1 1 0 0 0-1-1H4zM3 9v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9H3z"/>
+  <path d="M5 5h2l1.5 3H6.5L5 5zm4 0h2l1.5 3h-2L9 5zm4 0h2l1.5 3h-2L13 5z" fill="rgba(255,255,255,0.55)"/>
+</svg></div>
+  <div class="ci ci-tr" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 2a8 8 0 0 1 8 8 8 8 0 0 1-8 8 8 8 0 0 1-8-8 8 8 0 0 1 8-8zm0 3a5 5 0 0 0-5 5 5 5 0 0 0 5 5 5 5 0 0 0 5-5 5 5 0 0 0-5-5zm0 3a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2z"/>
+  <circle cx="12" cy="4.5" r="1.2"/>
+  <circle cx="19.1" cy="8.5" r="1.2"/>
+  <circle cx="19.1" cy="15.5" r="1.2"/>
+  <circle cx="12" cy="19.5" r="1.2"/>
+  <circle cx="4.9" cy="15.5" r="1.2"/>
+  <circle cx="4.9" cy="8.5" r="1.2"/>
+</svg></div>
+  <div class="ci ci-bl" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4V6.5l-4 4z"/>
+</svg></div>
+  <div class="ci ci-br" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+</svg></div>
+  <div class="front-body">
+    <p class="f-dir">Steven Spielberg</p>
+    <p class="f-year">1993</p>
+    <p class="f-title">Schindler's List</p>
+  </div>
+  <div class="front-strip">CINESCENES</div>
+</div>
+<div class="card front" style="background-color:#083e49">
+  <div class="front-glow"></div>
+  <div class="ci ci-tl" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M4 5a1 1 0 0 0-1 1v1h18V6a1 1 0 0 0-1-1H4zM3 9v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9H3z"/>
+  <path d="M5 5h2l1.5 3H6.5L5 5zm4 0h2l1.5 3h-2L9 5zm4 0h2l1.5 3h-2L13 5z" fill="rgba(255,255,255,0.55)"/>
+</svg></div>
+  <div class="ci ci-tr" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 2a8 8 0 0 1 8 8 8 8 0 0 1-8 8 8 8 0 0 1-8-8 8 8 0 0 1 8-8zm0 3a5 5 0 0 0-5 5 5 5 0 0 0 5 5 5 5 0 0 0 5-5 5 5 0 0 0-5-5zm0 3a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2z"/>
+  <circle cx="12" cy="4.5" r="1.2"/>
+  <circle cx="19.1" cy="8.5" r="1.2"/>
+  <circle cx="19.1" cy="15.5" r="1.2"/>
+  <circle cx="12" cy="19.5" r="1.2"/>
+  <circle cx="4.9" cy="15.5" r="1.2"/>
+  <circle cx="4.9" cy="8.5" r="1.2"/>
+</svg></div>
+  <div class="ci ci-bl" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4V6.5l-4 4z"/>
+</svg></div>
+  <div class="ci ci-br" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+</svg></div>
+  <div class="front-body">
+    <p class="f-dir">Harold Ramis</p>
+    <p class="f-year">1993</p>
+    <p class="f-title">Groundhog Day</p>
+  </div>
+  <div class="front-strip">CINESCENES</div>
+</div>
+<div class="card front" style="background-color:#0b3e42">
+  <div class="front-glow"></div>
+  <div class="ci ci-tl" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M4 5a1 1 0 0 0-1 1v1h18V6a1 1 0 0 0-1-1H4zM3 9v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9H3z"/>
+  <path d="M5 5h2l1.5 3H6.5L5 5zm4 0h2l1.5 3h-2L9 5zm4 0h2l1.5 3h-2L13 5z" fill="rgba(255,255,255,0.55)"/>
+</svg></div>
+  <div class="ci ci-tr" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 2a8 8 0 0 1 8 8 8 8 0 0 1-8 8 8 8 0 0 1-8-8 8 8 0 0 1 8-8zm0 3a5 5 0 0 0-5 5 5 5 0 0 0 5 5 5 5 0 0 0 5-5 5 5 0 0 0-5-5zm0 3a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2z"/>
+  <circle cx="12" cy="4.5" r="1.2"/>
+  <circle cx="19.1" cy="8.5" r="1.2"/>
+  <circle cx="19.1" cy="15.5" r="1.2"/>
+  <circle cx="12" cy="19.5" r="1.2"/>
+  <circle cx="4.9" cy="15.5" r="1.2"/>
+  <circle cx="4.9" cy="8.5" r="1.2"/>
+</svg></div>
+  <div class="ci ci-bl" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4V6.5l-4 4z"/>
+</svg></div>
+  <div class="ci ci-br" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+</svg></div>
+  <div class="front-body">
+    <p class="f-dir">Quentin Tarantino</p>
+    <p class="f-year">1994</p>
+    <p class="f-title">Pulp Fiction</p>
+  </div>
+  <div class="front-strip">CINESCENES</div>
+</div></div>
+<div class="page fronts">
+<div class="card front" style="background-color:#183d22">
+  <div class="front-glow"></div>
+  <div class="ci ci-tl" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M4 5a1 1 0 0 0-1 1v1h18V6a1 1 0 0 0-1-1H4zM3 9v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9H3z"/>
+  <path d="M5 5h2l1.5 3H6.5L5 5zm4 0h2l1.5 3h-2L9 5zm4 0h2l1.5 3h-2L13 5z" fill="rgba(255,255,255,0.55)"/>
+</svg></div>
+  <div class="ci ci-tr" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 2a8 8 0 0 1 8 8 8 8 0 0 1-8 8 8 8 0 0 1-8-8 8 8 0 0 1 8-8zm0 3a5 5 0 0 0-5 5 5 5 0 0 0 5 5 5 5 0 0 0 5-5 5 5 0 0 0-5-5zm0 3a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2z"/>
+  <circle cx="12" cy="4.5" r="1.2"/>
+  <circle cx="19.1" cy="8.5" r="1.2"/>
+  <circle cx="19.1" cy="15.5" r="1.2"/>
+  <circle cx="12" cy="19.5" r="1.2"/>
+  <circle cx="4.9" cy="15.5" r="1.2"/>
+  <circle cx="4.9" cy="8.5" r="1.2"/>
+</svg></div>
+  <div class="ci ci-bl" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4V6.5l-4 4z"/>
+</svg></div>
+  <div class="ci ci-br" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+</svg></div>
+  <div class="front-body">
+    <p class="f-dir">Lana &amp; Lilly Wachowski</p>
+    <p class="f-year">1999</p>
+    <p class="f-title">The Matrix</p>
+  </div>
+  <div class="front-strip">CINESCENES</div>
+</div>
+<div class="card front" style="background-color:#1b3d1b">
+  <div class="front-glow"></div>
+  <div class="ci ci-tl" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M4 5a1 1 0 0 0-1 1v1h18V6a1 1 0 0 0-1-1H4zM3 9v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9H3z"/>
+  <path d="M5 5h2l1.5 3H6.5L5 5zm4 0h2l1.5 3h-2L9 5zm4 0h2l1.5 3h-2L13 5z" fill="rgba(255,255,255,0.55)"/>
+</svg></div>
+  <div class="ci ci-tr" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 2a8 8 0 0 1 8 8 8 8 0 0 1-8 8 8 8 0 0 1-8-8 8 8 0 0 1 8-8zm0 3a5 5 0 0 0-5 5 5 5 0 0 0 5 5 5 5 0 0 0 5-5 5 5 0 0 0-5-5zm0 3a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2z"/>
+  <circle cx="12" cy="4.5" r="1.2"/>
+  <circle cx="19.1" cy="8.5" r="1.2"/>
+  <circle cx="19.1" cy="15.5" r="1.2"/>
+  <circle cx="12" cy="19.5" r="1.2"/>
+  <circle cx="4.9" cy="15.5" r="1.2"/>
+  <circle cx="4.9" cy="8.5" r="1.2"/>
+</svg></div>
+  <div class="ci ci-bl" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4V6.5l-4 4z"/>
+</svg></div>
+  <div class="ci ci-br" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+</svg></div>
+  <div class="front-body">
+    <p class="f-dir">Ridley Scott</p>
+    <p class="f-year">2000</p>
+    <p class="f-title">Gladiator</p>
+  </div>
+  <div class="front-strip">CINESCENES</div>
+</div>
+<div class="card front" style="background-color:#1b2236">
+  <div class="front-glow"></div>
+  <div class="ci ci-tl" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M4 5a1 1 0 0 0-1 1v1h18V6a1 1 0 0 0-1-1H4zM3 9v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9H3z"/>
+  <path d="M5 5h2l1.5 3H6.5L5 5zm4 0h2l1.5 3h-2L9 5zm4 0h2l1.5 3h-2L13 5z" fill="rgba(255,255,255,0.55)"/>
+</svg></div>
+  <div class="ci ci-tr" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 2a8 8 0 0 1 8 8 8 8 0 0 1-8 8 8 8 0 0 1-8-8 8 8 0 0 1 8-8zm0 3a5 5 0 0 0-5 5 5 5 0 0 0 5 5 5 5 0 0 0 5-5 5 5 0 0 0-5-5zm0 3a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2z"/>
+  <circle cx="12" cy="4.5" r="1.2"/>
+  <circle cx="19.1" cy="8.5" r="1.2"/>
+  <circle cx="19.1" cy="15.5" r="1.2"/>
+  <circle cx="12" cy="19.5" r="1.2"/>
+  <circle cx="4.9" cy="15.5" r="1.2"/>
+  <circle cx="4.9" cy="8.5" r="1.2"/>
+</svg></div>
+  <div class="ci ci-bl" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4V6.5l-4 4z"/>
+</svg></div>
+  <div class="ci ci-br" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+</svg></div>
+  <div class="front-body">
+    <p class="f-dir">Christopher Nolan</p>
+    <p class="f-year">2008</p>
+    <p class="f-title">The Dark Knight</p>
+  </div>
+  <div class="front-strip">CINESCENES</div>
+</div>
+<div class="card front" style="background-color:#1b1b3d">
+  <div class="front-glow"></div>
+  <div class="ci ci-tl" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M4 5a1 1 0 0 0-1 1v1h18V6a1 1 0 0 0-1-1H4zM3 9v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9H3z"/>
+  <path d="M5 5h2l1.5 3H6.5L5 5zm4 0h2l1.5 3h-2L9 5zm4 0h2l1.5 3h-2L13 5z" fill="rgba(255,255,255,0.55)"/>
+</svg></div>
+  <div class="ci ci-tr" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 2a8 8 0 0 1 8 8 8 8 0 0 1-8 8 8 8 0 0 1-8-8 8 8 0 0 1 8-8zm0 3a5 5 0 0 0-5 5 5 5 0 0 0 5 5 5 5 0 0 0 5-5 5 5 0 0 0-5-5zm0 3a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2z"/>
+  <circle cx="12" cy="4.5" r="1.2"/>
+  <circle cx="19.1" cy="8.5" r="1.2"/>
+  <circle cx="19.1" cy="15.5" r="1.2"/>
+  <circle cx="12" cy="19.5" r="1.2"/>
+  <circle cx="4.9" cy="15.5" r="1.2"/>
+  <circle cx="4.9" cy="8.5" r="1.2"/>
+</svg></div>
+  <div class="ci ci-bl" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4V6.5l-4 4z"/>
+</svg></div>
+  <div class="ci ci-br" style="color:rgba(255,255,255,0.75)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+</svg></div>
+  <div class="front-body">
+    <p class="f-dir">Christopher Nolan</p>
+    <p class="f-year">2010</p>
+    <p class="f-title">Inception</p>
+  </div>
+  <div class="front-strip">CINESCENES</div>
+</div></div>
+
+<div class="lbl">▶ Card backs — pages 3 to 4 &nbsp;(same card order — print on reverse side)</div>
+<div class="page backs">
+<div class="card back">
+  <div class="ci ci-tl" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M4 5a1 1 0 0 0-1 1v1h18V6a1 1 0 0 0-1-1H4zM3 9v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9H3z"/>
+  <path d="M5 5h2l1.5 3H6.5L5 5zm4 0h2l1.5 3h-2L9 5zm4 0h2l1.5 3h-2L13 5z" fill="rgba(255,255,255,0.55)"/>
+</svg></div>
+  <div class="ci ci-tr" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 2a8 8 0 0 1 8 8 8 8 0 0 1-8 8 8 8 0 0 1-8-8 8 8 0 0 1 8-8zm0 3a5 5 0 0 0-5 5 5 5 0 0 0 5 5 5 5 0 0 0 5-5 5 5 0 0 0-5-5zm0 3a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2z"/>
+  <circle cx="12" cy="4.5" r="1.2"/>
+  <circle cx="19.1" cy="8.5" r="1.2"/>
+  <circle cx="19.1" cy="15.5" r="1.2"/>
+  <circle cx="12" cy="19.5" r="1.2"/>
+  <circle cx="4.9" cy="15.5" r="1.2"/>
+  <circle cx="4.9" cy="8.5" r="1.2"/>
+</svg></div>
+  <div class="ci ci-bl" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4V6.5l-4 4z"/>
+</svg></div>
+  <div class="ci ci-br" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+</svg></div>
+  <div class="qr-box">
+    <img class="qr-img" src="data:image/png;base64,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" alt="The Godfather"/>
+  </div>
+  <p class="back-num">Cinescenes #1</p>
+</div>
+<div class="card back">
+  <div class="ci ci-tl" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M4 5a1 1 0 0 0-1 1v1h18V6a1 1 0 0 0-1-1H4zM3 9v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9H3z"/>
+  <path d="M5 5h2l1.5 3H6.5L5 5zm4 0h2l1.5 3h-2L9 5zm4 0h2l1.5 3h-2L13 5z" fill="rgba(255,255,255,0.55)"/>
+</svg></div>
+  <div class="ci ci-tr" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 2a8 8 0 0 1 8 8 8 8 0 0 1-8 8 8 8 0 0 1-8-8 8 8 0 0 1 8-8zm0 3a5 5 0 0 0-5 5 5 5 0 0 0 5 5 5 5 0 0 0 5-5 5 5 0 0 0-5-5zm0 3a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2z"/>
+  <circle cx="12" cy="4.5" r="1.2"/>
+  <circle cx="19.1" cy="8.5" r="1.2"/>
+  <circle cx="19.1" cy="15.5" r="1.2"/>
+  <circle cx="12" cy="19.5" r="1.2"/>
+  <circle cx="4.9" cy="15.5" r="1.2"/>
+  <circle cx="4.9" cy="8.5" r="1.2"/>
+</svg></div>
+  <div class="ci ci-bl" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4V6.5l-4 4z"/>
+</svg></div>
+  <div class="ci ci-br" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+</svg></div>
+  <div class="qr-box">
+    <img class="qr-img" src="data:image/png;base64,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" alt="Star Wars"/>
+  </div>
+  <p class="back-num">Cinescenes #2</p>
+</div>
+<div class="card back">
+  <div class="ci ci-tl" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M4 5a1 1 0 0 0-1 1v1h18V6a1 1 0 0 0-1-1H4zM3 9v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9H3z"/>
+  <path d="M5 5h2l1.5 3H6.5L5 5zm4 0h2l1.5 3h-2L9 5zm4 0h2l1.5 3h-2L13 5z" fill="rgba(255,255,255,0.55)"/>
+</svg></div>
+  <div class="ci ci-tr" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 2a8 8 0 0 1 8 8 8 8 0 0 1-8 8 8 8 0 0 1-8-8 8 8 0 0 1 8-8zm0 3a5 5 0 0 0-5 5 5 5 0 0 0 5 5 5 5 0 0 0 5-5 5 5 0 0 0-5-5zm0 3a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2z"/>
+  <circle cx="12" cy="4.5" r="1.2"/>
+  <circle cx="19.1" cy="8.5" r="1.2"/>
+  <circle cx="19.1" cy="15.5" r="1.2"/>
+  <circle cx="12" cy="19.5" r="1.2"/>
+  <circle cx="4.9" cy="15.5" r="1.2"/>
+  <circle cx="4.9" cy="8.5" r="1.2"/>
+</svg></div>
+  <div class="ci ci-bl" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4V6.5l-4 4z"/>
+</svg></div>
+  <div class="ci ci-br" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+</svg></div>
+  <div class="qr-box">
+    <img class="qr-img" src="data:image/png;base64,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" alt="Alien"/>
+  </div>
+  <p class="back-num">Cinescenes #3</p>
+</div>
+<div class="card back">
+  <div class="ci ci-tl" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M4 5a1 1 0 0 0-1 1v1h18V6a1 1 0 0 0-1-1H4zM3 9v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9H3z"/>
+  <path d="M5 5h2l1.5 3H6.5L5 5zm4 0h2l1.5 3h-2L9 5zm4 0h2l1.5 3h-2L13 5z" fill="rgba(255,255,255,0.55)"/>
+</svg></div>
+  <div class="ci ci-tr" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 2a8 8 0 0 1 8 8 8 8 0 0 1-8 8 8 8 0 0 1-8-8 8 8 0 0 1 8-8zm0 3a5 5 0 0 0-5 5 5 5 0 0 0 5 5 5 5 0 0 0 5-5 5 5 0 0 0-5-5zm0 3a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2z"/>
+  <circle cx="12" cy="4.5" r="1.2"/>
+  <circle cx="19.1" cy="8.5" r="1.2"/>
+  <circle cx="19.1" cy="15.5" r="1.2"/>
+  <circle cx="12" cy="19.5" r="1.2"/>
+  <circle cx="4.9" cy="15.5" r="1.2"/>
+  <circle cx="4.9" cy="8.5" r="1.2"/>
+</svg></div>
+  <div class="ci ci-bl" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4V6.5l-4 4z"/>
+</svg></div>
+  <div class="ci ci-br" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+</svg></div>
+  <div class="qr-box">
+    <img class="qr-img" src="data:image/png;base64,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" alt="Raiders of the Lost Ark"/>
+  </div>
+  <p class="back-num">Cinescenes #4</p>
+</div>
+<div class="card back">
+  <div class="ci ci-tl" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M4 5a1 1 0 0 0-1 1v1h18V6a1 1 0 0 0-1-1H4zM3 9v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9H3z"/>
+  <path d="M5 5h2l1.5 3H6.5L5 5zm4 0h2l1.5 3h-2L9 5zm4 0h2l1.5 3h-2L13 5z" fill="rgba(255,255,255,0.55)"/>
+</svg></div>
+  <div class="ci ci-tr" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 2a8 8 0 0 1 8 8 8 8 0 0 1-8 8 8 8 0 0 1-8-8 8 8 0 0 1 8-8zm0 3a5 5 0 0 0-5 5 5 5 0 0 0 5 5 5 5 0 0 0 5-5 5 5 0 0 0-5-5zm0 3a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2z"/>
+  <circle cx="12" cy="4.5" r="1.2"/>
+  <circle cx="19.1" cy="8.5" r="1.2"/>
+  <circle cx="19.1" cy="15.5" r="1.2"/>
+  <circle cx="12" cy="19.5" r="1.2"/>
+  <circle cx="4.9" cy="15.5" r="1.2"/>
+  <circle cx="4.9" cy="8.5" r="1.2"/>
+</svg></div>
+  <div class="ci ci-bl" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4V6.5l-4 4z"/>
+</svg></div>
+  <div class="ci ci-br" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+</svg></div>
+  <div class="qr-box">
+    <img class="qr-img" src="data:image/png;base64,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" alt="E.T. the Extra-Terrestrial"/>
+  </div>
+  <p class="back-num">Cinescenes #5</p>
+</div>
+<div class="card back">
+  <div class="ci ci-tl" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M4 5a1 1 0 0 0-1 1v1h18V6a1 1 0 0 0-1-1H4zM3 9v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9H3z"/>
+  <path d="M5 5h2l1.5 3H6.5L5 5zm4 0h2l1.5 3h-2L9 5zm4 0h2l1.5 3h-2L13 5z" fill="rgba(255,255,255,0.55)"/>
+</svg></div>
+  <div class="ci ci-tr" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 2a8 8 0 0 1 8 8 8 8 0 0 1-8 8 8 8 0 0 1-8-8 8 8 0 0 1 8-8zm0 3a5 5 0 0 0-5 5 5 5 0 0 0 5 5 5 5 0 0 0 5-5 5 5 0 0 0-5-5zm0 3a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2z"/>
+  <circle cx="12" cy="4.5" r="1.2"/>
+  <circle cx="19.1" cy="8.5" r="1.2"/>
+  <circle cx="19.1" cy="15.5" r="1.2"/>
+  <circle cx="12" cy="19.5" r="1.2"/>
+  <circle cx="4.9" cy="15.5" r="1.2"/>
+  <circle cx="4.9" cy="8.5" r="1.2"/>
+</svg></div>
+  <div class="ci ci-bl" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4V6.5l-4 4z"/>
+</svg></div>
+  <div class="ci ci-br" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+</svg></div>
+  <div class="qr-box">
+    <img class="qr-img" src="data:image/png;base64,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" alt="Back to the Future"/>
+  </div>
+  <p class="back-num">Cinescenes #6</p>
+</div>
+<div class="card back">
+  <div class="ci ci-tl" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M4 5a1 1 0 0 0-1 1v1h18V6a1 1 0 0 0-1-1H4zM3 9v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9H3z"/>
+  <path d="M5 5h2l1.5 3H6.5L5 5zm4 0h2l1.5 3h-2L9 5zm4 0h2l1.5 3h-2L13 5z" fill="rgba(255,255,255,0.55)"/>
+</svg></div>
+  <div class="ci ci-tr" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 2a8 8 0 0 1 8 8 8 8 0 0 1-8 8 8 8 0 0 1-8-8 8 8 0 0 1 8-8zm0 3a5 5 0 0 0-5 5 5 5 0 0 0 5 5 5 5 0 0 0 5-5 5 5 0 0 0-5-5zm0 3a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2z"/>
+  <circle cx="12" cy="4.5" r="1.2"/>
+  <circle cx="19.1" cy="8.5" r="1.2"/>
+  <circle cx="19.1" cy="15.5" r="1.2"/>
+  <circle cx="12" cy="19.5" r="1.2"/>
+  <circle cx="4.9" cy="15.5" r="1.2"/>
+  <circle cx="4.9" cy="8.5" r="1.2"/>
+</svg></div>
+  <div class="ci ci-bl" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4V6.5l-4 4z"/>
+</svg></div>
+  <div class="ci ci-br" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+</svg></div>
+  <div class="qr-box">
+    <img class="qr-img" src="data:image/png;base64,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" alt="Die Hard"/>
+  </div>
+  <p class="back-num">Cinescenes #7</p>
+</div>
+<div class="card back">
+  <div class="ci ci-tl" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M4 5a1 1 0 0 0-1 1v1h18V6a1 1 0 0 0-1-1H4zM3 9v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9H3z"/>
+  <path d="M5 5h2l1.5 3H6.5L5 5zm4 0h2l1.5 3h-2L9 5zm4 0h2l1.5 3h-2L13 5z" fill="rgba(255,255,255,0.55)"/>
+</svg></div>
+  <div class="ci ci-tr" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 2a8 8 0 0 1 8 8 8 8 0 0 1-8 8 8 8 0 0 1-8-8 8 8 0 0 1 8-8zm0 3a5 5 0 0 0-5 5 5 5 0 0 0 5 5 5 5 0 0 0 5-5 5 5 0 0 0-5-5zm0 3a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2z"/>
+  <circle cx="12" cy="4.5" r="1.2"/>
+  <circle cx="19.1" cy="8.5" r="1.2"/>
+  <circle cx="19.1" cy="15.5" r="1.2"/>
+  <circle cx="12" cy="19.5" r="1.2"/>
+  <circle cx="4.9" cy="15.5" r="1.2"/>
+  <circle cx="4.9" cy="8.5" r="1.2"/>
+</svg></div>
+  <div class="ci ci-bl" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4V6.5l-4 4z"/>
+</svg></div>
+  <div class="ci ci-br" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+</svg></div>
+  <div class="qr-box">
+    <img class="qr-img" src="data:image/png;base64,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" alt="GoodFellas"/>
+  </div>
+  <p class="back-num">Cinescenes #8</p>
+</div>
+<div class="card back">
+  <div class="ci ci-tl" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M4 5a1 1 0 0 0-1 1v1h18V6a1 1 0 0 0-1-1H4zM3 9v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9H3z"/>
+  <path d="M5 5h2l1.5 3H6.5L5 5zm4 0h2l1.5 3h-2L9 5zm4 0h2l1.5 3h-2L13 5z" fill="rgba(255,255,255,0.55)"/>
+</svg></div>
+  <div class="ci ci-tr" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 2a8 8 0 0 1 8 8 8 8 0 0 1-8 8 8 8 0 0 1-8-8 8 8 0 0 1 8-8zm0 3a5 5 0 0 0-5 5 5 5 0 0 0 5 5 5 5 0 0 0 5-5 5 5 0 0 0-5-5zm0 3a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2z"/>
+  <circle cx="12" cy="4.5" r="1.2"/>
+  <circle cx="19.1" cy="8.5" r="1.2"/>
+  <circle cx="19.1" cy="15.5" r="1.2"/>
+  <circle cx="12" cy="19.5" r="1.2"/>
+  <circle cx="4.9" cy="15.5" r="1.2"/>
+  <circle cx="4.9" cy="8.5" r="1.2"/>
+</svg></div>
+  <div class="ci ci-bl" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4V6.5l-4 4z"/>
+</svg></div>
+  <div class="ci ci-br" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+</svg></div>
+  <div class="qr-box">
+    <img class="qr-img" src="data:image/png;base64,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" alt="The Silence of the Lambs"/>
+  </div>
+  <p class="back-num">Cinescenes #9</p>
+</div>
+<div class="card back">
+  <div class="ci ci-tl" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M4 5a1 1 0 0 0-1 1v1h18V6a1 1 0 0 0-1-1H4zM3 9v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9H3z"/>
+  <path d="M5 5h2l1.5 3H6.5L5 5zm4 0h2l1.5 3h-2L9 5zm4 0h2l1.5 3h-2L13 5z" fill="rgba(255,255,255,0.55)"/>
+</svg></div>
+  <div class="ci ci-tr" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 2a8 8 0 0 1 8 8 8 8 0 0 1-8 8 8 8 0 0 1-8-8 8 8 0 0 1 8-8zm0 3a5 5 0 0 0-5 5 5 5 0 0 0 5 5 5 5 0 0 0 5-5 5 5 0 0 0-5-5zm0 3a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2z"/>
+  <circle cx="12" cy="4.5" r="1.2"/>
+  <circle cx="19.1" cy="8.5" r="1.2"/>
+  <circle cx="19.1" cy="15.5" r="1.2"/>
+  <circle cx="12" cy="19.5" r="1.2"/>
+  <circle cx="4.9" cy="15.5" r="1.2"/>
+  <circle cx="4.9" cy="8.5" r="1.2"/>
+</svg></div>
+  <div class="ci ci-bl" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4V6.5l-4 4z"/>
+</svg></div>
+  <div class="ci ci-br" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+</svg></div>
+  <div class="qr-box">
+    <img class="qr-img" src="data:image/png;base64,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" alt="Schindler's List"/>
+  </div>
+  <p class="back-num">Cinescenes #10</p>
+</div>
+<div class="card back">
+  <div class="ci ci-tl" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M4 5a1 1 0 0 0-1 1v1h18V6a1 1 0 0 0-1-1H4zM3 9v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9H3z"/>
+  <path d="M5 5h2l1.5 3H6.5L5 5zm4 0h2l1.5 3h-2L9 5zm4 0h2l1.5 3h-2L13 5z" fill="rgba(255,255,255,0.55)"/>
+</svg></div>
+  <div class="ci ci-tr" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 2a8 8 0 0 1 8 8 8 8 0 0 1-8 8 8 8 0 0 1-8-8 8 8 0 0 1 8-8zm0 3a5 5 0 0 0-5 5 5 5 0 0 0 5 5 5 5 0 0 0 5-5 5 5 0 0 0-5-5zm0 3a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2z"/>
+  <circle cx="12" cy="4.5" r="1.2"/>
+  <circle cx="19.1" cy="8.5" r="1.2"/>
+  <circle cx="19.1" cy="15.5" r="1.2"/>
+  <circle cx="12" cy="19.5" r="1.2"/>
+  <circle cx="4.9" cy="15.5" r="1.2"/>
+  <circle cx="4.9" cy="8.5" r="1.2"/>
+</svg></div>
+  <div class="ci ci-bl" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4V6.5l-4 4z"/>
+</svg></div>
+  <div class="ci ci-br" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+</svg></div>
+  <div class="qr-box">
+    <img class="qr-img" src="data:image/png;base64,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" alt="Groundhog Day"/>
+  </div>
+  <p class="back-num">Cinescenes #11</p>
+</div>
+<div class="card back">
+  <div class="ci ci-tl" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M4 5a1 1 0 0 0-1 1v1h18V6a1 1 0 0 0-1-1H4zM3 9v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9H3z"/>
+  <path d="M5 5h2l1.5 3H6.5L5 5zm4 0h2l1.5 3h-2L9 5zm4 0h2l1.5 3h-2L13 5z" fill="rgba(255,255,255,0.55)"/>
+</svg></div>
+  <div class="ci ci-tr" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 2a8 8 0 0 1 8 8 8 8 0 0 1-8 8 8 8 0 0 1-8-8 8 8 0 0 1 8-8zm0 3a5 5 0 0 0-5 5 5 5 0 0 0 5 5 5 5 0 0 0 5-5 5 5 0 0 0-5-5zm0 3a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2z"/>
+  <circle cx="12" cy="4.5" r="1.2"/>
+  <circle cx="19.1" cy="8.5" r="1.2"/>
+  <circle cx="19.1" cy="15.5" r="1.2"/>
+  <circle cx="12" cy="19.5" r="1.2"/>
+  <circle cx="4.9" cy="15.5" r="1.2"/>
+  <circle cx="4.9" cy="8.5" r="1.2"/>
+</svg></div>
+  <div class="ci ci-bl" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4V6.5l-4 4z"/>
+</svg></div>
+  <div class="ci ci-br" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+</svg></div>
+  <div class="qr-box">
+    <img class="qr-img" src="data:image/png;base64,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" alt="Pulp Fiction"/>
+  </div>
+  <p class="back-num">Cinescenes #12</p>
+</div></div>
+<div class="page backs">
+<div class="card back">
+  <div class="ci ci-tl" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M4 5a1 1 0 0 0-1 1v1h18V6a1 1 0 0 0-1-1H4zM3 9v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9H3z"/>
+  <path d="M5 5h2l1.5 3H6.5L5 5zm4 0h2l1.5 3h-2L9 5zm4 0h2l1.5 3h-2L13 5z" fill="rgba(255,255,255,0.55)"/>
+</svg></div>
+  <div class="ci ci-tr" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 2a8 8 0 0 1 8 8 8 8 0 0 1-8 8 8 8 0 0 1-8-8 8 8 0 0 1 8-8zm0 3a5 5 0 0 0-5 5 5 5 0 0 0 5 5 5 5 0 0 0 5-5 5 5 0 0 0-5-5zm0 3a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2z"/>
+  <circle cx="12" cy="4.5" r="1.2"/>
+  <circle cx="19.1" cy="8.5" r="1.2"/>
+  <circle cx="19.1" cy="15.5" r="1.2"/>
+  <circle cx="12" cy="19.5" r="1.2"/>
+  <circle cx="4.9" cy="15.5" r="1.2"/>
+  <circle cx="4.9" cy="8.5" r="1.2"/>
+</svg></div>
+  <div class="ci ci-bl" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4V6.5l-4 4z"/>
+</svg></div>
+  <div class="ci ci-br" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+</svg></div>
+  <div class="qr-box">
+    <img class="qr-img" src="data:image/png;base64,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gPUqAMB6P+Ffp/vkxczNi+6TFzM3r7pPvjRz87Xuky26T740c/Oi++TVzM2L7pMX3SdbzNy86D752swNf64CAKxXAQDWqwAA61UAgPUqAMB6FQBgvQoAsF4FAFivAgCsVwEA1qsAAOtVAID1KgDAehUAYL2f/Ed0n7yYuXnRffJq5uZF98mLmZtfXffJ12ZufnUzNy+6T17M3LzqPvnVzdy86D55MXPzte6TFzM3X+s+eTFz86ICAKxXAQDWqwAA61UAgPUqAMB6FQBgvQoAsF4FAFivAgCsVwEA1qsAAOtVAID1KgDAer/9/oc86j55MXPzte4T/j1mbl50n3xp5uZV98kWMzcvuk9ezNy86D752szN17pPXszcbNF98mLmhj9XAQDWqwAA61UAgPUqAMB6FQBgvQoAsF4FAFivAgCsVwEA1qsAAOtVAID1KgDAehUAYL2fLNJ98rWZmxfdJ69mbn513ScvZm5edJ98bebmRffJr677ZIvuky26T7aYuXnRffK1mZsNKgDAehUAYL0KALBeBQBYrwIArFcBANarAADrVQCA9SoAwHoVAGC9CgCwXgUAWK8CAKz3k39A98mLmZtX3Scvuk9ezNy86j55MXPzq+s++VL3yauZmy/N3PzqZm626D7ZYubmRffJq+6TFzM3X+s+eTFz86UKALBeBQBYrwIArFcBANarAADrVQCA9SoAwHoVAGC9CgCwXgUAWK8CAKxXAQDWqwAA61UAgPV++/0PedR98qubueHfo/vkxczN17pPtpi5edF9wr/HzM2L7pOvzdx8qfvk1czNi+6TFzM3LyoAwHoVAGC9CgCwXgUAWK8CAKxXAQDWqwAA61UAgPUqAMB6FQBgvQoAsF4FAFivAgCs95N/wMwNf6375MXMzYvuk6/N3LyYuXnRfbLFzM3Xuk++NHPzovvk1czNi+6TFzM3r7pPXnSfvJi5edF98rXuk691n7yYuflSBQBYrwIArFcBANarAADrVQCA9SoAwHoVAGC9CgCwXgUAWK8CAKxXAQDWqwAA61UAgPV+8h/RfbLFzM2L7pMXMzcvuk++1n3yYubma90nX+o+eTVz86vrPnkxc/Oi++TVzM2L7pMvzdx8bebmRffJ17pPXszcvKgAAOtVAID1KgDAehUAYL0KALBeBQBYrwIArFcBANarAADrVQCA9SoAwHoVAGC9CgCwXgUAWO8n/H/N3LzoPnnVffKl7pMXMzevuk/4e83cvOo++dLMzYuZm691n7yYuXnVffKl7pNf3czNq+6TFzM3X6oAAOtVAID1KgDAehUAYL0KALBeBQBYrwIArFcBANarAADrVQCA9SoAwHoVAGC9CgCw3m+//yH8p3WffG3m5kvdJy9mbrboPvnazM2L7pMXMzevuk9ezNy86D752szNFt0n/LmZmxcVAGC9CgCwXgUAWK8CAKxXAQDWqwAA61UAgPUqAMB6FQBgvQoAsF4FAFivAgCsVwEA1vvJ/6D7hH+PmZsXMzcvuk9edZ+8mLn51XWf/Opmbl50n7yauXnRffKr6z55MXPzXzBzs0EFAFivAgCsVwEA1qsAAOtVAID1KgDAehUAYL0KALBeBQBYrwIArFcBANarAADrVQCA9X7yD5i54a91n3yp+2SL7pMXMzdf6z55MXPzte6TF90nL2ZuvtZ98mLm5mvdJ1+aueHv133yYubmRQUAWK8CAKxXAQDWqwAA61UAgPUqAMB6FQBgvQoAsF4FAFivAgCsVwEA1qsAAOtVAID1KgDAej9ZpPtki5kb/n4zNy+6T17M3LyauXnRffK1mZsNZm6+1n3yYubma90n/LmZm1fdJy9mbr5UAQDWqwAA61UAgPUqAMB6FQBgvQoAsF4FAFivAgCsVwEA1qsAAOtVAID1KgDAehUAYL2fAH+p+2SLmZuvdZ9sMXPzYubmRffJq5mbF90nL2ZuXnSfbNF98rXukxczNy8qAMB6FQBgvQoAsF4FAFivAgCsVwEA1qsAAOtVAID1KgDAehUAYL0KALBeBQBYrwIArPcTeDRz87XukxczN1t0n7zoPnk1c/Ni5maL7pMXMzcvZm5edZ98qfvkxczN17pPvjZzs0EFAFivAgCsVwEA1qsAAOtVAID1KgDAehUAYL0KALBeBQBYrwIArFcBANarAADrVQCA9SoAwHo/WWTmhr/fzM3Xuk9ezNy86D55MXOzxczN17pPfnXdJ1+bufnVdZ+8mLl50X3yq6sAAOtVAID1KgDAehUAYL0KALBeBQBYrwIArFcBANarAADrVQCA9SoAwHoVAGC9CgCw3k/+Ad0n/Ht0n3xt5maD7pNXMzdf6j7ZYuZmi+6TFzM3r7pPfnUzNy+6T17M3LzqPnkxc/OlCgCwXgUAWK8CAKxXAQDWqwAA61UAgPUqAMB6FQBgvQoAsF4FAFivAgCsVwEA1qsAAOv99vsfAgCsVgEA1qsAAOtVAID1KgDAehUAYL0KALBeBQBYrwIArFcBANarAADrVQCA9SoAwHoVAGC9/wea6xYmXhhwuAAAAABJRU5ErkJggg==" alt="The Matrix"/>
+  </div>
+  <p class="back-num">Cinescenes #13</p>
+</div>
+<div class="card back">
+  <div class="ci ci-tl" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M4 5a1 1 0 0 0-1 1v1h18V6a1 1 0 0 0-1-1H4zM3 9v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9H3z"/>
+  <path d="M5 5h2l1.5 3H6.5L5 5zm4 0h2l1.5 3h-2L9 5zm4 0h2l1.5 3h-2L13 5z" fill="rgba(255,255,255,0.55)"/>
+</svg></div>
+  <div class="ci ci-tr" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 2a8 8 0 0 1 8 8 8 8 0 0 1-8 8 8 8 0 0 1-8-8 8 8 0 0 1 8-8zm0 3a5 5 0 0 0-5 5 5 5 0 0 0 5 5 5 5 0 0 0 5-5 5 5 0 0 0-5-5zm0 3a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2z"/>
+  <circle cx="12" cy="4.5" r="1.2"/>
+  <circle cx="19.1" cy="8.5" r="1.2"/>
+  <circle cx="19.1" cy="15.5" r="1.2"/>
+  <circle cx="12" cy="19.5" r="1.2"/>
+  <circle cx="4.9" cy="15.5" r="1.2"/>
+  <circle cx="4.9" cy="8.5" r="1.2"/>
+</svg></div>
+  <div class="ci ci-bl" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4V6.5l-4 4z"/>
+</svg></div>
+  <div class="ci ci-br" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+</svg></div>
+  <div class="qr-box">
+    <img class="qr-img" src="data:image/png;base64,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" alt="Gladiator"/>
+  </div>
+  <p class="back-num">Cinescenes #14</p>
+</div>
+<div class="card back">
+  <div class="ci ci-tl" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M4 5a1 1 0 0 0-1 1v1h18V6a1 1 0 0 0-1-1H4zM3 9v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9H3z"/>
+  <path d="M5 5h2l1.5 3H6.5L5 5zm4 0h2l1.5 3h-2L9 5zm4 0h2l1.5 3h-2L13 5z" fill="rgba(255,255,255,0.55)"/>
+</svg></div>
+  <div class="ci ci-tr" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 2a8 8 0 0 1 8 8 8 8 0 0 1-8 8 8 8 0 0 1-8-8 8 8 0 0 1 8-8zm0 3a5 5 0 0 0-5 5 5 5 0 0 0 5 5 5 5 0 0 0 5-5 5 5 0 0 0-5-5zm0 3a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2z"/>
+  <circle cx="12" cy="4.5" r="1.2"/>
+  <circle cx="19.1" cy="8.5" r="1.2"/>
+  <circle cx="19.1" cy="15.5" r="1.2"/>
+  <circle cx="12" cy="19.5" r="1.2"/>
+  <circle cx="4.9" cy="15.5" r="1.2"/>
+  <circle cx="4.9" cy="8.5" r="1.2"/>
+</svg></div>
+  <div class="ci ci-bl" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4V6.5l-4 4z"/>
+</svg></div>
+  <div class="ci ci-br" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+</svg></div>
+  <div class="qr-box">
+    <img class="qr-img" src="data:image/png;base64,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" alt="The Dark Knight"/>
+  </div>
+  <p class="back-num">Cinescenes #15</p>
+</div>
+<div class="card back">
+  <div class="ci ci-tl" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M4 5a1 1 0 0 0-1 1v1h18V6a1 1 0 0 0-1-1H4zM3 9v9a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9H3z"/>
+  <path d="M5 5h2l1.5 3H6.5L5 5zm4 0h2l1.5 3h-2L9 5zm4 0h2l1.5 3h-2L13 5z" fill="rgba(255,255,255,0.55)"/>
+</svg></div>
+  <div class="ci ci-tr" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 2a8 8 0 0 1 8 8 8 8 0 0 1-8 8 8 8 0 0 1-8-8 8 8 0 0 1 8-8zm0 3a5 5 0 0 0-5 5 5 5 0 0 0 5 5 5 5 0 0 0 5-5 5 5 0 0 0-5-5zm0 3a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2z"/>
+  <circle cx="12" cy="4.5" r="1.2"/>
+  <circle cx="19.1" cy="8.5" r="1.2"/>
+  <circle cx="19.1" cy="15.5" r="1.2"/>
+  <circle cx="12" cy="19.5" r="1.2"/>
+  <circle cx="4.9" cy="15.5" r="1.2"/>
+  <circle cx="4.9" cy="8.5" r="1.2"/>
+</svg></div>
+  <div class="ci ci-bl" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4V6.5l-4 4z"/>
+</svg></div>
+  <div class="ci ci-br" style="color:rgba(245,197,24,0.6)"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+  <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+</svg></div>
+  <div class="qr-box">
+    <img class="qr-img" src="data:image/png;base64,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" alt="Inception"/>
+  </div>
+  <p class="back-num">Cinescenes #16</p>
+</div></div>
+
+</body>
+</html>

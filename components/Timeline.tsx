@@ -1,14 +1,13 @@
-import { useRef } from 'react';
 import {
   ScrollView,
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
-  Animated,
 } from 'react-native';
 import { Movie } from '@/lib/database.types';
 import { C, R, FS } from '@/constants/theme';
+import { FlippingMovieCard, CardBack, CardFront } from '@/components/MovieCard';
 
 interface TimelineProps {
   timeline: number[];
@@ -18,9 +17,10 @@ interface TimelineProps {
   onIntervalSelect: (i: number) => void;
   onConfirm: () => void;
   placedInterval?: number | null;
-  placedMovies?: Array<{ year: number; title: string }>;
+  placedMovies?: Movie[];
   hideFloatingCard?: boolean;
   blockedIntervals?: number[];
+  revealingMovie?: Movie;
 }
 
 export function Timeline({
@@ -34,6 +34,7 @@ export function Timeline({
   placedMovies,
   hideFloatingCard,
   blockedIntervals,
+  revealingMovie,
 }: TimelineProps) {
   // Build the display list: sorted years from timeline
   const sortedYears = [...timeline].sort((a, b) => a - b);
@@ -42,10 +43,6 @@ export function Timeline({
   // In interactive mode: at selectedInterval position (or at end if none selected)
   // In observer mode: at placedInterval position
   const showAtInterval = interactive ? selectedInterval : (placedInterval ?? null);
-
-  // Build list of "slots": each slot is either a placed card or the gap indicator
-  // We have N placed cards and N+1 gaps (0..N)
-  const totalCards = sortedYears.length;
 
   function renderGap(index: number) {
     const isActive = showAtInterval === index;
@@ -60,11 +57,13 @@ export function Timeline({
     }
 
     if (!interactive) {
-      // Show unknown card at this position if placedInterval matches
+      // Show card at this position if placedInterval matches
       if (placedInterval === index) {
         return (
           <View key={`gap-${index}`} style={styles.unknownCardSlot}>
-            <UnknownCard />
+            {revealingMovie
+              ? <FlippingMovieCard movie={revealingMovie} width={80} height={100} autoFlip />
+              : <CardBack width={80} height={100} />}
           </View>
         );
       }
@@ -75,7 +74,7 @@ export function Timeline({
     if (isActive) {
       return (
         <View key={`gap-${index}`} style={styles.activeGap}>
-          {!hideFloatingCard && <UnknownCard />}
+          {!hideFloatingCard && <CardBack width={80} height={100} />}
           <TouchableOpacity style={styles.confirmBtn} onPress={onConfirm}>
             <Text style={styles.confirmBtnText}>Place Here</Text>
           </TouchableOpacity>
@@ -98,15 +97,13 @@ export function Timeline({
   }
 
   function renderPlacedCard(year: number, idx: number) {
-    const title = placedMovies?.find((m) => m.year === year)?.title;
+    const movie = placedMovies?.find((m) => m.year === year);
+    if (movie) {
+      return <CardFront key={`card-${idx}`} movie={movie} width={80} height={100} />;
+    }
     return (
       <View key={`card-${idx}`} style={styles.card}>
         <Text style={styles.cardYear}>{year}</Text>
-        {title ? (
-          <Text style={styles.cardTitle} numberOfLines={2}>
-            {title}
-          </Text>
-        ) : null}
       </View>
     );
   }
@@ -121,11 +118,11 @@ export function Timeline({
     items.push(renderGap(i + 1));
   }
 
-  // If no interval selected in interactive mode, show the unknown card at end (unless floating in parent)
+  // If no interval selected in interactive mode, show the card back at end (unless floating in parent)
   if (interactive && selectedInterval === null && !hideFloatingCard) {
     items.push(
       <View key="unknown-pending" style={styles.unknownCardSlot}>
-        <UnknownCard />
+        <CardBack width={80} height={100} />
       </View>
     );
   }
@@ -139,15 +136,6 @@ export function Timeline({
     >
       {items}
     </ScrollView>
-  );
-}
-
-function UnknownCard() {
-  return (
-    <View style={styles.unknownCard}>
-      <Text style={styles.unknownCardIcon}>🎬</Text>
-      <Text style={styles.unknownCardLabel}>?</Text>
-    </View>
   );
 }
 
@@ -221,26 +209,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 8,
-  },
-  unknownCard: {
-    width: 80,
-    height: 100,
-    backgroundColor: C.surfaceHigh,
-    borderRadius: R.md,
-    borderWidth: 2,
-    borderColor: C.gold,
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-  },
-  unknownCardIcon: {
-    fontSize: 20,
-  },
-  unknownCardLabel: {
-    color: C.gold,
-    fontSize: 22,
-    fontWeight: '900',
   },
   unknownCardSlot: {
     alignItems: 'center',

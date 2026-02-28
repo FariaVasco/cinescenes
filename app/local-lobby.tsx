@@ -8,6 +8,8 @@ import {
   StyleSheet,
   Alert,
   Clipboard,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { C, R, FS } from '@/constants/theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -46,6 +48,7 @@ export default function LocalLobbyScreen() {
   const [localIsHost, setLocalIsHost] = useState(false);
   const [nameEntered, setNameEntered] = useState(false);
 
+  const nameInputRef = useRef<TextInput>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Keep latest values accessible inside the interval without stale closure
   const gameIdRef = useRef<string | null>(null);
@@ -346,6 +349,8 @@ export default function LocalLobbyScreen() {
 
   // ── Create / Join form ──
   const isCreate = view === 'create';
+  const canSubmit = displayName.trim().length > 0 && (isCreate || joinCode.trim().length > 0);
+  const handleSubmit = isCreate ? handleCreateGame : handleJoinGame;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -353,7 +358,11 @@ export default function LocalLobbyScreen() {
         <Text style={styles.backBtnText}>←  Back</Text>
       </TouchableOpacity>
 
-      <View style={styles.formCenter}>
+      <KeyboardAvoidingView
+        style={styles.formCenter}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
+      >
         <Text style={styles.title}>{isCreate ? 'Create Game' : 'Join Game'}</Text>
 
         {!isCreate && (
@@ -367,6 +376,10 @@ export default function LocalLobbyScreen() {
               placeholderTextColor="#555"
               autoCapitalize="characters"
               maxLength={6}
+              returnKeyType="next"
+              onSubmitEditing={() => nameInputRef.current?.focus()}
+              blurOnSubmit={false}
+              autoFocus
             />
           </View>
         )}
@@ -374,30 +387,30 @@ export default function LocalLobbyScreen() {
         <View style={styles.inputWrapper}>
           <Text style={styles.inputLabel}>Your Name</Text>
           <TextInput
+            ref={nameInputRef}
             style={styles.input}
             value={displayName}
             onChangeText={setDisplayName}
             placeholder="Enter your name"
             placeholderTextColor="#555"
             maxLength={20}
-            autoFocus
+            returnKeyType="go"
+            onSubmitEditing={() => { if (canSubmit && !loading) handleSubmit(); }}
+            autoFocus={isCreate}
           />
         </View>
 
         <TouchableOpacity
-          style={[
-            styles.actionBtn,
-            (!displayName.trim() || (!isCreate && !joinCode.trim())) && styles.actionBtnDisabled,
-          ]}
-          onPress={isCreate ? handleCreateGame : handleJoinGame}
-          disabled={!displayName.trim() || (!isCreate && !joinCode.trim()) || loading}
+          style={[styles.actionBtn, !canSubmit && styles.actionBtnDisabled]}
+          onPress={handleSubmit}
+          disabled={!canSubmit || loading}
           activeOpacity={0.85}
         >
           <Text style={styles.actionBtnText}>
             {loading ? 'Loading…' : isCreate ? 'Create Game' : 'Join Game'}
           </Text>
         </TouchableOpacity>
-      </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
