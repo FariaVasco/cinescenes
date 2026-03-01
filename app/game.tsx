@@ -10,7 +10,9 @@ import {
   Animated,
   Easing,
   useWindowDimensions,
+  TextInput,
 } from 'react-native';
+import { SpeechModule, speechAvailable, useSpeechRecognitionEvent } from '@/lib/speech-recognition';
 import { C, R, FS } from '@/constants/theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Snackbar } from 'react-native-paper';
@@ -38,6 +40,41 @@ const REPORT_OPTIONS = [
 const db = supabase as unknown as { from: (t: string) => any };
 const POLL_MS = 2000;
 
+async function interpretVoiceInput(transcript: string): Promise<{ movie: string; director: string } | null> {
+  const apiKey = process.env.EXPO_PUBLIC_GROQ_API_KEY;
+  if (!apiKey) return null;
+  try {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: [
+          {
+            role: 'system',
+            content: 'You extract movie titles and director names from game player voice input. Respond only with valid JSON, no prose.',
+          },
+          {
+            role: 'user',
+            content: `A player said: "${transcript}"\n\nThey are trying to name a movie and its director. Extract both. Return ONLY: {"movie":"...","director":"..."}\nIf you cannot confidently identify both from what was said, return: {"error":"cannot identify"}`,
+          },
+        ],
+        max_tokens: 80,
+        temperature: 0,
+      }),
+    });
+    const data = await res.json();
+    const content: string = data.choices?.[0]?.message?.content ?? '';
+    const match = content.match(/\{[\s\S]*?\}/);
+    if (!match) return null;
+    const parsed = JSON.parse(match[0]);
+    if (parsed.error || !parsed.movie || !parsed.director) return null;
+    return { movie: parsed.movie, director: parsed.director };
+  } catch {
+    return null;
+  }
+}
+
 export default function GameScreen() {
   const router = useRouter();
   const {
@@ -62,6 +99,8 @@ export default function GameScreen() {
   const [loading, setLoading] = useState(true);
   const [showIntro, setShowIntro] = useState(false);
   const [showLandscapePrompt, setShowLandscapePrompt] = useState(false);
+  const [trailerKey, setTrailerKey] = useState(0);
+  const [showMyTimeline, setShowMyTimeline] = useState(false);
 
   const [selectedInterval, setSelectedInterval] = useState<number | null>(null);
   const [hasPassed, setHasPassed] = useState(false);
@@ -74,20 +113,35 @@ export default function GameScreen() {
   const cardAnimY = useRef(new Animated.Value(0)).current;
   const cardAnimScale = useRef(new Animated.Value(1)).current;
   const cardAnimOpacity = useRef(new Animated.Value(1)).current;
+  const challengeWindowStart = useRef<number | null>(null);
+  const revealTriggered = useRef(false);
+  const nextTurnInProgress = useRef(false);
+  const [revealPhase, setRevealPhase] = useState<'flip' | 'result'>('flip');
+  const [movieGuess, setMovieGuess] = useState('');
+  const [directorGuess, setDirectorGuess] = useState('');
+  const [revealLocked, setRevealLocked] = useState(true);
+  const introShownRef = useRef(false);
+
+  const [voiceState, setVoiceState] = useState<'idle' | 'listening' | 'processing' | 'error'>('idle');
+  const [voiceError, setVoiceError] = useState('');
+  const voiceStateRef = useRef<'idle' | 'listening' | 'processing' | 'error'>('idle');
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Refs so the interval always has the latest values
   const currentTurnRef = useRef<Turn | null>(null);
   const gameIdRef = useRef<string | null>(null);
 
-  // Portrait during intro/loading, landscape for the actual game
+  // Portrait during intro/loading/guess input; landscape for the actual game
   useEffect(() => {
+    const amActivePlayer = myPlayerId === currentTurn?.active_player_id;
     if (loading || showIntro) {
+      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+    } else if (trailerEnded && !readyToPlace && amActivePlayer) {
       ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
     } else {
       ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
     }
-  }, [loading, showIntro]);
+  }, [loading, showIntro, trailerEnded, readyToPlace, myPlayerId, currentTurn?.active_player_id]);
 
   useEffect(() => {
     if (!game) { router.replace('/'); return; }
@@ -95,6 +149,70 @@ export default function GameScreen() {
     loadState();
     return () => stopPolling();
   }, []);
+
+  // Switch from 'flip' → 'result' after the FlippingMovieCard animation completes
+  useEffect(() => {
+    if (currentTurn?.status !== 'revealing') return;
+    setRevealPhase('flip');
+    const t = setTimeout(() => setRevealPhase('result'), 1200);
+    return () => clearTimeout(t);
+  }, [currentTurn?.status]);
+
+  // Lock the Reveal button for 5.5 s after challenging starts
+  // (gives everyone the challenge window + buffer before reveal is allowed)
+  useEffect(() => {
+    if (currentTurn?.status !== 'challenging') { setRevealLocked(true); return; }
+    setRevealLocked(true);
+    const t = setTimeout(() => setRevealLocked(false), 5500);
+    return () => clearTimeout(t);
+  }, [currentTurn?.id, currentTurn?.status]);
+
+  // Pause polling while the active player is typing on the guess screen.
+  // Without this, the 2-second poll triggers state updates → KeyboardAvoidingView
+  // recalculates layout (causing visible glitching) and disrupts speech recognition.
+  useEffect(() => {
+    const amActive = myPlayerId === currentTurn?.active_player_id;
+    if (trailerEnded && !readyToPlace && amActive) {
+      stopPolling();
+    } else if (!loading) {
+      startPolling();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trailerEnded, readyToPlace, myPlayerId, currentTurn?.active_player_id, loading]);
+
+  // Speech recognition event handlers (must be called at component level)
+  useSpeechRecognitionEvent('result', async (event) => {
+    const transcript = (event.results as any)[0]?.[0]?.transcript ?? '';
+    if (!transcript || voiceStateRef.current !== 'listening') return;
+    voiceStateRef.current = 'processing';
+    setVoiceState('processing');
+    const parsed = await interpretVoiceInput(transcript);
+    if (parsed) {
+      setMovieGuess(parsed.movie);
+      setDirectorGuess(parsed.director);
+      voiceStateRef.current = 'idle';
+      setVoiceState('idle');
+    } else {
+      voiceStateRef.current = 'error';
+      setVoiceError(`Heard: "${transcript}" — couldn't identify movie + director. Please type.`);
+      setVoiceState('error');
+    }
+  });
+
+  useSpeechRecognitionEvent('error', () => {
+    if (voiceStateRef.current === 'idle') return;
+    voiceStateRef.current = 'error';
+    setVoiceError('Speech recognition failed. Please type instead.');
+    setVoiceState('error');
+  });
+
+  useSpeechRecognitionEvent('end', () => {
+    if (voiceStateRef.current === 'listening') {
+      voiceStateRef.current = 'error';
+      setVoiceError("Didn't catch that. Please try again or type.");
+      setVoiceState('error');
+    }
+  });
 
   function stopPolling() {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
@@ -122,8 +240,9 @@ export default function GameScreen() {
       const prevTurn = currentTurnRef.current;
       const turnChanged = !prevTurn || prevTurn.id !== latestTurn.id;
       const statusChanged = prevTurn?.status !== latestTurn.status;
+      const placedIntervalChanged = prevTurn?.placed_interval !== latestTurn.placed_interval;
 
-      if (turnChanged || statusChanged) {
+      if (turnChanged || statusChanged || placedIntervalChanged) {
         currentTurnRef.current = latestTurn;
         setLocalTurn(latestTurn);
         setCurrentTurn(latestTurn);
@@ -146,6 +265,16 @@ export default function GameScreen() {
           cardAnimOpacity.setValue(1);
           setShowReportDialog(false);
           setSnackMessage('');
+          challengeWindowStart.current = null;
+          revealTriggered.current = false;
+          nextTurnInProgress.current = false;
+          setRevealPhase('flip');
+          setMovieGuess('');
+          setDirectorGuess('');
+          setRevealLocked(true);
+          voiceStateRef.current = 'idle';
+          setVoiceState('idle');
+          setVoiceError('');
         }
       }
 
@@ -160,6 +289,28 @@ export default function GameScreen() {
         // Sync my own challenge in case it arrived from DB
         const mine = cData.find((c) => c.challenger_id === myPlayerId);
         if (mine) setMyChallenge(mine);
+      }
+
+
+      // Auto-reveal: active player's device triggers once the challenge window settles
+      if (
+        latestTurn?.status === 'challenging' &&
+        myPlayerId === latestTurn.active_player_id &&
+        !revealTriggered.current
+      ) {
+        const allSettled = (cData ?? []).every((c: Challenge) => c.interval_index !== -1);
+        // Initialize window if not set (e.g. fresh load into an already-challenging turn)
+        if (challengeWindowStart.current === null) {
+          // If challenges are already settled, backdate so the next check fires quickly
+          challengeWindowStart.current = allSettled ? Date.now() - 14000 : Date.now();
+        }
+        const elapsed = Date.now() - challengeWindowStart.current;
+        // Reveal after 6.5 s (5 s window + 1.5 s buffer) once everyone has confirmed
+        // Hard cutoff at 15 s in case a challenger's app froze
+        if (elapsed > 6500 && (allSettled || elapsed > 15000)) {
+          revealTriggered.current = true;
+          handleReveal();
+        }
       }
     }
 
@@ -201,7 +352,9 @@ export default function GameScreen() {
     }
 
     const isGameStart = loadedPlayers.every(p => (p.timeline ?? []).length <= 1);
-    setShowIntro(isGameStart);
+    if (isGameStart && !introShownRef.current) {
+      setShowIntro(true);
+    }
     setLoading(false);
     startPolling();
   }
@@ -258,6 +411,11 @@ export default function GameScreen() {
   async function handleChallenge() {
     if (!currentTurn || myChallenge) return;
     setHasPassed(false);
+    // Challenging always costs 1 coin
+    const challenger = players.find(p => p.id === myPlayerId);
+    if (challenger && challenger.coins > 0) {
+      await db.from('players').update({ coins: challenger.coins - 1 }).eq('id', myPlayerId);
+    }
     const { data: inserted } = await db
       .from('challenges')
       .insert({ turn_id: currentTurn.id, challenger_id: myPlayerId!, interval_index: -1 })
@@ -280,11 +438,32 @@ export default function GameScreen() {
         Animated.timing(cardAnimOpacity, { toValue: 0, duration: 300, useNativeDriver: true }),
       ]).start(() => resolve());
     });
+    challengeWindowStart.current = Date.now();
+    revealTriggered.current = false;
     handleConfirmPlacement();
   }
 
   async function handleReveal() {
     if (!currentTurn) return;
+    // Award coin to active player if placement correct AND they named the movie + director
+    if (myPlayerId === currentTurn.active_player_id && movieGuess.trim() && directorGuess.trim()) {
+      const m = activeMovies.find(mv => mv.id === currentTurn.movie_id);
+      if (m) {
+        const validIntervals = computeValidIntervals(m.year, getActivePlayerTimeline());
+        const isCorrect = currentTurn.placed_interval !== null &&
+          validIntervals.includes(currentTurn.placed_interval);
+        if (isCorrect) {
+          const titleOK = movieGuess.trim().toLowerCase() === m.title.toLowerCase();
+          const directorOK = directorGuess.trim().toLowerCase() === (m.director ?? '').toLowerCase();
+          if (titleOK && directorOK) {
+            const myPlayer = players.find(p => p.id === myPlayerId);
+            if (myPlayer) {
+              await db.from('players').update({ coins: myPlayer.coins + 1 }).eq('id', myPlayerId);
+            }
+          }
+        }
+      }
+    }
     const optimistic = { ...currentTurn, status: 'revealing' as const };
     setLocalTurn(optimistic);
     setCurrentTurn(optimistic);
@@ -299,54 +478,110 @@ export default function GameScreen() {
     setSnackMessage("Thanks! 🙏  We'll review this trailer soon.");
   }
 
-  async function handleNextTurn() {
-    const g = game;
-    if (!g || !currentTurn) return;
-    const movie = getMovie();
-    if (!movie) return;
-
-    const activeTimeline = getActivePlayerTimeline();
-    const validIntervals = computeValidIntervals(movie.year, activeTimeline);
-    const activeCorrect =
-      currentTurn.placed_interval !== null &&
-      currentTurn.placed_interval !== undefined &&
-      validIntervals.includes(currentTurn.placed_interval);
-    // A challenger wins only if the active player was wrong and they placed in a valid interval
-    const winningChallenger = activeCorrect
-      ? null
-      : challenges.find((c) => c.interval_index !== -1 && validIntervals.includes(c.interval_index));
-
-    let winnerId: string | null = null;
-    if (activeCorrect) winnerId = currentTurn.active_player_id;
-    else if (winningChallenger) winnerId = winningChallenger.challenger_id;
-
-    if (winnerId) {
-      const winner = getPlayer(winnerId);
-      if (winner) {
-        const newTimeline = [...winner.timeline, movie.year].sort((a, b) => a - b);
-        await db.from('players').update({ timeline: newTimeline }).eq('id', winnerId);
-      }
+  async function startVoice() {
+    setVoiceError('');
+    if (!speechAvailable) {
+      voiceStateRef.current = 'error';
+      setVoiceError('Voice input not available. Please type instead.');
+      setVoiceState('error');
+      return;
     }
+    const { granted } = await SpeechModule.requestPermissionsAsync();
+    if (!granted) {
+      voiceStateRef.current = 'error';
+      setVoiceError('Microphone permission denied. Please type instead.');
+      setVoiceState('error');
+      return;
+    }
+    voiceStateRef.current = 'listening';
+    setVoiceState('listening');
+    SpeechModule.start({ lang: 'en-US', continuous: false, interimResults: false });
+  }
 
-    const currentIdx = players.findIndex((p) => p.id === currentTurn.active_player_id);
-    const nextPlayer = players[(currentIdx + 1) % players.length];
+  function stopVoice() {
+    SpeechModule.stop();
+    // State updated by the 'end' event handler
+  }
 
-    const { data: pastTurns } = await db
-      .from('turns')
-      .select('movie_id')
-      .eq('game_id', g.id);
-    const usedMovieIds = new Set<string>(pastTurns?.map((t: { movie_id: string }) => t.movie_id) ?? []);
-    const pool = activeMovies.filter((m) => !usedMovieIds.has(m.id));
-    const nextMovie = pool.length > 0
-      ? pool[Math.floor(Math.random() * pool.length)]
-      : activeMovies[Math.floor(Math.random() * activeMovies.length)];
+  async function handleNextTurn() {
+    // Guard: prevent double-tap on this device
+    if (nextTurnInProgress.current) return;
+    nextTurnInProgress.current = true;
+    try {
+      const g = game;
+      if (!g || !currentTurn) return;
 
-    await db.from('turns').insert({
-      game_id: g.id,
-      active_player_id: nextPlayer.id,
-      movie_id: nextMovie.id,
-      status: 'drawing',
-    });
+      // Atomically claim this turn: only update to 'done' if still in 'revealing'.
+      // If two devices race here, only one will match the WHERE clause and get rows back.
+      const { data: claimed } = await db
+        .from('turns')
+        .update({ status: 'done' as any })
+        .eq('id', currentTurn.id)
+        .eq('status', 'revealing')
+        .select('id') as { data: { id: string }[] | null };
+      if (!claimed || claimed.length === 0) return; // Another device already processed it
+
+      const movie = getMovie();
+      if (!movie) return;
+
+      // Fetch fresh player data so winner.timeline is never stale
+      const { data: freshPlayers } = await db
+        .from('players').select('*').eq('game_id', g.id).order('created_at') as { data: Player[] | null };
+      const latestPlayers: Player[] = freshPlayers ?? players;
+      if (freshPlayers) { setLocalPlayers(freshPlayers); setPlayers(freshPlayers); }
+
+      const activeTL = latestPlayers.find(p => p.id === currentTurn.active_player_id)?.timeline ?? [];
+      const validIntervals = computeValidIntervals(movie.year, activeTL);
+      const activeCorrect =
+        currentTurn.placed_interval !== null &&
+        currentTurn.placed_interval !== undefined &&
+        validIntervals.includes(currentTurn.placed_interval);
+      // A challenger wins only if the active player was wrong and they placed in a valid interval
+      const winningChallenger = activeCorrect
+        ? null
+        : challenges.find((c) => c.interval_index !== -1 && validIntervals.includes(c.interval_index));
+
+      let winnerId: string | null = null;
+      if (activeCorrect) winnerId = currentTurn.active_player_id;
+      else if (winningChallenger) winnerId = winningChallenger.challenger_id;
+
+      if (winnerId) {
+        const winner = latestPlayers.find(p => p.id === winnerId) ?? null;
+        if (winner) {
+          const newTimeline = [...winner.timeline, movie.year].sort((a, b) => a - b);
+          await db.from('players').update({ timeline: newTimeline }).eq('id', winnerId);
+        }
+      }
+
+      const currentIdx = latestPlayers.findIndex((p) => p.id === currentTurn.active_player_id);
+      const nextPlayer = latestPlayers[(currentIdx + 1) % latestPlayers.length];
+
+      const { data: pastTurns } = await db
+        .from('turns')
+        .select('movie_id')
+        .eq('game_id', g.id);
+      const usedMovieIds = new Set<string>(pastTurns?.map((t: { movie_id: string }) => t.movie_id) ?? []);
+      // Also exclude starting cards (added directly to timelines, never in a turn row)
+      latestPlayers.forEach(p => {
+        p.timeline.forEach(year => {
+          const mv = activeMovies.find(m => m.year === year);
+          if (mv) usedMovieIds.add(mv.id);
+        });
+      });
+      const pool = activeMovies.filter((m) => !usedMovieIds.has(m.id));
+      const nextMovie = pool.length > 0
+        ? pool[Math.floor(Math.random() * pool.length)]
+        : activeMovies[Math.floor(Math.random() * activeMovies.length)];
+
+      await db.from('turns').insert({
+        game_id: g.id,
+        active_player_id: nextPlayer.id,
+        movie_id: nextMovie.id,
+        status: 'drawing',
+      });
+    } finally {
+      nextTurnInProgress.current = false;
+    }
   }
 
   // ── Phase renderers ──
@@ -367,7 +602,11 @@ export default function GameScreen() {
       <GameIntroScreen
         startingMovie={startingMovie}
         playerName={myPlayer?.display_name ?? 'Player'}
-        onDone={() => { setShowIntro(false); setShowLandscapePrompt(true); }}
+        onDone={() => {
+          introShownRef.current = true;
+          setShowIntro(false);
+          setShowLandscapePrompt(true);
+        }}
         allMovies={activeMovies}
       />
     );
@@ -381,16 +620,54 @@ export default function GameScreen() {
   const activePlayer = getActivePlayer();
   const amActive = isActivePlayer();
   const timeline = getActivePlayerTimeline();
-  const placedMovies: Movie[] = players.flatMap((p) =>
-    p.timeline
-      .map((year) => activeMovies.find((mv) => mv.year === year))
-      .filter((m): m is Movie => m !== undefined)
+
+  // Only use the ACTIVE player's movies for timeline display.
+  // Using all players caused wrong movies to appear when multiple movies share the same year.
+  const placedMovies: Movie[] = timeline
+    .map((year) => activeMovies.find((mv) => mv.year === year))
+    .filter((m): m is Movie => m !== undefined);
+
+  // My own timeline (for "my timeline" modal and drawing phase display)
+  const myTimeline = (players.find(p => p.id === myPlayerId)?.timeline ?? []).slice().sort((a, b) => a - b);
+  const myPlacedMovies: Movie[] = myTimeline
+    .map(year => activeMovies.find(m => m.year === year))
+    .filter((m): m is Movie => m !== undefined);
+
+  // ── "My Timeline" modal — overlaid on every game screen ──
+  const myTimelineModal = (
+    <Modal visible={showMyTimeline} transparent animationType="slide" onRequestClose={() => setShowMyTimeline(false)}>
+      <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowMyTimeline(false)}>
+        <TouchableOpacity activeOpacity={1} style={styles.myTimelineSheet}>
+          <View style={styles.myTimelineHeader}>
+            <Text style={styles.myTimelineTitle}>My Timeline</Text>
+            <TouchableOpacity onPress={() => setShowMyTimeline(false)} style={styles.reportCloseBtn}>
+              <Text style={styles.reportCloseText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          {myTimeline.length === 0 ? (
+            <Text style={styles.myTimelineEmpty}>No cards yet</Text>
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.myTimelineScroll}>
+              {myTimeline.map((year, i) => {
+                const m = activeMovies.find(mv => mv.year === year);
+                return m
+                  ? <CardFront key={i} movie={m} width={90} height={126} />
+                  : <View key={i} style={styles.myTimelinePlaceholder}><Text style={styles.myTimelinePlaceholderYear}>{year}</Text></View>;
+              })}
+            </ScrollView>
+          )}
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
   );
 
   // ── DRAWING ──
   if (currentTurn.status === 'drawing') {
+    const drawingTimeline = myTimeline;
+    const drawingPlacedMovies = myPlacedMovies;
     return (
       <SafeAreaView style={styles.container}>
+        {myTimelineModal}
         <View style={styles.phaseCenter}>
           {amActive ? (
             <>
@@ -407,11 +684,22 @@ export default function GameScreen() {
                 </Text>
               </View>
               <Text style={styles.waitingText}>{activePlayer?.display_name} is thinking…</Text>
-              <ActivityIndicator color="#f5c518" style={{ marginTop: 12 }} />
             </>
           )}
         </View>
-        <ScoreBar players={players} myId={myPlayerId} />
+        {drawingTimeline.length > 0 && movie && (
+          <Timeline
+            timeline={drawingTimeline}
+            currentCardMovie={movie}
+            interactive={false}
+            selectedInterval={null}
+            onIntervalSelect={() => {}}
+            onConfirm={() => {}}
+            placedMovies={drawingPlacedMovies}
+            hideFloatingCard
+          />
+        )}
+        <ScoreBar players={players} myId={myPlayerId} onShowTimeline={() => setShowMyTimeline(true)} />
       </SafeAreaView>
     );
   }
@@ -420,10 +708,39 @@ export default function GameScreen() {
   if (currentTurn.status === 'placing') {
     if (!movie) return <LoadingScreen />;
 
+    // ── Observer: active player clicked "I know it!" — show waiting screen ──
+    if (!amActive && currentTurn.placed_interval === -1) {
+      return (
+        <SafeAreaView style={styles.container}>
+          {myTimelineModal}
+          <View style={styles.placingTopHalf}>
+            <Text style={styles.phaseLabel}>Waiting for {activePlayer?.display_name}…</Text>
+            <View style={styles.floatingCardWrapper}>
+              <CardBack width={80} height={CARD_H} />
+            </View>
+          </View>
+          <View style={styles.placingBottomHalf}>
+            <Timeline
+              timeline={timeline}
+              currentCardMovie={movie}
+              interactive={false}
+              selectedInterval={null}
+              onIntervalSelect={() => {}}
+              onConfirm={() => {}}
+              placedMovies={placedMovies}
+              hideFloatingCard
+            />
+          </View>
+          <ScoreBar players={players} myId={myPlayerId} onShowTimeline={() => setShowMyTimeline(true)} />
+        </SafeAreaView>
+      );
+    }
+
     // ── Timeline (after trailer + ready) ──
     if (readyToPlace) {
       return (
         <SafeAreaView style={styles.container}>
+          {myTimelineModal}
           {/* Top half: floating animated card */}
           <View style={styles.placingTopHalf}>
             <Text style={styles.phaseLabel}>
@@ -439,7 +756,7 @@ export default function GameScreen() {
                   },
                 ]}
               >
-                <CardBack width={CARD_W} height={CARD_H} />
+                <CardBack width={80} height={CARD_H} />
               </Animated.View>
             </View>
           </View>
@@ -447,7 +764,7 @@ export default function GameScreen() {
           {/* Bottom half: timeline */}
           <View style={styles.placingBottomHalf}>
             {amActive && selectedInterval === null && (
-              <Text style={styles.tapHint}>Tap ⌄ to pick a spot</Text>
+              <Text style={styles.tapHint}>Tap + to pick a spot</Text>
             )}
             <Timeline
               timeline={timeline}
@@ -461,7 +778,7 @@ export default function GameScreen() {
             />
           </View>
 
-          <ScoreBar players={players} myId={myPlayerId} />
+          <ScoreBar players={players} myId={myPlayerId} onShowTimeline={() => setShowMyTimeline(true)} />
         </SafeAreaView>
       );
     }
@@ -484,34 +801,117 @@ export default function GameScreen() {
       }
 
       return (
-        <View style={styles.endedOverlay}>
-          <SafeAreaView style={styles.endedInner} edges={['top', 'bottom']}>
-            <View style={styles.endedCenter}>
-              <Text style={styles.endedTitle}>Ready to guess? 🎬</Text>
-              <Text style={styles.endedSubtitle}>What year is this movie from?</Text>
+        // No KeyboardAvoidingView — it fights with the landscape→portrait orientation
+        // transition and causes non-stop layout thrashing on iOS.
+        // automaticallyAdjustKeyboardInsets is a native iOS scroll-inset mechanism
+        // that is unaffected by orientation changes.
+        <SafeAreaView style={styles.guessScreen} edges={['top', 'bottom']}>
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            showsVerticalScrollIndicator={false}
+            automaticallyAdjustKeyboardInsets
+            contentContainerStyle={styles.guessScrollContent}
+          >
+            {/* Header */}
+            <View style={styles.guessHeader}>
+              <Text style={styles.guessTitle}>🎬 Ready to guess?</Text>
+              <Text style={styles.guessSubtitle}>WHAT YEAR IS THIS MOVIE FROM?</Text>
             </View>
-            <View style={styles.endedActions}>
+
+            {/* Bonus coin section */}
+            <View style={styles.guessBonusSection}>
+              <Text style={styles.guessBonusLabel}>🪙 Bonus coin</Text>
+              <Text style={styles.guessBonusDesc}>Name the movie + director to earn an extra coin</Text>
+
+              <TextInput
+                style={styles.guessInput}
+                placeholder="Movie title…"
+                placeholderTextColor={C.textMuted}
+                value={movieGuess}
+                onChangeText={setMovieGuess}
+                autoCorrect={false}
+                returnKeyType="next"
+              />
+              <TextInput
+                style={styles.guessInput}
+                placeholder="Director name…"
+                placeholderTextColor={C.textMuted}
+                value={directorGuess}
+                onChangeText={setDirectorGuess}
+                autoCorrect={false}
+                returnKeyType="done"
+              />
+
+              {/* OR divider */}
+              <View style={styles.guessOrRow}>
+                <View style={styles.guessOrLine} />
+                <Text style={styles.guessOrText}>OR</Text>
+                <View style={styles.guessOrLine} />
+              </View>
+
+              {/* Voice input */}
+              {voiceState === 'idle' && (
+                <TouchableOpacity style={styles.voiceMicBtn} onPress={startVoice} activeOpacity={0.75}>
+                  <Text style={styles.voiceMicIcon}>🎤</Text>
+                  <Text style={styles.voiceMicText}>Speak your answer</Text>
+                </TouchableOpacity>
+              )}
+              {voiceState === 'listening' && (
+                <TouchableOpacity style={[styles.voiceMicBtn, styles.voiceMicBtnListening]} onPress={stopVoice} activeOpacity={0.75}>
+                  <Text style={styles.voiceMicIcon}>🎤</Text>
+                  <Text style={styles.voiceMicText}>Listening… tap to stop</Text>
+                </TouchableOpacity>
+              )}
+              {voiceState === 'processing' && (
+                <View style={[styles.voiceMicBtn, { opacity: 0.7 }]}>
+                  <ActivityIndicator color={C.gold} size="small" />
+                  <Text style={styles.voiceMicText}>Interpreting…</Text>
+                </View>
+              )}
+              {voiceState === 'error' && (
+                <View style={styles.voiceErrorBox}>
+                  <Text style={styles.voiceErrorText}>{voiceError}</Text>
+                  <TouchableOpacity onPress={() => { voiceStateRef.current = 'idle'; setVoiceState('idle'); setVoiceError(''); }}>
+                    <Text style={styles.voiceRetryText}>Try again</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+
+            {/* Footer inside scroll so it's always reachable above the keyboard */}
+            <View style={styles.guessFooter}>
               {!hasReplayed && (
                 <TouchableOpacity
-                  style={[styles.actionButton, styles.replayButton]}
-                  onPress={() => {
+                  style={styles.guessReplayBtn}
+                  onPressIn={() => {
                     setHasReplayed(true);
                     setTrailerEnded(false);
                     setUserPaused(false);
+                    setTrailerKey(k => k + 1);
                   }}
+                  activeOpacity={0.7}
                 >
-                  <Text style={styles.replayButtonText}>↺  Replay</Text>
+                  <Text style={styles.guessReplayText}>↺ Replay</Text>
                 </TouchableOpacity>
               )}
               <TouchableOpacity
-                style={[styles.actionButton, styles.nextButton]}
-                onPress={() => setReadyToPlace(true)}
+                style={styles.guessSkipBtn}
+                onPressIn={() => { setMovieGuess(''); setDirectorGuess(''); setReadyToPlace(true); }}
+                activeOpacity={0.7}
               >
-                <Text style={styles.nextButtonText}>Place it! →</Text>
+                <Text style={styles.guessSkipText}>Skip</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.guessPlaceBtn}
+                onPressIn={() => setReadyToPlace(true)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.guessPlaceText}>Submit</Text>
               </TouchableOpacity>
             </View>
-          </SafeAreaView>
-        </View>
+          </ScrollView>
+        </SafeAreaView>
       );
     }
 
@@ -519,7 +919,7 @@ export default function GameScreen() {
     return (
       <View style={styles.trailerContainer}>
         <TrailerPlayer
-          key={currentTurn.id}
+          key={`${currentTurn.id}-${trailerKey}`}
           ref={trailerRef}
           movie={movie}
           onEnded={() => { setTrailerEnded(true); setUserPaused(false); }}
@@ -546,7 +946,15 @@ export default function GameScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.skipButton}
-                onPress={() => { trailerRef.current?.stop(); setTrailerEnded(true); setUserPaused(false); }}
+                onPress={() => {
+                  trailerRef.current?.stop();
+                  setTrailerEnded(true);
+                  setUserPaused(false);
+                  // Signal to observers: placed_interval = -1 means "I know it" phase
+                  if (currentTurn) {
+                    db.from('turns').update({ placed_interval: -1 }).eq('id', currentTurn.id);
+                  }
+                }}
               >
                 <Text style={styles.skipButtonText}>I know it! →</Text>
               </TouchableOpacity>
@@ -611,116 +1019,132 @@ export default function GameScreen() {
 
   // ── CHALLENGING ──
   if (currentTurn.status === 'challenging') {
-    const alreadyDecided = hasPassed || myChallenge !== null;
+    if (!movie) return <LoadingScreen />;
 
-    // Intervals already claimed: active player's pick + any confirmed challenger picks
+    const alreadyDecided = hasPassed || myChallenge !== null;
     const takenSet = new Set<number>();
     if (currentTurn.placed_interval !== null && currentTurn.placed_interval !== undefined) {
       takenSet.add(currentTurn.placed_interval);
     }
     challenges.forEach(c => { if (c.interval_index !== -1) takenSet.add(c.interval_index); });
     const blockedIntervals = Array.from(takenSet);
-    const totalIntervals = timeline.length + 1;
-    const canChallenge = totalIntervals - takenSet.size > 0;
+    const canChallenge = (timeline.length + 1) - takenSet.size > 0;
+
+    // Dynamic status message visible to all players
+    const pickingNow = challenges.filter(c => c.interval_index === -1);
+    const confirmedC = challenges.filter(c => c.interval_index !== -1);
+    let statusMsg: string;
+    let statusEmoji: string | null = null;
+    if (pickingNow.length > 0) {
+      const names = pickingNow.map(c => getPlayer(c.challenger_id)?.display_name ?? '?').join(', ');
+      statusMsg = `${names} is picking a spot…`;
+      statusEmoji = '🤔';
+    } else if (confirmedC.length > 0) {
+      const names = confirmedC.map(c => getPlayer(c.challenger_id)?.display_name ?? '?').join(', ');
+      statusMsg = `${names} challenged! Revealing soon…`;
+      statusEmoji = '🎯';
+    } else {
+      statusMsg = 'Waiting for everyone to decide…';
+    }
 
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.challengingLayout}>
-          <View style={styles.timelineSection}>
+        {myTimelineModal}
+        {/* Full-width timeline + centered status overlay */}
+        <View style={styles.challengeTimelineArea}>
+          <Timeline
+            timeline={timeline}
+            currentCardMovie={movie}
+            interactive={false}
+            selectedInterval={null}
+            onIntervalSelect={() => {}}
+            onConfirm={() => {}}
+            placedInterval={currentTurn.placed_interval}
+            placedMovies={placedMovies}
+          />
+          {/* Status message floats centered over the timeline */}
+          <View style={styles.challengeOverlayWrap} pointerEvents="none">
+            <View style={styles.challengeOverlayCard}>
+              {statusEmoji
+                ? <Text style={styles.challengeOverlayIcon}>{statusEmoji}</Text>
+                : <ActivityIndicator size="small" color={C.gold} />}
+              <Text style={styles.challengeOverlayText}>{statusMsg}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Challenger: interval picker (before confirming) */}
+        {!amActive && myChallenge && !challengeConfirmed && (
+          <View style={styles.challengePickStrip}>
+            <Text style={styles.challengePickTitle}>Where would YOU place it?</Text>
             <Timeline
               timeline={timeline}
-              currentCardMovie={movie!}
-              interactive={false}
-              selectedInterval={null}
-              onIntervalSelect={() => {}}
-              onConfirm={() => {}}
-              placedInterval={currentTurn.placed_interval}
+              currentCardMovie={movie}
+              interactive
+              selectedInterval={challengeInterval}
+              onIntervalSelect={setChallengeInterval}
+              onConfirm={handleConfirmChallengeInterval}
               placedMovies={placedMovies}
+              blockedIntervals={blockedIntervals}
             />
+            {challengeInterval === null && (
+              <Text style={styles.tapHint}>Tap + to pick a spot</Text>
+            )}
           </View>
+        )}
 
-          {amActive ? (
-            <View style={styles.challengePanel}>
-              <Text style={styles.challengePanelTitle}>Challenges received</Text>
-              {challenges.length === 0 ? (
-                <Text style={styles.noChallengesText}>None yet</Text>
-              ) : (
-                challenges.map((c) => {
-                  const name = getPlayer(c.challenger_id)?.display_name ?? '?';
-                  return (
-                    <Text key={c.id} style={styles.challengeEntry}>
-                      {name} → {c.interval_index === -1 ? 'picking…' : `interval ${c.interval_index}`}
-                    </Text>
-                  );
-                })
-              )}
-              <TouchableOpacity style={styles.primaryBtn} onPress={handleReveal}>
-                <Text style={styles.primaryBtnText}>Reveal the Card 🃏</Text>
-              </TouchableOpacity>
-            </View>
-          ) : myChallenge && !challengeConfirmed ? (
-            <View style={styles.challengePanel}>
-              <Text style={styles.challengePanelTitle}>Where would YOU place it?</Text>
-              <Timeline
-                timeline={timeline}
-                currentCardMovie={movie!}
-                interactive
-                selectedInterval={challengeInterval}
-                onIntervalSelect={setChallengeInterval}
-                onConfirm={handleConfirmChallengeInterval}
-                placedMovies={placedMovies}
-                blockedIntervals={blockedIntervals}
-              />
-              {challengeInterval === null && (
-                <Text style={styles.tapHint}>Tap ⌄ to pick a spot</Text>
-              )}
-            </View>
-          ) : alreadyDecided || challengeConfirmed ? (
-            <View style={styles.challengePanel}>
-              <Text style={styles.noChallengesText}>
-                {challengeConfirmed
-                  ? `You challenged — interval ${challengeInterval}`
-                  : 'Waiting for others…'}
-              </Text>
-              {challenges.map((c) => {
-                const name = getPlayer(c.challenger_id)?.display_name ?? '?';
-                return (
-                  <Text key={c.id} style={styles.challengeEntry}>
-                    {name} → {c.interval_index === -1 ? 'picking…' : `interval ${c.interval_index}`}
-                  </Text>
-                );
-              })}
-            </View>
-          ) : (
-            <View style={styles.challengePanel}>
+        {/* Non-active players who haven't decided yet: Challenge / Pass */}
+        {!amActive && !alreadyDecided && (() => {
+          const myPlayerObj = players.find(p => p.id === myPlayerId);
+          const hasCoins = (myPlayerObj?.coins ?? 0) > 0;
+          return (
+            <View style={styles.challengeDecideStrip}>
               {canChallenge ? (
                 <>
-                  <Text style={styles.challengePanelTitle}>Challenge?</Text>
-                  <View style={styles.challengeTimerRow}>
-                    <ChallengeTimer seconds={5} onExpire={() => setHasPassed(true)} />
-                  </View>
-                  <View style={styles.challengeButtons}>
-                    <TouchableOpacity style={styles.challengeBtn} onPress={handleChallenge}>
-                      <Text style={styles.challengeBtnText}>Challenge</Text>
+                  <ChallengeTimer seconds={5} onExpire={() => setHasPassed(true)} size={108}>
+                    <TouchableOpacity
+                      style={[styles.challengeBtnCircle, !hasCoins && { opacity: 0.35 }]}
+                      onPress={hasCoins ? handleChallenge : undefined}
+                      activeOpacity={hasCoins ? 0.7 : 1}
+                    >
+                      <Text style={styles.challengeBtnText}>
+                        {hasCoins ? 'Challenge' : 'No coins'}
+                      </Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.passBtn} onPress={() => setHasPassed(true)}>
-                      <Text style={styles.passBtnText}>Pass</Text>
-                    </TouchableOpacity>
-                  </View>
-                </>
-              ) : (
-                <>
-                  <Text style={styles.challengePanelTitle}>No spots left</Text>
-                  <Text style={styles.noChallengesText}>All intervals are taken</Text>
-                  <TouchableOpacity style={styles.passBtn} onPress={() => setHasPassed(true)}>
-                    <Text style={styles.passBtnText}>Got it</Text>
+                  </ChallengeTimer>
+                  <TouchableOpacity style={[styles.passBtn, { flex: 1 }]} onPress={() => setHasPassed(true)}>
+                    <Text style={styles.passBtnText}>Pass</Text>
                   </TouchableOpacity>
                 </>
+              ) : (
+                <TouchableOpacity style={[styles.passBtn, { flex: 1 }]} onPress={() => setHasPassed(true)}>
+                  <Text style={styles.passBtnText}>All spots taken — Pass</Text>
+                </TouchableOpacity>
               )}
             </View>
-          )}
-        </View>
-        <ScoreBar players={players} myId={myPlayerId} />
+          );
+        })()}
+
+        {/* Active player: manual reveal button — only enabled once challenge window closed */}
+        {amActive && (() => {
+          const pendingChallengers = challenges.some(c => c.interval_index === -1);
+          const canRevealNow = !revealLocked && !pendingChallengers;
+          return (
+            <View style={styles.challengeDecideStrip}>
+              <TouchableOpacity
+                style={[styles.revealNowBtn, { flex: 1 }, !canRevealNow && { opacity: 0.35 }]}
+                onPress={canRevealNow ? handleReveal : undefined}
+                activeOpacity={canRevealNow ? 0.85 : 1}
+              >
+                <Text style={styles.revealNowBtnText}>
+                  {revealLocked ? 'Waiting for decisions…' : pendingChallengers ? 'Challenger deciding…' : 'Reveal →'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          );
+        })()}
+
+        <ScoreBar players={players} myId={myPlayerId} onShowTimeline={() => setShowMyTimeline(true)} />
       </SafeAreaView>
     );
   }
@@ -735,12 +1159,9 @@ export default function GameScreen() {
       currentTurn.placed_interval !== null &&
       currentTurn.placed_interval !== undefined &&
       validIntervals.includes(currentTurn.placed_interval);
-    // A challenger wins only when the active player was wrong
     const winningChallenger = activeCorrect
       ? null
       : challenges.find((c) => c.interval_index !== -1 && validIntervals.includes(c.interval_index));
-    // Coin-back: active was correct AND a challenger also picked the OTHER valid interval
-    // (duplicate-year case — both adjacent intervals are valid, challenger wasn't wrong)
     const coinBackChallengers = (validIntervals.length === 2 && activeCorrect)
       ? challenges.filter(
           (c) =>
@@ -753,62 +1174,118 @@ export default function GameScreen() {
       .map((c) => getPlayer(c.challenger_id)?.display_name)
       .filter(Boolean) as string[];
 
-    let resultText = 'Nobody got it — card trashed 🗑️';
+    let resultText = 'Nobody got it — card trashed';
     let resultName = '';
     if (activeCorrect) {
       resultName = activePlayer?.display_name ?? '';
-      resultText = 'got it right! 🎉';
+      resultText = 'got it right!';
     } else if (winningChallenger) {
       resultName = getPlayer(winningChallenger.challenger_id)?.display_name ?? '';
-      resultText = 'challenged correctly! 🎯';
+      resultText = 'challenged correctly!';
     }
 
-    const resultEmoji = activeCorrect ? '🎉' : winningChallenger ? '🎯' : '🗑️';
+    const isTrash = !activeCorrect && !winningChallenger;
+
+    // Bonus coin feedback — only meaningful on the active player's device since
+    // movieGuess/directorGuess are local state
+    const didSubmitBonus = amActive && movieGuess.trim() !== '' && directorGuess.trim() !== '';
+    const gotBonusCoin = didSubmitBonus && activeCorrect &&
+      movieGuess.trim().toLowerCase() === m.title.toLowerCase() &&
+      directorGuess.trim().toLowerCase() === (m.director ?? '').toLowerCase();
+
+    // Show winner's timeline with the card inserted at the correct position
+    const winnerId = activeCorrect ? currentTurn.active_player_id : winningChallenger?.challenger_id ?? null;
+    const winnerPlayer = winnerId ? getPlayer(winnerId) : null;
+    const winnerTimeline = winnerPlayer
+      ? (winnerPlayer.timeline ?? []).slice().sort((a, b) => a - b)
+      : timeline;
+    const revealInterval = winnerPlayer
+      ? computeCorrectInterval(m.year, winnerTimeline)
+      : currentTurn.placed_interval;
+
+    // Phase 'flip': always show ACTIVE PLAYER's timeline with card flipping at placed_interval
+    // Phase 'result': show WINNER's timeline (filter m.year to avoid duplicate) + result strip
+    const displayTimeline = revealPhase === 'flip'
+      ? timeline  // active player's timeline
+      : winnerTimeline.filter(y => y !== m.year);  // winner's timeline minus the card being inserted
+    const displayInterval = revealPhase === 'flip'
+      ? currentTurn.placed_interval
+      : revealInterval;
+
+    // Use the display timeline's own movies for lookup — avoids cross-player year collisions
+    const revealPlacedMovies: Movie[] = displayTimeline
+      .map((year) => activeMovies.find((mv) => mv.year === year))
+      .filter((mv): mv is Movie => mv !== undefined);
 
     return (
       <SafeAreaView style={styles.container}>
-        {/* Timeline with card flip animation at placed_interval */}
+        {myTimelineModal}
         <View style={styles.revealTimelineWrapper}>
           <Timeline
-            timeline={timeline}
+            timeline={displayTimeline}
             currentCardMovie={m}
             interactive={false}
             selectedInterval={null}
             onIntervalSelect={() => {}}
             onConfirm={() => {}}
-            placedInterval={currentTurn.placed_interval}
-            placedMovies={placedMovies}
+            placedInterval={displayInterval}
+            placedMovies={revealPlacedMovies}
             revealingMovie={m}
           />
         </View>
 
-        {/* Result strip */}
-        <View style={styles.revealResultStrip}>
-          <Text style={styles.revealResultEmoji}>{resultEmoji}</Text>
-          <View style={styles.revealResultTextBlock}>
-            <Text style={styles.revealResultText}>
-              {resultName
-                ? <><Text style={styles.revealResultPlayer}>{resultName}</Text>{' '}{resultText}</>
-                : resultText}
-            </Text>
-            {coinBackNames.length > 0 && (
-              <Text style={styles.revealCoinBack}>
-                {'🪙 '}
-                <Text style={styles.revealCoinBackName}>{coinBackNames.join(', ')}</Text>
-                {' also had it right — coin returned'}
-              </Text>
+        {/* Result + button — appears after the flip completes */}
+        {revealPhase === 'result' && (
+          <>
+            {winningChallenger && (
+              <View style={styles.revealTransferBanner}>
+                <Text style={styles.revealTransferText}>
+                  ↓ Card moves to {getPlayer(winningChallenger.challenger_id)?.display_name}'s timeline
+                </Text>
+              </View>
             )}
-          </View>
-        </View>
+            <View style={styles.revealResultStrip}>
+              <Text style={styles.revealResultEmoji}>
+                {activeCorrect ? '🎉' : winningChallenger ? '🎯' : '🗑️'}
+              </Text>
+              <View style={styles.revealResultTextBlock}>
+                <Text style={styles.revealResultText}>
+                  {resultName
+                    ? <><Text style={styles.revealResultPlayer}>{resultName}</Text>{' '}{resultText}</>
+                    : resultText}
+                </Text>
+                {coinBackNames.length > 0 && (
+                  <Text style={styles.revealCoinBack}>
+                    {'🪙 '}
+                    <Text style={styles.revealCoinBackName}>{coinBackNames.join(', ')}</Text>
+                    {' also had it right — coin returned'}
+                  </Text>
+                )}
+                {didSubmitBonus && (
+                  <Text style={styles.revealCoinBack}>
+                    {gotBonusCoin
+                      ? <><Text style={styles.revealCoinBackName}>🪙 +1 bonus coin!</Text>{' Movie + director correct'}</>
+                      : '❌ No bonus coin — movie or director incorrect'}
+                  </Text>
+                )}
+              </View>
+            </View>
 
-        {/* Full-width button strip above score bar */}
-        <View style={styles.revealFooter}>
-          <TouchableOpacity style={styles.revealNextBtn} onPress={handleNextTurn} activeOpacity={0.85}>
-            <Text style={styles.revealNextBtnText}>Next Player →</Text>
-          </TouchableOpacity>
-        </View>
+            <View style={styles.revealFooter}>
+              <TouchableOpacity style={styles.revealNextBtn} onPress={handleNextTurn} activeOpacity={0.85}>
+                <Text style={styles.revealNextBtnText}>Next Player →</Text>
+              </TouchableOpacity>
+            </View>
 
-        <ScoreBar players={players} myId={myPlayerId} />
+            {/* Confetti burst when active player got it right */}
+            {activeCorrect && <ConfettiBurst />}
+
+            {/* Card flies to trash when nobody got it right */}
+            {isTrash && <TrashCard movie={m} />}
+          </>
+        )}
+
+        <ScoreBar players={players} myId={myPlayerId} onShowTimeline={() => setShowMyTimeline(true)} />
       </SafeAreaView>
     );
   }
@@ -816,21 +1293,35 @@ export default function GameScreen() {
   return <LoadingScreen />;
 }
 
-function ScoreBar({ players, myId }: { players: Player[]; myId: string | null }) {
+function ScoreBar({ players, myId, onShowTimeline }: { players: Player[]; myId: string | null; onShowTimeline?: () => void }) {
   return (
-    <ScrollView
-      horizontal
-      style={styles.scoreBar}
-      contentContainerStyle={styles.scoreBarContent}
-      showsHorizontalScrollIndicator={false}
-    >
-      {players.map((p) => (
-        <View key={p.id} style={[styles.scoreChip, p.id === myId && styles.scoreChipMe]}>
-          <Text style={styles.scoreChipName}>{p.display_name}</Text>
-          <Text style={styles.scoreChipCount}>{p.timeline.length}</Text>
-        </View>
-      ))}
-    </ScrollView>
+    <View style={styles.scoreBarRow}>
+      <ScrollView
+        horizontal
+        style={styles.scoreBar}
+        contentContainerStyle={styles.scoreBarContent}
+        showsHorizontalScrollIndicator={false}
+      >
+        {players.map((p) => (
+          <View key={p.id} style={[styles.scoreChip, p.id === myId && styles.scoreChipMe]}>
+            <Text style={styles.scoreChipName}>{p.display_name}</Text>
+            <Text style={styles.scoreChipCount}>{p.timeline.length}</Text>
+            <Text style={styles.scoreChipCoins}>🪙{p.coins}</Text>
+          </View>
+        ))}
+      </ScrollView>
+      {onShowTimeline && (
+        <TouchableOpacity style={styles.timelineBtn} onPress={onShowTimeline}>
+          <View style={styles.timelineBtnIcon}>
+            <View style={styles.timelineMiniCard} />
+            <View style={styles.timelineMiniLine} />
+            <View style={styles.timelineMiniCard} />
+            <View style={styles.timelineMiniLine} />
+            <View style={styles.timelineMiniCard} />
+          </View>
+        </TouchableOpacity>
+      )}
+    </View>
   );
 }
 
@@ -839,6 +1330,110 @@ function LoadingScreen() {
     <SafeAreaView style={styles.container}>
       <ActivityIndicator size="large" color="#f5c518" />
     </SafeAreaView>
+  );
+}
+
+// ── Confetti burst (correct answer) ──────────────────────────────────────────
+
+const CONFETTI_COLORS = ['#f5c518', '#e63946', '#2a9d8f', '#e9c46a', '#f4a261', '#ffffff', '#c77dff', '#ff6b6b'];
+const CONFETTI_COUNT = 28;
+
+function ConfettiBurst() {
+  const particles = useRef(
+    Array.from({ length: CONFETTI_COUNT }, (_, i) => {
+      const angle = (i / CONFETTI_COUNT) * Math.PI * 2;
+      const jitter = (Math.random() - 0.5) * 1.0;
+      const speed = 90 + Math.random() * 170;
+      return {
+        anim: new Animated.Value(0),
+        dx: Math.cos(angle + jitter) * speed,
+        dy: Math.sin(angle + jitter) * speed - 60,
+        color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+        size: 5 + Math.floor(Math.random() * 7),
+        spins: Math.random() * 6 - 3,
+      };
+    })
+  ).current;
+
+  useEffect(() => {
+    Animated.stagger(
+      22,
+      particles.map(p =>
+        Animated.timing(p.anim, {
+          toValue: 1,
+          duration: 850 + Math.random() * 450,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        })
+      )
+    ).start();
+  }, []);
+
+  return (
+    <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+      {particles.map((p, i) => {
+        const tx = p.anim.interpolate({ inputRange: [0, 1], outputRange: [0, p.dx] });
+        const ty = p.anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, p.dy, p.dy + 80] });
+        const opacity = p.anim.interpolate({ inputRange: [0, 0.55, 1], outputRange: [1, 1, 0] });
+        const rotate = p.anim.interpolate({
+          inputRange: [0, 1],
+          outputRange: ['0deg', `${p.spins * 360}deg`],
+        });
+        return (
+          <Animated.View
+            key={i}
+            style={{
+              position: 'absolute',
+              top: '42%',
+              alignSelf: 'center',
+              width: p.size,
+              height: p.size,
+              borderRadius: p.size / 4,
+              backgroundColor: p.color,
+              opacity,
+              transform: [{ translateX: tx }, { translateY: ty }, { rotate }],
+            }}
+          />
+        );
+      })}
+    </View>
+  );
+}
+
+// ── Trash animation (nobody got it right) ────────────────────────────────────
+
+function TrashCard({ movie }: { movie: Movie }) {
+  const anim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(anim, {
+      toValue: 1,
+      duration: 700,
+      delay: 300,
+      easing: Easing.in(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, []);
+
+  const tx = anim.interpolate({ inputRange: [0, 1], outputRange: [0, 260] });
+  const ty = anim.interpolate({ inputRange: [0, 1], outputRange: [0, -200] });
+  const rotate = anim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '55deg'] });
+  const opacity = anim.interpolate({ inputRange: [0, 0.45, 1], outputRange: [1, 0.85, 0] });
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        alignSelf: 'center',
+        top: '30%',
+        zIndex: 50,
+        opacity,
+        transform: [{ translateX: tx }, { translateY: ty }, { rotate }],
+      }}
+    >
+      <CardFront movie={movie} width={80} height={100} />
+    </Animated.View>
   );
 }
 
@@ -853,7 +1448,7 @@ const WHEEL_RADIUS = 150;
 // After WHEEL_TOTAL_SPIN, it lands at 90° (3 o'clock):
 //   (120 + WHEEL_TOTAL_SPIN) mod 360 = 90  →  WHEEL_TOTAL_SPIN = 5*360 + 90 - 120 = 1770°
 const WHEEL_HIGHLIGHT_IDX = 4;
-const WHEEL_TOTAL_SPIN = 5 * 360 + 90 - (WHEEL_HIGHLIGHT_IDX / WHEEL_CARD_COUNT) * 360; // 1770°
+const WHEEL_TOTAL_SPIN = 7 * 360 + 90 - (WHEEL_HIGHLIGHT_IDX / WHEEL_CARD_COUNT) * 360; // 2490°
 // Pre-compute card positions once (static — doesn't depend on allMovies)
 const WHEEL_POSITIONS = Array.from({ length: WHEEL_CARD_COUNT }, (_, i) => {
   const rad = (i / WHEEL_CARD_COUNT) * 2 * Math.PI;
@@ -922,6 +1517,8 @@ function GameIntroScreen({
   const { width: screenWidth } = useWindowDimensions();
   const arrowRight = screenWidth / 2 - WHEEL_RADIUS - CARD_W / 2 - 4;
 
+  // Context screen shown before spin — player must tap "Let's spin!" to begin
+  const [started, setStarted] = useState(false);
   // Allow tap-to-advance once the wheel has stopped
   const canDismiss = useRef(false);
   // All cards look identical during the spin; only the highlight reveals after stopping
@@ -933,142 +1530,202 @@ function GameIntroScreen({
   // After wheel stops: card slides toward screen center (translateX = -WHEEL_RADIUS)
   const highlightX     = useRef(new Animated.Value(0)).current;
   const highlightScale = useRef(new Animated.Value(1)).current;
-  const revealOpacity  = useRef(new Animated.Value(0)).current;
+  // flipAnim: 0 = back visible, 1 = front visible (3D rotateY card flip)
+  const flipAnim       = useRef(new Animated.Value(0)).current;
+  // tapHintOpacity: fades in the "Tap to continue" prompt after flip completes
+  const tapHintOpacity = useRef(new Animated.Value(0)).current;
   const screenOpacity  = useRef(new Animated.Value(0)).current;
+  const contextOpacity = useRef(new Animated.Value(1)).current;
 
   const wheelRotStr   = wheelRotation.interpolate({
     inputRange:  [0, WHEEL_TOTAL_SPIN],
     outputRange: ['0deg', `${WHEEL_TOTAL_SPIN}deg`],
+    extrapolate: 'clamp',
   });
   const counterRotStr = wheelRotation.interpolate({
     inputRange:  [0, WHEEL_TOTAL_SPIN],
     outputRange: ['0deg', `-${WHEEL_TOTAL_SPIN}deg`],
+    extrapolate: 'clamp',
   });
-  const backOpacity = revealOpacity.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
 
+  // Card flip interpolations — back spins out, front spins in around Y axis
+  const backRotY   = flipAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: ['0deg',   '90deg',  '90deg'] });
+  const frontRotY  = flipAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: ['-90deg', '-90deg', '0deg']  });
+  // Snap visibility at the midpoint so neither face is visible edge-on
+  const backFace   = flipAnim.interpolate({ inputRange: [0, 0.499, 0.5], outputRange: [1, 1, 0] });
+  const frontFace  = flipAnim.interpolate({ inputRange: [0, 0.5, 0.501], outputRange: [0, 0, 1] });
+
+  // Kick off wheel animation when player presses "Let's spin!"
   useEffect(() => {
-    // Phase 1: fade in + wheel spin
+    if (!started) return;
+
+    // Fade context screen out, then run the wheel
     Animated.sequence([
-      Animated.timing(screenOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
+      Animated.timing(contextOpacity, { toValue: 0, duration: 250, useNativeDriver: true }),
+      Animated.timing(screenOpacity,  { toValue: 1, duration: 300, useNativeDriver: true }),
       Animated.delay(200),
       Animated.timing(wheelRotation, {
         toValue: WHEEL_TOTAL_SPIN,
-        duration: 3000,
-        easing: Easing.out(Easing.cubic),
+        duration: 5500,
+        // inOut cubic: eases in slowly, peaks at mid-spin, then decelerates
+        // — avoids the jarring high-velocity start that caused frame drops
+        easing: Easing.inOut(Easing.cubic),
         useNativeDriver: true,
       }),
-      Animated.delay(100),
+      Animated.delay(600),
     ]).start(() => {
-      canDismiss.current = true;
-      setSpinDone(true); // swap SpinCard → CardBack on highlight card
+      setSpinDone(true);
 
-      // Phase 2: arrow + others vanish, highlight card glides to center and flips
+      // Phase 2: arrow + others vanish, highlight card glides to center then flips
       Animated.sequence([
         Animated.parallel([
-          Animated.timing(otherOpacity,   { toValue: 0,            duration: 300, useNativeDriver: true }),
-          Animated.timing(arrowOpacity,   { toValue: 0,            duration: 200, useNativeDriver: true }),
-          // translateX after counter-rotation = moves in screen-space X (toward center)
-          Animated.timing(highlightX,     { toValue: -WHEEL_RADIUS, duration: 520, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-          Animated.timing(highlightScale, { toValue: 1.8,           duration: 520, easing: Easing.out(Easing.back(1.1)), useNativeDriver: true }),
+          Animated.timing(otherOpacity,   { toValue: 0,             duration: 350, useNativeDriver: true }),
+          Animated.timing(arrowOpacity,   { toValue: 0,             duration: 250, useNativeDriver: true }),
+          Animated.timing(highlightX,     { toValue: -WHEEL_RADIUS, duration: 700, easing: Easing.out(Easing.cubic),      useNativeDriver: true }),
+          Animated.timing(highlightScale, { toValue: 1.8,           duration: 700, easing: Easing.out(Easing.back(1.1)), useNativeDriver: true }),
         ]),
-        Animated.delay(80),
-        Animated.timing(revealOpacity, { toValue: 1, duration: 500, useNativeDriver: true }),
-        // Hold so player can read the card, then auto-advance
-        Animated.delay(2500),
-      ]).start(() => onDone());
+        Animated.delay(150),
+        // 3D card flip: back → front
+        Animated.timing(flipAnim, { toValue: 1, duration: 600, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
+        Animated.delay(100),
+        // "Tap to continue" prompt appears; player must tap to advance
+        Animated.timing(tapHintOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
+      ]).start(() => {
+        canDismiss.current = true; // enable tap-to-advance only after prompt is visible
+      });
     });
-  }, []);
+  }, [started]);
 
+  // Both screens are always mounted — we switch between them via opacity so that
+  // both Animated.Values remain attached to native views throughout (avoids
+  // Animated.sequence silently aborting when it tries to animate a detached value).
   return (
-    <Animated.View style={[introStyles.screen, { opacity: screenOpacity }]}>
-      {/* Whole screen is tappable — advances once wheel has stopped */}
-      <TouchableOpacity
-        activeOpacity={1}
-        onPress={() => { if (canDismiss.current) onDone(); }}
-        style={{ flex: 1 }}
+    <View style={introStyles.screen}>
+
+      {/* ── Context screen (shown first, fades out on "Let's spin!") ── */}
+      <Animated.View
+        style={[StyleSheet.absoluteFill, { opacity: contextOpacity }]}
+        pointerEvents={started ? 'none' : 'auto'}
       >
-        <SafeAreaView style={introStyles.inner} edges={['top', 'bottom']}>
-
-          <View style={introStyles.header}>
-            <Text style={introStyles.headline}>Your starting card</Text>
-            <Text style={introStyles.subtext}>Draw from the deck, {playerName}</Text>
+        <SafeAreaView style={introStyles.contextInner} edges={['top', 'bottom']}>
+          <View style={introStyles.contextBody}>
+            <Text style={introStyles.contextTitle}>Time to spin</Text>
+            <Text style={introStyles.contextDesc}>
+              {playerName}, we'll randomly draw a movie to kick off your timeline.
+            </Text>
           </View>
-
-          <View style={{ height: WHEEL_RADIUS * 2 + CARD_H, alignSelf: 'stretch' }}>
-            {/* Pointer arrow */}
-            <Animated.View style={[introStyles.pointerRow, {
-              top: CARD_H / 2 + WHEEL_RADIUS - 14,
-              right: arrowRight,
-              opacity: arrowOpacity,
-            }]}>
-              <Text style={introStyles.pointer}>◄</Text>
-            </Animated.View>
-
-            <Animated.View style={[introStyles.wheelContainer, {
-              width: WHEEL_RADIUS * 2,
-              height: WHEEL_RADIUS * 2,
-              top: CARD_H / 2,
-              marginLeft: -WHEEL_RADIUS,
-              transform: [{ rotate: wheelRotStr }],
-            }]}>
-              {WHEEL_POSITIONS.map((pos, i) => {
-                const isHighlight = i === WHEEL_HIGHLIGHT_IDX;
-                const cardTransform: any[] = isHighlight
-                  ? [{ rotate: counterRotStr }, { translateX: highlightX }, { scale: highlightScale }]
-                  : [{ rotate: counterRotStr }];
-
-                return (
-                  <Animated.View
-                    key={i}
-                    style={[
-                      introStyles.cardWrapper,
-                      {
-                        left:      pos.left,
-                        top:       pos.top,
-                        opacity:   isHighlight ? 1 : otherOpacity,
-                        zIndex:    isHighlight ? 10 : i,
-                        transform: cardTransform,
-                      },
-                    ]}
-                  >
-                    <View style={introStyles.card}>
-                      {isHighlight && spinDone ? (
-                        // Wheel has stopped: reveal CardBack → fade to CardFront
-                        <>
-                          <Animated.View style={[StyleSheet.absoluteFill, { opacity: backOpacity }]}>
-                            <CardBack width={CARD_W} height={CARD_H} />
-                          </Animated.View>
-                          <Animated.View style={[StyleSheet.absoluteFill, { opacity: revealOpacity }]}>
-                            {startingMovie
-                              ? <CardFront movie={startingMovie} width={CARD_W} height={CARD_H} />
-                              : <CardBack width={CARD_W} height={CARD_H} />}
-                          </Animated.View>
-                        </>
-                      ) : (
-                        <CardBack width={CARD_W} height={CARD_H} />
-                      )}
-                    </View>
-                    {isHighlight && (
-                      <Animated.View
-                        style={[StyleSheet.absoluteFill, introStyles.cardRing, { opacity: revealOpacity }]}
-                        pointerEvents="none"
-                      />
-                    )}
-                  </Animated.View>
-                );
-              })}
-            </Animated.View>
-          </View>
-
-          <View style={introStyles.footer}>
-            <Animated.Text style={[introStyles.tapHint, { opacity: revealOpacity }]}>
-              Tap anywhere to continue
-            </Animated.Text>
-          </View>
-
+          <TouchableOpacity
+            style={introStyles.spinBtn}
+            onPress={() => setStarted(true)}
+            activeOpacity={0.75}
+          >
+            <Text style={introStyles.spinBtnText}>Let's spin! 🎰</Text>
+          </TouchableOpacity>
+          <View style={{ height: 32 }} />
         </SafeAreaView>
-      </TouchableOpacity>
-    </Animated.View>
+      </Animated.View>
+
+      {/* ── Wheel screen (fades in after "Let's spin!") ── */}
+      <Animated.View
+        style={[StyleSheet.absoluteFill, { opacity: screenOpacity }]}
+        pointerEvents={started ? 'auto' : 'none'}
+      >
+        {/* Whole screen is tappable — advances once wheel has stopped */}
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={() => { if (canDismiss.current) onDone(); }}
+          style={{ flex: 1 }}
+        >
+          <SafeAreaView style={introStyles.inner} edges={['top', 'bottom']}>
+
+            <View style={introStyles.header}>
+              <Text style={introStyles.headline}>Your starting card</Text>
+              <Text style={introStyles.subtext}>Draw from the deck, {playerName}</Text>
+            </View>
+
+            <View style={{ height: WHEEL_RADIUS * 2 + CARD_H, alignSelf: 'stretch' }}>
+              {/* Pointer arrow */}
+              <Animated.View style={[introStyles.pointerRow, {
+                top: CARD_H / 2 + WHEEL_RADIUS - 14,
+                right: arrowRight,
+                opacity: arrowOpacity,
+              }]}>
+                <Text style={introStyles.pointer}>◄</Text>
+              </Animated.View>
+
+              <Animated.View style={[introStyles.wheelContainer, {
+                width: WHEEL_RADIUS * 2,
+                height: WHEEL_RADIUS * 2,
+                top: CARD_H / 2,
+                marginLeft: -WHEEL_RADIUS,
+                transform: [{ rotate: wheelRotStr }],
+              }]}>
+                {WHEEL_POSITIONS.map((pos, i) => {
+                  const isHighlight = i === WHEEL_HIGHLIGHT_IDX;
+                  const cardTransform: any[] = isHighlight
+                    ? [{ rotate: counterRotStr }, { translateX: highlightX }, { scale: highlightScale }]
+                    : [{ rotate: counterRotStr }];
+
+                  return (
+                    <Animated.View
+                      key={i}
+                      style={[
+                        introStyles.cardWrapper,
+                        {
+                          left:      pos.left,
+                          top:       pos.top,
+                          opacity:   isHighlight ? 1 : otherOpacity,
+                          zIndex:    isHighlight ? 10 : i,
+                          transform: cardTransform,
+                        },
+                      ]}
+                    >
+                      <View style={introStyles.card}>
+                        {isHighlight && spinDone ? (
+                          // Wheel has stopped: 3D rotateY flip back → front
+                          <>
+                            <Animated.View style={[StyleSheet.absoluteFill, {
+                              opacity: backFace,
+                              transform: [{ perspective: 600 }, { rotateY: backRotY }],
+                            }]}>
+                              <CardBack width={CARD_W} height={CARD_H} />
+                            </Animated.View>
+                            <Animated.View style={[StyleSheet.absoluteFill, {
+                              opacity: frontFace,
+                              transform: [{ perspective: 600 }, { rotateY: frontRotY }],
+                            }]}>
+                              {startingMovie
+                                ? <CardFront movie={startingMovie} width={CARD_W} height={CARD_H} />
+                                : <CardBack width={CARD_W} height={CARD_H} />}
+                            </Animated.View>
+                          </>
+                        ) : (
+                          <CardBack width={CARD_W} height={CARD_H} />
+                        )}
+                      </View>
+                      {isHighlight && (
+                        <Animated.View
+                          style={[StyleSheet.absoluteFill, introStyles.cardRing, { opacity: frontFace }]}
+                          pointerEvents="none"
+                        />
+                      )}
+                    </Animated.View>
+                  );
+                })}
+              </Animated.View>
+            </View>
+
+            <View style={introStyles.footer}>
+              <Animated.Text style={[introStyles.tapHint, { opacity: tapHintOpacity }]}>
+                Tap anywhere to continue
+              </Animated.Text>
+            </View>
+
+          </SafeAreaView>
+        </TouchableOpacity>
+      </Animated.View>
+
+    </View>
   );
 }
 
@@ -1104,7 +1761,7 @@ const introStyles = StyleSheet.create({
   },
   pointer: {
     color: C.gold,
-    fontSize: 26,
+    fontSize: 40,
   },
   // wheel container; size + margin are set dynamically in JSX
   wheelContainer: {
@@ -1121,9 +1778,6 @@ const introStyles = StyleSheet.create({
     height: CARD_H,
     borderRadius: R.sm,
     overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: C.border,
-    backgroundColor: C.surface,
   },
   // Golden ring overlay — fades in with revealOpacity so all cards look the same during spin
   cardRing: {
@@ -1140,6 +1794,43 @@ const introStyles = StyleSheet.create({
     color: 'rgba(255,255,255,0.35)',
     fontSize: FS.sm,
     fontWeight: '500',
+  },
+  // Context screen (before spin starts)
+  contextInner: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+    gap: 32,
+  },
+  contextBody: {
+    alignItems: 'center',
+    gap: 12,
+  },
+  contextTitle: {
+    color: C.textPrimary,
+    fontSize: FS['2xl'],
+    fontWeight: '900',
+    textAlign: 'center',
+    letterSpacing: 0.3,
+  },
+  contextDesc: {
+    color: C.textMuted,
+    fontSize: FS.base,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  spinBtn: {
+    backgroundColor: C.gold,
+    borderRadius: R.btn,
+    paddingHorizontal: 36,
+    paddingVertical: 16,
+  },
+  spinBtnText: {
+    color: C.textOnGold,
+    fontSize: FS.lg,
+    fontWeight: '900',
+    letterSpacing: 0.5,
   },
 });
 
@@ -1202,21 +1893,68 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
 
-  challengingLayout: { flex: 1, flexDirection: 'row', gap: 16, padding: 12 },
-  timelineSection: { flex: 1, justifyContent: 'center' },
-  challengePanel: {
-    width: 220, backgroundColor: C.surface, borderRadius: R.card,
-    padding: 16, gap: 10, justifyContent: 'center',
+  challengeTimelineArea: { flex: 1 },
+  challengeOverlayWrap: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  challengePanelTitle: { color: C.textPrimary, fontSize: FS.base + 1, fontWeight: '700' },
-  noChallengesText: { color: C.textMuted, fontSize: FS.sm },
-  challengeEntry: { color: C.textSub, fontSize: FS.xs },
-  challengeTimerRow: { alignItems: 'center', marginVertical: 4 },
-  challengeButtons: { gap: 8 },
+  challengeOverlayCard: {
+    backgroundColor: 'rgba(10, 6, 24, 0.88)',
+    borderRadius: R.card,
+    borderWidth: 1,
+    borderColor: C.border,
+    paddingHorizontal: 22,
+    paddingVertical: 12,
+    alignItems: 'center',
+    gap: 6,
+    maxWidth: 260,
+  },
+  challengeOverlayIcon: { fontSize: 24 },
+  challengeOverlayText: {
+    color: C.textSub,
+    fontSize: FS.sm,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  challengePickStrip: {
+    backgroundColor: C.surface,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: C.border,
+    paddingVertical: 6,
+    gap: 4,
+  },
+  challengePickTitle: {
+    color: C.textMuted,
+    fontSize: FS.xs,
+    fontWeight: '600',
+    textAlign: 'center',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  challengeDecideStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: C.bg,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: C.borderSubtle,
+  },
   challengeBtn: { backgroundColor: C.danger, borderRadius: R.sm, paddingVertical: 10, alignItems: 'center' },
   challengeBtnText: { color: C.textPrimary, fontSize: FS.base, fontWeight: '800' },
-  passBtn: { backgroundColor: C.border, borderRadius: R.sm, paddingVertical: 10, alignItems: 'center' },
-  passBtnText: { color: C.textMuted, fontSize: FS.base, fontWeight: '600' },
+  passBtn: {
+    borderRadius: R.sm, paddingVertical: 10, alignItems: 'center',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  passBtnText: { color: C.textSub, fontSize: FS.base, fontWeight: '600' },
+  revealNowBtn: {
+    borderRadius: R.sm, paddingVertical: 10, alignItems: 'center',
+    borderWidth: 1.5, borderColor: C.gold, backgroundColor: 'rgba(245,197,24,0.12)',
+  },
+  revealNowBtnText: { color: C.gold, fontSize: FS.base, fontWeight: '700' },
 
   // ── Revealing phase ──
   revealTimelineWrapper: {
@@ -1321,7 +2059,8 @@ const styles = StyleSheet.create({
   reportOptionText: { color: C.textSub, fontSize: FS.sm, lineHeight: 18 },
   snack: { backgroundColor: C.surface, marginBottom: 16 },
 
-  scoreBar: { flexGrow: 0, backgroundColor: 'rgba(0,0,0,0.4)' },
+  scoreBarRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)' },
+  scoreBar: { flexGrow: 1 },
   scoreBarContent: { paddingHorizontal: 12, paddingVertical: 6, gap: 8, flexDirection: 'row', alignItems: 'center' },
   scoreChip: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
@@ -1330,4 +2069,153 @@ const styles = StyleSheet.create({
   scoreChipMe: { borderWidth: 1, borderColor: C.gold },
   scoreChipName: { color: C.textSub, fontSize: FS.sm, fontWeight: '600' },
   scoreChipCount: { color: C.gold, fontSize: FS.sm, fontWeight: '800' },
+
+  timelineBtn: {
+    paddingHorizontal: 14, paddingVertical: 8,
+    borderLeftWidth: 1, borderLeftColor: 'rgba(255,255,255,0.08)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  timelineBtnIcon: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  timelineMiniCard: { width: 7, height: 10, borderRadius: 1.5, backgroundColor: 'rgba(245,197,24,0.75)' },
+  timelineMiniLine: { width: 4, height: 1.5, backgroundColor: 'rgba(245,197,24,0.35)' },
+
+  // My Timeline modal
+  myTimelineSheet: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    backgroundColor: C.surface,
+    borderTopLeftRadius: R.card, borderTopRightRadius: R.card,
+    padding: 20, paddingBottom: 32,
+    gap: 16,
+  },
+  myTimelineHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  myTimelineTitle: { color: C.textPrimary, fontSize: FS.lg, fontWeight: '800' },
+  myTimelineEmpty: { color: C.textMuted, fontSize: FS.base, textAlign: 'center', paddingVertical: 16 },
+  myTimelineScroll: { gap: 8, paddingVertical: 4 },
+  myTimelinePlaceholder: {
+    width: 90, height: 126, backgroundColor: C.bg,
+    borderRadius: R.md, borderWidth: 1, borderColor: C.border,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  myTimelinePlaceholderYear: { color: C.gold, fontSize: FS.md, fontWeight: '800' },
+
+  // Challenge button circle (inside ChallengeTimer ring)
+  challengeBtnCircle: {
+    width: 96, height: 96, borderRadius: 48,
+    backgroundColor: 'rgba(230,57,70,0.18)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+
+  // Bonus coin guess inputs (trailerEnded screen)
+  bonusCoinBox: {
+    alignItems: 'stretch', gap: 8, marginTop: 12, width: '100%', paddingHorizontal: 16,
+  },
+  bonusCoinHint: {
+    color: C.gold, fontSize: FS.xs, fontWeight: '700',
+    textAlign: 'center', letterSpacing: 0.5, textTransform: 'uppercase',
+  },
+  guessInput: {
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+    borderRadius: R.sm, paddingHorizontal: 12, paddingVertical: 12,
+    color: C.textPrimary, fontSize: FS.base,
+  },
+
+  // ── Portrait guess screen (trailer ended, active player) ──
+  guessScreen: {
+    flex: 1, backgroundColor: C.bg,
+    paddingHorizontal: 24,
+  },
+  guessScrollContent: {
+    flexGrow: 1,
+    justifyContent: 'space-between',
+  },
+  guessHeader: {
+    alignItems: 'center', paddingTop: 24, paddingBottom: 16, gap: 8,
+  },
+  guessTitle: {
+    color: C.textPrimary, fontSize: 26, fontWeight: '900', letterSpacing: 0.5,
+  },
+  guessSubtitle: {
+    color: C.gold, fontSize: FS.xs, fontWeight: '700',
+    letterSpacing: 2.5, textTransform: 'uppercase',
+  },
+  guessBonusSection: {
+    gap: 12, paddingTop: 4,
+  },
+  guessBonusLabel: {
+    color: C.gold, fontSize: FS.sm, fontWeight: '700',
+    letterSpacing: 0.5, textAlign: 'center',
+  },
+  guessBonusDesc: {
+    color: C.textMuted, fontSize: FS.sm, textAlign: 'center', lineHeight: 18, marginBottom: 4,
+  },
+  guessOrRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 2,
+  },
+  guessOrLine: {
+    flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: C.border,
+  },
+  guessOrText: {
+    color: C.textMuted, fontSize: FS.xs, fontWeight: '700', letterSpacing: 1.5,
+  },
+  voiceMicBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 10, paddingVertical: 16, borderRadius: R.card,
+    backgroundColor: 'rgba(245,197,24,0.07)',
+    borderWidth: 1.5, borderColor: 'rgba(245,197,24,0.3)',
+  },
+  voiceMicBtnListening: {
+    borderColor: C.gold, backgroundColor: 'rgba(245,197,24,0.14)',
+  },
+  voiceMicIcon: { fontSize: 22 },
+  voiceMicText: {
+    color: C.gold, fontSize: FS.base, fontWeight: '700',
+  },
+  voiceErrorBox: {
+    backgroundColor: 'rgba(230,57,70,0.08)',
+    borderWidth: 1, borderColor: 'rgba(230,57,70,0.3)',
+    borderRadius: R.sm, padding: 14, gap: 8, alignItems: 'center',
+  },
+  voiceErrorText: {
+    color: C.textSub, fontSize: FS.sm, textAlign: 'center', lineHeight: 18,
+  },
+  voiceRetryText: {
+    color: C.gold, fontSize: FS.sm, fontWeight: '700',
+  },
+  guessFooter: {
+    flexDirection: 'row', alignItems: 'center', paddingVertical: 20, gap: 10,
+  },
+  guessReplayBtn: {
+    flex: 1, height: 52, borderRadius: R.card,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  guessReplayText: { color: C.textSub, fontSize: FS.base, fontWeight: '600' },
+  guessSkipBtn: {
+    flex: 1, height: 52, borderRadius: R.card,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  guessSkipText: {
+    color: C.textSub, fontSize: FS.md, fontWeight: '700',
+  },
+  guessPlaceBtn: {
+    flex: 1, height: 52, backgroundColor: C.gold, borderRadius: R.card,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  guessPlaceText: {
+    color: C.textOnGold, fontSize: FS.md, fontWeight: '900', letterSpacing: 0.4,
+  },
+
+  // Reveal transfer banner (challenger win)
+  revealTransferBanner: {
+    backgroundColor: 'rgba(245,197,24,0.1)',
+    borderTopWidth: 1, borderTopColor: 'rgba(245,197,24,0.3)',
+    paddingVertical: 6, paddingHorizontal: 20, alignItems: 'center',
+  },
+  revealTransferText: { color: C.gold, fontSize: FS.sm, fontWeight: '700' },
+
+  // Coin count in ScoreBar
+  scoreChipCoins: { color: C.textMuted, fontSize: FS.xs, fontWeight: '600' },
 });

@@ -1,18 +1,9 @@
 import { useEffect, useImperativeHandle, forwardRef, useRef } from 'react';
 import { View, Text, Animated, StyleSheet } from 'react-native';
 import { Movie } from '@/lib/database.types';
+import { cardColor } from '@/constants/theme';
 
-// ── Card color palette ────────────────────────────────────────────────────────
-const CARD_COLORS = [
-  '#6d3014', '#4c1247', '#0d3b6e', '#1a4731', '#5c1a1a',
-  '#2d1854', '#4a3000', '#1a3d2b', '#3d1a00', '#0a3d62', '#2c1654', '#1a2e1a',
-];
-
-export function getCardColor(id: string): string {
-  let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
-  return CARD_COLORS[h % CARD_COLORS.length];
-}
+export { cardColor as getCardColor };
 
 // ── CardBack ─────────────────────────────────────────────────────────────────
 // Classy typographic design — pure View/Text, no SVG overhead.
@@ -20,14 +11,15 @@ export function getCardColor(id: string): string {
 interface CardSizeProps {
   width: number;
   height: number;
+  outlined?: boolean;
 }
 
-export function CardBack({ width, height }: CardSizeProps) {
+export function CardBack({ width, height, outlined = false }: CardSizeProps) {
   const radius = Math.max(6, width * 0.08);
   const pad = Math.max(5, width * 0.09);
 
   return (
-    <View style={[s.shell, { width, height, borderRadius: radius }]}>
+    <View style={[s.shell, { width, height, borderRadius: radius }, outlined && s.shellOutlined]}>
       {/* Outer gold border frame */}
       <View style={[s.frame1, { top: pad, left: pad, right: pad, bottom: pad, borderRadius: radius * 0.55 }]} />
       {/* Inner hairline frame */}
@@ -56,10 +48,14 @@ interface CardFrontProps extends CardSizeProps {
 
 export function CardFront({ movie, width, height }: CardFrontProps) {
   const radius = Math.max(6, width * 0.08);
-  const bg = getCardColor(movie.id);
+  const bg = cardColor(movie.id);
 
   return (
     <View style={[s.shell, { width, height, borderRadius: radius, backgroundColor: bg }]}>
+      {/* Subtle center glow overlay */}
+      <View style={[StyleSheet.absoluteFill, s.frontGlow, { borderRadius: radius }]} pointerEvents="none" />
+
+      {/* Content */}
       <View style={[s.frontBody, { paddingHorizontal: width * 0.1, paddingVertical: height * 0.1 }]}>
         {movie.director ? (
           <Text
@@ -141,10 +137,14 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  shellOutlined: {
+    borderWidth: 1,
+    borderColor: 'rgba(245,197,24,0.35)',
+  },
   // Outer gold border frame (absolute inset)
   frame1: {
     position: 'absolute',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: `${GOLD}0.5)`,
   },
   // Inner hairline frame
@@ -171,6 +171,9 @@ const s = StyleSheet.create({
     marginVertical: 2,
   },
   // ── CardFront ──
+  frontGlow: {
+    backgroundColor: 'rgba(255,255,255,0.07)',
+  },
   frontBody: {
     flex: 1,
     width: '100%',
@@ -178,12 +181,14 @@ const s = StyleSheet.create({
     justifyContent: 'space-evenly',
   },
   frontDirector: {
+    alignSelf: 'stretch',
     color: 'rgba(255,255,255,0.75)',
     fontWeight: '500',
     fontStyle: 'italic',
     textAlign: 'center',
   },
   frontYear: {
+    alignSelf: 'stretch',
     color: '#ffffff',
     fontWeight: '900',
     letterSpacing: -0.5,
@@ -193,6 +198,7 @@ const s = StyleSheet.create({
     textShadowRadius: 4,
   },
   frontTitle: {
+    alignSelf: 'stretch',
     color: 'rgba(255,255,255,0.9)',
     fontWeight: '700',
     fontStyle: 'italic',

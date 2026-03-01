@@ -8,7 +8,7 @@
  * safe_start / safe_end in the database.
  *
  * Requirements:
- *   brew install yt-dlp ffmpeg tesseract  # video/audio extraction + OCR
+ *   brew install yt-dlp ffmpeg            # video/audio extraction
  *   TMDB_API_KEY    in .env               # https://developer.themoviedb.org
  *   GROQ_API_KEY    in .env               # https://console.groq.com
  *   SUPABASE_SERVICE_KEY in .env          # Supabase project → Settings → API (service_role)
@@ -34,12 +34,12 @@ const { createClient } = require('@supabase/supabase-js');
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const TMDB_BASE          = 'https://api.themoviedb.org/3';
-const FRAMES_FPS         = 0.5;  // 1 frame every 2s — title cards stay on screen ≥ 2s
-const CREDIT_ZONE_HEAD_S = 15;   // seconds from start to scan (studio logos, opening cards)
-const CREDIT_ZONE_TAIL_S = 45;   // seconds from end to scan (director/title credits)
-const MAX_CLIP_S         = 60;   // max safe window length (seconds)
-const MIN_CLIP_S         = 30;   // minimum useful window
-const BUFFER_S           = 2;    // seconds of padding around flagged segments
+const FRAMES_FPS         = 0.5;   // 1 frame every 2s — title cards stay on screen ≥ 2s
+const MAX_CLIP_S         = 60;    // max safe window length (seconds)
+const MIN_CLIP_S         = 30;    // minimum useful window
+const BUFFER_S           = 2;     // seconds of padding around flagged segments
+const VISION_MODEL       = 'meta-llama/llama-4-scout-17b-16e-instruct';
+const VISION_DELAY_MS    = 500;   // delay between vision API calls (raise if hitting rate limits)
 const ENV_FILE           = path.join(__dirname, '../.env');
 
 // Known major studio / distributor channel keywords — trailers from these
@@ -197,86 +197,83 @@ function extractAudio(videoPath, audioPath) {
 }
 
 /**
- * Extract frames only from the "credit zones" — first CREDIT_ZONE_HEAD_S seconds
- * (studio logos) and last CREDIT_ZONE_TAIL_S seconds (director/title credits).
- * This covers ~95% of where text spoilers appear while scanning only a fraction
- * of the video. Returns [{framePath, timestamp}] sorted by timestamp.
+ * Extract frames from the entire video at FRAMES_FPS.
+ * Scans the full trailer to catch title cards that appear mid-video
+ * (e.g. "Director of The Dark Knight" at 0:45 in a 2:30 trailer).
+ * Returns [{framePath, timestamp}] sorted by timestamp.
  */
-function extractCreditZoneFrames(videoPath, framesDir, duration) {
+function extractFullVideoFrames(videoPath, framesDir) {
   fs.mkdirSync(framesDir, { recursive: true });
 
-  const tailStart = Math.max(0, duration - CREDIT_ZONE_TAIL_S);
-  const zones = [
-    { name: 'head', start: 0,         len: Math.min(CREDIT_ZONE_HEAD_S, duration) },
-    { name: 'tail', start: tailStart,  len: duration - tailStart },
-  ];
+  spawnSync('ffmpeg', [
+    '-i',  videoPath,
+    '-vf', `fps=${FRAMES_FPS}`,
+    `${framesDir}/frame_%05d.jpg`,
+    '-y',
+  ], { encoding: 'utf-8' });
 
-  const frames = [];
-  const seenTs = new Set();
-
-  for (const zone of zones) {
-    if (zone.len <= 0) continue;
-    const zoneDir = path.join(framesDir, zone.name);
-    fs.mkdirSync(zoneDir, { recursive: true });
-
-    spawnSync('ffmpeg', [
-      '-ss', String(zone.start),
-      '-t',  String(zone.len),
-      '-i',  videoPath,
-      '-vf', `fps=${FRAMES_FPS}`,
-      `${zoneDir}/frame_%05d.jpg`,
-      '-y',
-    ], { encoding: 'utf-8' });
-
-    const files = fs.readdirSync(zoneDir).filter(f => f.endsWith('.jpg')).sort();
-    for (let i = 0; i < files.length; i++) {
-      const timestamp = zone.start + i / FRAMES_FPS;
-      const tsKey = Math.round(timestamp * 10); // deduplicate at 0.1s granularity
-      if (!seenTs.has(tsKey)) {
-        seenTs.add(tsKey);
-        frames.push({ framePath: path.join(zoneDir, files[i]), timestamp });
-      }
-    }
-  }
-
-  return frames.sort((a, b) => a.timestamp - b.timestamp);
+  const files = fs.readdirSync(framesDir).filter(f => f.endsWith('.jpg')).sort();
+  return files.map((f, i) => ({
+    framePath: path.join(framesDir, f),
+    timestamp: i / FRAMES_FPS,
+  }));
 }
 
-// ── Tesseract OCR ─────────────────────────────────────────────────────────────
-
-function checkTesseract() {
-  const result = spawnSync('which', ['tesseract']);
-  if (result.status !== 0) {
-    console.error('\n❌  tesseract not found. Install it with:\n    brew install tesseract\n');
-    process.exit(1);
-  }
-}
+// ── Groq Vision ───────────────────────────────────────────────────────────────
 
 /**
- * Run Tesseract OCR on each frame (local, free).
- * --psm 11 = sparse text mode, best for title cards scattered across the frame.
+ * Analyse each frame with a vision LLM (Groq llama-3.2-vision).
+ * Asks the model to transcribe all visible text, then matches against the
+ * spoiler word list with the same regex logic used for audio.
  * Returns flagged intervals in the same shape as audio flagged intervals.
  */
-function detectVisualSpoilers(frames, spoilerWords) {
+async function detectVisualSpoilers(frames, spoilerWords, groq) {
   const regexes = buildSpoilerRegexes(spoilerWords);
   const flagged = [];
 
   for (const { framePath, timestamp } of frames) {
-    const result = spawnSync('tesseract', [framePath, 'stdout', '--psm', '11'], {
-      encoding: 'utf-8',
-    });
-    const text = (result.stdout ?? '').trim();
-    if (!text) continue;
+    const imageB64 = fs.readFileSync(framePath).toString('base64');
 
-    const matched = regexes.filter(({ regex }) => regex.test(text)).map(({ word }) => word);
-    if (matched.length > 0) {
-      flagged.push({
-        start:   timestamp,
-        end:     timestamp + 1 / FRAMES_FPS,
-        text:    text.replace(/\n/g, ' ').slice(0, 120),
-        matched,
+    try {
+      const response = await groq.chat.completions.create({
+        model: VISION_MODEL,
+        messages: [{
+          role: 'user',
+          content: [
+            {
+              type:      'image_url',
+              image_url: { url: `data:image/jpeg;base64,${imageB64}` },
+            },
+            {
+              type: 'text',
+              text: 'Transcribe ALL text visible in this image, including title cards, logos, subtitles, and any stylized or decorative text. Reply with ONLY the visible text exactly as it appears. If no text is visible, reply with "NONE".',
+            },
+          ],
+        }],
+        max_tokens:  150,
+        temperature: 0,
       });
+
+      let text = (response.choices[0]?.message?.content ?? '').trim();
+      // Strip common model preambles ("The visible text is:", "The text in the image is:", etc.)
+      text = text.replace(/^(the\s+)?(visible\s+)?text\s+(in\s+(the|this)\s+image\s+)?is\s*:\s*/i, '').trim();
+      // Skip frames with no text (model may reply "NONE", "None", "No text", etc.)
+      if (!text || /^(none|no\s+text|nothing|no\s+visible\s+text)/i.test(text)) continue;
+
+      const matched = regexes.filter(({ regex }) => regex.test(text)).map(({ word }) => word);
+      if (matched.length > 0) {
+        flagged.push({
+          start:   timestamp,
+          end:     timestamp + 1 / FRAMES_FPS,
+          text:    text.replace(/\n/g, ' ').slice(0, 120),
+          matched,
+        });
+      }
+    } catch (e) {
+      console.warn(`    ⚠️  Vision API error at ${fmt(timestamp)}: ${e.message}`);
     }
+
+    await new Promise(r => setTimeout(r, VISION_DELAY_MS));
   }
 
   return flagged;
@@ -316,16 +313,48 @@ async function buildSpoilerWords(title, director, year, tmdbId, apiKey) {
     'and', 'or', 'but', 'is', 'it', 'its', 'be', 'by', 'as', 'at', 'this',
     'that', 'with', 'from', 'into', 'was', 'are', 'not']);
 
+  // Extended stop list for enrichment-derived words — adds common English nouns
+  // and adjectives that appear in film titles but match normal dialogue/review text.
+  const ENRICH_STOP = new Set([...STOP,
+    'about', 'after', 'again', 'against', 'back', 'been', 'before', 'between',
+    'black', 'blood', 'blue', 'city', 'come', 'could', 'days', 'dead', 'dear',
+    'death', 'does', 'done', 'down', 'each', 'earth', 'even', 'every', 'eyes',
+    'face', 'fire', 'first', 'force', 'found', 'girl', 'goes', 'gold', 'good',
+    'great', 'green', 'have', 'heart', 'here', 'high', 'home', 'hope', 'house',
+    'just', 'keep', 'kill', 'know', 'land', 'last', 'late', 'left', 'life',
+    'light', 'like', 'line', 'little', 'live', 'long', 'look', 'love', 'made',
+    'make', 'more', 'most', 'much', 'must', 'name', 'need', 'next', 'night',
+    'only', 'open', 'over', 'part', 'past', 'people', 'place', 'plan', 'play',
+    'power', 'rain', 'real', 'right', 'road', 'rock', 'same', 'says', 'seen',
+    'side', 'some', 'soon', 'soul', 'star', 'stay', 'still', 'stone', 'stop',
+    'such', 'take', 'tell', 'them', 'then', 'there', 'they', 'thing', 'think',
+    'time', 'told', 'town', 'turn', 'under', 'very', 'want', 'ways', 'well',
+    'went', 'were', 'what', 'when', 'where', 'which', 'while', 'white', 'will',
+    'without', 'woman', 'words', 'work', 'world', 'year', 'years', 'young', 'your',
+  ]);
+
   const words = new Set();
 
-  const addPhrase = (phrase) => {
+  // Core words (title, director, year): minimal filtering — keep short distinctive
+  // words like "ford", "dark", "alien", "back"
+  const addCore = (phrase) => {
     if (!phrase) return;
-    const tokens = phrase.toLowerCase().split(/[\s\-_,.:]+/).filter(w => w.length > 2 && !STOP.has(w));
-    tokens.forEach(w => words.add(w));
+    phrase.toLowerCase().split(/[\s\-_,.:]+/)
+      .filter(w => w.length > 2 && !STOP.has(w))
+      .forEach(w => words.add(w));
   };
 
-  addPhrase(title);
-  addPhrase(director);
+  // Enrichment words (filmography, collections): require 5+ chars AND exclude
+  // common English words to prevent false positives in dialogue / review text
+  const addEnrichment = (phrase) => {
+    if (!phrase) return;
+    phrase.toLowerCase().split(/[\s\-_,.:]+/)
+      .filter(w => w.length > 4 && !ENRICH_STOP.has(w))
+      .forEach(w => words.add(w));
+  };
+
+  addCore(title);
+  addCore(director);
   if (year) {
     words.add(String(year));
     // Common spoken forms: "nineteen seventy-two", "two thousand and three"
@@ -340,12 +369,12 @@ async function buildSpoilerWords(title, director, year, tmdbId, apiKey) {
       const directors = (credits.crew ?? []).filter(c => c.job === 'Director');
 
       for (const dir of directors) {
-        addPhrase(dir.name); // in case director wasn't passed in
+        addCore(dir.name); // in case director wasn't passed in
         try {
           const personCredits = await getTmdbPersonCredits(dir.id, apiKey);
           for (const film of (personCredits.crew ?? [])) {
             if (film.job === 'Director' && film.title && film.id !== tmdbId) {
-              addPhrase(film.title);
+              addEnrichment(film.title);
             }
           }
         } catch {}
@@ -355,11 +384,11 @@ async function buildSpoilerWords(title, director, year, tmdbId, apiKey) {
       const details = await getTmdbMovieDetails(tmdbId, apiKey);
       const collection = details.belongs_to_collection;
       if (collection) {
-        addPhrase(collection.name);
+        addEnrichment(collection.name);
         try {
           const col = await getTmdbCollection(collection.id, apiKey);
           for (const part of (col.parts ?? [])) {
-            if (part.id !== tmdbId) addPhrase(part.title);
+            if (part.id !== tmdbId) addEnrichment(part.title);
           }
         } catch {}
       }
@@ -399,6 +428,86 @@ function findFlaggedIntervals(segments, spoilerWords) {
   return flagged;
 }
 
+// ── OCR verification pass ─────────────────────────────────────────────────────
+
+const OCR_FPS = 1;   // 1 frame/s — catches title cards visible for ≥ 1s
+
+/**
+ * Runs Tesseract OCR on every frame within the proposed safe window.
+ * Used as a deterministic second check after the Vision-LLM first pass —
+ * title-card text like "Director of Black Panther" is reliably read by
+ * Tesseract even when the LLM misses it.
+ *
+ * Re-extracts the window from the original video at OCR_FPS (1fps) so that
+ * title cards visible for ≥ 1s are never missed by sparse 0.5fps sampling.
+ *
+ * Returns flagged intervals in the same shape as audio/visual flags.
+ * Silently skips (returns []) if Tesseract is not installed.
+ */
+function verifyWindowWithOCR(videoPath, windowStart, windowEnd, ocrFramesDir, spoilerWords) {
+  const tessCheck = spawnSync('which', ['tesseract'], { encoding: 'utf-8' });
+  if (tessCheck.status !== 0) return [];   // not installed — skip silently
+
+  // Extract 1fps frames for only the candidate window (fast — typically 60 frames)
+  fs.mkdirSync(ocrFramesDir, { recursive: true });
+  spawnSync('ffmpeg', [
+    '-ss',   String(windowStart),
+    '-to',   String(windowEnd),
+    '-i',    videoPath,
+    '-vf',   `fps=${OCR_FPS}`,
+    `${ocrFramesDir}/ocr_%05d.jpg`,
+    '-y',
+  ], { encoding: 'utf-8' });
+
+  const ocrFiles = fs.readdirSync(ocrFramesDir)
+    .filter(f => f.startsWith('ocr_') && f.endsWith('.jpg'))
+    .sort();
+
+  const regexes = buildSpoilerRegexes(spoilerWords);
+  const flagged  = [];
+
+  for (let i = 0; i < ocrFiles.length; i++) {
+    const framePath  = path.join(ocrFramesDir, ocrFiles[i]);
+    const timestamp  = windowStart + i / OCR_FPS;
+
+    // Preprocess: grayscale → 2× upscale → hard threshold at luma 30/255.
+    // Trailer title cards use low-contrast styled text (gray-on-black with film
+    // grain texture) that Tesseract cannot binarize correctly from raw JPEG.
+    // Thresholding produces clean white-on-black text that Tesseract reads reliably.
+    const processedPath = framePath.replace(/\.jpg$/, '_proc.png');
+    spawnSync('ffmpeg', [
+      '-i', framePath,
+      '-vf', "hue=s=0,scale=iw*2:ih*2,lutrgb=r='if(gt(val,30),255,0)':g='if(gt(val,30),255,0)':b='if(gt(val,30),255,0)'",
+      processedPath, '-y',
+    ], { encoding: 'utf-8' });
+
+    const result = spawnSync(
+      'tesseract', [processedPath, 'stdout', '--psm', '6', '-l', 'eng'],
+      { encoding: 'utf-8' },
+    );
+
+    try { fs.unlinkSync(processedPath); } catch {}
+
+    const text = (result.stdout ?? '').trim();
+    if (!text) continue;
+
+    const matched = regexes
+      .filter(({ regex }) => regex.test(text))
+      .map(({ word }) => word);
+
+    if (matched.length > 0) {
+      flagged.push({
+        start:   timestamp,
+        end:     timestamp + 1 / OCR_FPS,
+        text:    text.replace(/\n/g, ' ').slice(0, 120),
+        matched,
+      });
+    }
+  }
+
+  return flagged;
+}
+
 // ── Safe window algorithm ─────────────────────────────────────────────────────
 
 function mergeIntervals(intervals) {
@@ -413,34 +522,53 @@ function mergeIntervals(intervals) {
   return merged;
 }
 
+/**
+ * Forward-scanning safe window algorithm.
+ *
+ * Starts at T=0 and tries to accumulate MAX_CLIP_S (60s) of clean time.
+ * When a spoiler is hit, resets the counter past it and tries again.
+ * Falls back to the first gap ≥ MIN_CLIP_S (30s) if no 60s window exists.
+ */
 function findSafeWindow(totalDuration, flaggedIntervals) {
-  // Expand each flagged segment by BUFFER_S on both sides
+  // Expand each flagged segment by BUFFER_S on both sides and merge overlaps
   const buffered = flaggedIntervals.map(f => [
     Math.max(0, f.start - BUFFER_S),
     Math.min(totalDuration, f.end + BUFFER_S),
   ]);
   const blocked = mergeIntervals(buffered);
 
-  // Build list of clean regions
-  const clean = [];
+  // Forward scan: start at 0, advance past each blocked region.
+  // Return as soon as a MAX_CLIP_S-wide clean gap is found.
   let pos = 0;
-  for (const [s, e] of blocked) {
-    if (s > pos) clean.push([pos, s]);
-    pos = e;
+  for (const [bs, be] of blocked) {
+    if (bs >= pos + MAX_CLIP_S) {
+      // Clean gap of ≥ 60s found starting at pos — stop here
+      return { start: Math.round(pos), end: Math.round(pos + MAX_CLIP_S), len: MAX_CLIP_S };
+    }
+    if (be > pos) pos = be; // skip past this spoiler block
   }
-  if (pos < totalDuration) clean.push([pos, totalDuration]);
+  // Check the tail after the last blocked region
+  if (totalDuration - pos >= MAX_CLIP_S) {
+    return { start: Math.round(pos), end: Math.round(pos + MAX_CLIP_S), len: MAX_CLIP_S };
+  }
 
-  // Score each clean region: prefer early start, then longer window
-  const candidates = clean
-    .map(([s, e]) => {
-      const available = e - s;
-      const len = Math.min(available, MAX_CLIP_S);
-      return { start: Math.round(s), end: Math.round(s + len), len };
-    })
-    .filter(c => c.len >= MIN_CLIP_S)
-    .sort((a, b) => a.start - b.start || b.len - a.len);
+  // Fallback: find the first clean gap ≥ MIN_CLIP_S (30s)
+  pos = 0;
+  for (const [bs, be] of blocked) {
+    const gapLen = bs - pos;
+    if (gapLen >= MIN_CLIP_S) {
+      const len = Math.min(gapLen, MAX_CLIP_S);
+      return { start: Math.round(pos), end: Math.round(pos + len), len: Math.round(len) };
+    }
+    if (be > pos) pos = be;
+  }
+  const remaining = totalDuration - pos;
+  if (remaining >= MIN_CLIP_S) {
+    const len = Math.min(remaining, MAX_CLIP_S);
+    return { start: Math.round(pos), end: Math.round(pos + len), len: Math.round(len) };
+  }
 
-  return candidates[0] ?? null;
+  return null;
 }
 
 // ── Supabase write ────────────────────────────────────────────────────────────
@@ -496,7 +624,6 @@ async function main() {
   if (!groqKey || groqKey.startsWith('your_')) { console.error('❌  GROQ_API_KEY not set in .env'); process.exit(1); }
 
   checkYtDlp();
-  checkTesseract();
 
   const groq = new OpenAI({ apiKey: groqKey, baseURL: 'https://api.groq.com/openai/v1' });
 
@@ -517,6 +644,17 @@ async function main() {
     trailerName   = 'Manual';
     channelName   = 'Manual';
     console.log(`\n🎬  Using provided YouTube ID: ${youtubeId}`);
+
+    // Still look up TMDb ID so buildSpoilerWords can enrich with director filmography
+    try {
+      const result = await findTmdbMovie(movieTitle, movieYear, tmdbKey);
+      if (result) {
+        tmdbId = result.id;
+        console.log(`    TMDb match: ${result.title} (${result.release_date?.slice(0,4)}) — ID: ${tmdbId}`);
+      }
+    } catch {
+      // Non-fatal — enrichment will be skipped
+    }
   } else {
     // Look up via TMDb
     tmdbId = cli.tmdbId;
@@ -590,11 +728,12 @@ async function main() {
 
   // ── Step 3: Download video ──────────────────────────────────────────────────
 
-  const tmpDir    = os.tmpdir();
-  const tmpBase   = path.join(tmpDir, `cinescenes_${Date.now()}`);
-  const videoPath = `${tmpBase}.mp4`;
-  const audioPath = `${tmpBase}.mp3`;
-  const framesDir = `${tmpBase}_frames`;
+  const tmpDir     = os.tmpdir();
+  const tmpBase    = path.join(tmpDir, `cinescenes_${Date.now()}`);
+  const videoPath  = `${tmpBase}.mp4`;
+  const audioPath  = `${tmpBase}.mp3`;
+  const framesDir  = `${tmpBase}_frames`;
+  const ocrFramesDir = `${tmpBase}_ocr`;
 
   console.log(`\n📥  Downloading video (≤480p)…`);
   try {
@@ -609,6 +748,7 @@ async function main() {
   let segments;
   let visualFlagged = [];
   let audioFlagged  = [];
+  let finalWindow   = null;
 
   try {
     // ── Step 4: Extract audio ─────────────────────────────────────────────────
@@ -630,10 +770,10 @@ async function main() {
       console.log('------------------\n');
     }
 
-    // ── Step 6: Extract credit-zone frames ───────────────────────────────────
+    // ── Step 6: Extract full-video frames ────────────────────────────────────
 
-    console.log(`\n🖼️   Extracting credit-zone frames (first ${CREDIT_ZONE_HEAD_S}s + last ${CREDIT_ZONE_TAIL_S}s at ${FRAMES_FPS}fps)…`);
-    const frames = extractCreditZoneFrames(videoPath, framesDir, duration);
+    console.log(`\n🖼️   Extracting full-video frames at ${FRAMES_FPS}fps…`);
+    const frames = extractFullVideoFrames(videoPath, framesDir);
     console.log(`    ${frames.length} frame(s) extracted`);
 
     // ── Step 7: Visual spoiler detection (Tesseract OCR) ─────────────────────
@@ -641,8 +781,8 @@ async function main() {
     console.log(`\n🔍  Building spoiler word list…`);
     const spoilerWords = await buildSpoilerWords(movieTitle, movieDirector, movieYear, tmdbId, tmdbKey);
 
-    console.log(`\n👁️   Running Tesseract OCR on frames…`);
-    visualFlagged = detectVisualSpoilers(frames, spoilerWords);
+    console.log(`\n👁️   Running vision analysis on frames (${VISION_MODEL})…`);
+    visualFlagged = await detectVisualSpoilers(frames, spoilerWords, groq);
     if (visualFlagged.length === 0) {
       console.log(`    ✅  No visual spoilers detected`);
     } else {
@@ -664,20 +804,49 @@ async function main() {
       });
     }
 
+    // ── Step 9: Find safe window + OCR verification ────────────────────────────
+
+    const allFlagged = [...audioFlagged, ...visualFlagged];
+    let candidateWindow = findSafeWindow(duration, allFlagged);
+
+    if (candidateWindow) {
+      console.log(`\n🔬  Second-pass OCR verification  (${fmt(candidateWindow.start)} – ${fmt(candidateWindow.end)})…`);
+      const MAX_ITER = 3;
+      let iter = 0;
+      let windowClean = false;
+
+      while (!windowClean && candidateWindow && iter < MAX_ITER) {
+        const ocrFlagged = verifyWindowWithOCR(
+          videoPath, candidateWindow.start, candidateWindow.end, ocrFramesDir, spoilerWords,
+        );
+
+        if (ocrFlagged.length === 0) {
+          windowClean = true;
+          console.log(`    ✅  Window is clean`);
+        } else {
+          iter++;
+          ocrFlagged.forEach(f =>
+            console.log(`    ⚠️   [${fmt(f.start)} – ${fmt(f.end)}]  "${f.text}"  → matched: ${f.matched.join(', ')}`),
+          );
+          allFlagged.push(...ocrFlagged);
+          candidateWindow = findSafeWindow(duration, allFlagged);
+          if (!candidateWindow) console.log(`    ❌  No clean window remains after OCR verification`);
+        }
+      }
+
+      finalWindow = candidateWindow;
+    }
+
   } finally {
-    // ── Step 9: Cleanup ───────────────────────────────────────────────────────
+    // ── Step 10: Cleanup ──────────────────────────────────────────────────────
     try { fs.unlinkSync(videoPath); } catch {}
     try { fs.unlinkSync(audioPath); } catch {}
-    try { fs.rmSync(framesDir, { recursive: true, force: true }); } catch {}
+    try { fs.rmSync(framesDir,    { recursive: true, force: true }); } catch {}
+    try { fs.rmSync(ocrFramesDir, { recursive: true, force: true }); } catch {}
   }
 
-  // ── Find safe window ────────────────────────────────────────────────────────
-
-  const allFlagged = [...audioFlagged, ...visualFlagged];
-  const window = findSafeWindow(duration, allFlagged);
-
   console.log('\n' + '─'.repeat(56));
-  if (!window) {
+  if (!finalWindow) {
     console.log(`❌  No clean ${MIN_CLIP_S}s+ window found in this trailer.`);
     console.log(`    Consider choosing a different trailer or reviewing manually.`);
     process.exit(0);
@@ -687,9 +856,9 @@ async function main() {
   console.log(`    Movie:  ${movieTitle} (${movieYear})`);
   console.log(`    Trailer: "${trailerName}" — https://youtu.be/${youtubeId}`);
   console.log(`    Channel: ${channelName}`);
-  console.log(`    safe_start: ${window.start}s  (${fmt(window.start)})`);
-  console.log(`    safe_end:   ${window.end}s  (${fmt(window.end)})`);
-  console.log(`    Length:     ${window.end - window.start}s`);
+  console.log(`    safe_start: ${finalWindow.start}s  (${fmt(finalWindow.start)})`);
+  console.log(`    safe_end:   ${finalWindow.end}s  (${fmt(finalWindow.end)})`);
+  console.log(`    Length:     ${finalWindow.end - finalWindow.start}s`);
   console.log('─'.repeat(56));
 
   // ── Update DB ───────────────────────────────────────────────────────────────
@@ -697,7 +866,7 @@ async function main() {
   if (cli.update) {
     console.log(`\n💾  Writing to Supabase…`);
     try {
-      const row = await updateDatabase(movieTitle, movieYear, movieDirector, youtubeId, window.start, window.end, env);
+      const row = await updateDatabase(movieTitle, movieYear, movieDirector, youtubeId, finalWindow.start, finalWindow.end, env);
       const verb = row.inserted ? 'Inserted' : 'Updated';
       console.log(`✓   ${verb} movies row: id=${row.id}  "${row.title}" (${row.year})`);
     } catch (e) {

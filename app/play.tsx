@@ -7,6 +7,7 @@ import {
 } from 'react-native';
 import { C, R, FS } from '@/constants/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { CastToTVIcon } from '@/components/CinemaIcons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ScreenOrientation from 'expo-screen-orientation';
@@ -45,7 +46,7 @@ export default function PlayScreen() {
           <Text style={styles.backBtnText}>←</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.castBtn} onPress={() => setCastModalVisible(true)}>
-          <MaterialCommunityIcons name="cast" size={20} color="rgba(255,255,255,0.4)" />
+          <CastToTVIcon size={20} color="rgba(255,255,255,0.4)" />
           <Text style={styles.castBtnLabel}>Cast</Text>
         </TouchableOpacity>
       </View>

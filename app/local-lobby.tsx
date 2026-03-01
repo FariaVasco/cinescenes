@@ -15,6 +15,7 @@ import { C, R, FS } from '@/constants/theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
+import { CinemaButton } from '@/components/CinemaButton';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
@@ -228,7 +229,7 @@ export default function LocalLobbyScreen() {
         usedIds.add(startMovie.id);
         await db
           .from('players')
-          .update({ timeline: [startMovie.year] })
+          .update({ timeline: [startMovie.year], coins: 2 })
           .eq('id', localPlayers[i].id);
       }
 
@@ -316,28 +317,45 @@ export default function LocalLobbyScreen() {
         </View>
 
         <ScrollView style={styles.playerList} contentContainerStyle={styles.playerListContent}>
-          {localPlayers.map((p) => (
-            <View key={p.id} style={styles.playerChip}>
-              <View style={styles.playerAvatar}>
-                <Text style={styles.playerAvatarText}>{initials(p.display_name)}</Text>
+          {localPlayers.map((p) => {
+            const sortedYears = [...(p.timeline ?? [])].sort((a, b) => a - b);
+            return (
+              <View key={p.id} style={styles.playerChip}>
+                <View style={styles.playerChipTop}>
+                  <View style={styles.playerAvatar}>
+                    <Text style={styles.playerAvatarText}>{initials(p.display_name)}</Text>
+                  </View>
+                  <Text style={styles.playerName}>{p.display_name}</Text>
+                  {p.id === localPlayerId && <Text style={styles.youBadge}>you</Text>}
+                </View>
+                {sortedYears.length > 0 && (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.miniTimeline}
+                    contentContainerStyle={styles.miniTimelineContent}
+                  >
+                    {sortedYears.map((year, i) => (
+                      <View key={i} style={styles.miniCard}>
+                        <Text style={styles.miniCardYear}>{year}</Text>
+                      </View>
+                    ))}
+                  </ScrollView>
+                )}
               </View>
-              <Text style={styles.playerName}>{p.display_name}</Text>
-              {p.id === localPlayerId && <Text style={styles.youBadge}>you</Text>}
-            </View>
-          ))}
+            );
+          })}
         </ScrollView>
 
         {localIsHost ? (
-          <TouchableOpacity
-            style={[styles.startBtn, localPlayers.length < 1 && styles.startBtnDisabled]}
+          <CinemaButton
+            size="lg"
             onPress={handleStartGame}
             disabled={localPlayers.length < 1 || loading}
-            activeOpacity={0.85}
+            style={styles.startBtn}
           >
-            <Text style={styles.startBtnText}>
-              {loading ? 'Starting…' : 'Start Game →'}
-            </Text>
-          </TouchableOpacity>
+            {loading ? 'Starting…' : 'START GAME →'}
+          </CinemaButton>
         ) : (
           <View style={styles.waitingForHost}>
             <Text style={styles.waitingForHostText}>Waiting for host to start…</Text>
@@ -365,6 +383,25 @@ export default function LocalLobbyScreen() {
       >
         <Text style={styles.title}>{isCreate ? 'Create Game' : 'Join Game'}</Text>
 
+        <View style={styles.inputWrapper}>
+          <Text style={styles.inputLabel}>Your Name</Text>
+          <TextInput
+            ref={nameInputRef}
+            style={styles.input}
+            value={displayName}
+            onChangeText={setDisplayName}
+            placeholder="Enter your name"
+            placeholderTextColor="#555"
+            maxLength={20}
+            returnKeyType={isCreate ? 'go' : 'next'}
+            onSubmitEditing={() => {
+              if (isCreate) { if (canSubmit && !loading) handleSubmit(); }
+              else { /* focus code input below */ }
+            }}
+            autoFocus
+          />
+        </View>
+
         {!isCreate && (
           <View style={styles.inputWrapper}>
             <Text style={styles.inputLabel}>Game Code</Text>
@@ -376,40 +413,20 @@ export default function LocalLobbyScreen() {
               placeholderTextColor="#555"
               autoCapitalize="characters"
               maxLength={6}
-              returnKeyType="next"
-              onSubmitEditing={() => nameInputRef.current?.focus()}
-              blurOnSubmit={false}
-              autoFocus
+              returnKeyType="go"
+              onSubmitEditing={() => { if (canSubmit && !loading) handleSubmit(); }}
             />
           </View>
         )}
 
-        <View style={styles.inputWrapper}>
-          <Text style={styles.inputLabel}>Your Name</Text>
-          <TextInput
-            ref={nameInputRef}
-            style={styles.input}
-            value={displayName}
-            onChangeText={setDisplayName}
-            placeholder="Enter your name"
-            placeholderTextColor="#555"
-            maxLength={20}
-            returnKeyType="go"
-            onSubmitEditing={() => { if (canSubmit && !loading) handleSubmit(); }}
-            autoFocus={isCreate}
-          />
-        </View>
-
-        <TouchableOpacity
-          style={[styles.actionBtn, !canSubmit && styles.actionBtnDisabled]}
+        <CinemaButton
           onPress={handleSubmit}
           disabled={!canSubmit || loading}
-          activeOpacity={0.85}
+          size="lg"
+          style={styles.actionBtn}
         >
-          <Text style={styles.actionBtnText}>
-            {loading ? 'Loading…' : isCreate ? 'Create Game' : 'Join Game'}
-          </Text>
-        </TouchableOpacity>
+          {loading ? 'Loading…' : isCreate ? 'CREATE GAME' : 'JOIN GAME'}
+        </CinemaButton>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -446,12 +463,7 @@ const styles = StyleSheet.create({
     borderColor: C.border, color: C.textPrimary, fontSize: FS.md + 1,
     paddingHorizontal: 16, paddingVertical: 14,
   },
-  actionBtn: {
-    backgroundColor: C.gold, borderRadius: R.btn,
-    paddingVertical: 16, alignItems: 'center', marginTop: 8,
-  },
-  actionBtnDisabled: { opacity: 0.4 },
-  actionBtnText: { color: C.textOnGold, fontSize: FS.md, fontWeight: '800' },
+  actionBtn: { marginTop: 8 },
 
   waitingHeader: { alignItems: 'center', paddingTop: 24, paddingBottom: 16, gap: 6 },
   waitingLabel: {
@@ -469,8 +481,27 @@ const styles = StyleSheet.create({
   playerList: { flex: 1, paddingHorizontal: 24 },
   playerListContent: { gap: 10, paddingBottom: 16 },
   playerChip: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: C.surface,
-    borderRadius: R.md, padding: 12, gap: 12, borderWidth: 1, borderColor: C.border,
+    backgroundColor: C.surface,
+    borderRadius: R.md, padding: 12, gap: 8, borderWidth: 1, borderColor: C.border,
+  },
+  playerChipTop: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+  },
+  miniTimeline: { flexGrow: 0 },
+  miniTimelineContent: { gap: 4, paddingTop: 2 },
+  miniCard: {
+    backgroundColor: 'rgba(245,197,24,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(245,197,24,0.3)',
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  miniCardYear: {
+    color: 'rgba(245,197,24,0.9)',
+    fontSize: 12,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
   },
   playerAvatar: {
     width: 36, height: 36, borderRadius: R.full,
@@ -483,12 +514,7 @@ const styles = StyleSheet.create({
     backgroundColor: C.goldFaint,
     paddingHorizontal: 8, paddingVertical: 3, borderRadius: R.xs,
   },
-  startBtn: {
-    backgroundColor: C.gold, margin: 24,
-    borderRadius: R.btn, paddingVertical: 18, alignItems: 'center',
-  },
-  startBtnDisabled: { opacity: 0.4 },
-  startBtnText: { color: C.textOnGold, fontSize: FS.md, fontWeight: '900' },
+  startBtn: { margin: 24 },
   waitingForHost: { margin: 24, paddingVertical: 18, alignItems: 'center' },
   waitingForHostText: { color: C.textSub, fontSize: FS.base },
 });
