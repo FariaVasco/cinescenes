@@ -550,32 +550,24 @@ export default function GameScreen() {
       const ct = currentTurnRef.current;
       if (!g || !ct) return;
 
-      // Guard against double-processing across devices: if a newer turn already exists,
-      // another device already handled this. nextTurnInProgress handles same-device taps.
-      const { data: existingNext } = await db
-        .from('turns')
-        .select('id')
-        .eq('game_id', g.id)
-        .gt('created_at', ct.created_at)
-        .limit(1) as { data: { id: string }[] | null };
-      if (existingNext && existingNext.length > 0) return;
-
       const movie = activeMovies.find((m) => m.id === ct.movie_id) ?? null;
       if (!movie) return;
 
-      // Fetch fresh player data so winner.timeline is never stale
+      // Fetch fresh player data BEFORE the cross-device guard so winner computation
+      // and myMoviePairs sync happen on EVERY device, not just the one that "wins the race".
       const { data: freshPlayers } = await db
         .from('players').select('*').eq('game_id', g.id).order('created_at') as { data: Player[] | null };
       const latestPlayers: Player[] = freshPlayers ?? players;
       if (freshPlayers) { setLocalPlayers(freshPlayers); setPlayers(freshPlayers); }
 
+      // Compute winner — needed here so myMoviePairs stays correct regardless of which
+      // device inserts the next turn.
       const activeTL = latestPlayers.find(p => p.id === ct.active_player_id)?.timeline ?? [];
       const validIntervals = computeValidIntervals(movie.year, activeTL);
       const activeCorrect =
         ct.placed_interval !== null &&
         ct.placed_interval !== undefined &&
         validIntervals.includes(ct.placed_interval);
-      // A challenger wins only if the active player was wrong and they placed in a valid interval
       const winningChallenger = activeCorrect
         ? null
         : challenges.find((c) => c.interval_index !== -1 && validIntervals.includes(c.interval_index));
@@ -584,17 +576,34 @@ export default function GameScreen() {
       if (activeCorrect) winnerId = ct.active_player_id;
       else if (winningChallenger) winnerId = winningChallenger.challenger_id;
 
+      // Sync myMoviePairs BEFORE the cross-device guard — this ensures that even when
+      // another device processes the turn first (and we return early below), our local
+      // display still shows the correct movie for each timeline slot.
+      if (winnerId === myPlayerId) {
+        setMyMoviePairs(prev => {
+          if (prev.some(p => p.id === movie.id)) return prev; // idempotent
+          return [...prev, { year: movie.year, id: movie.id }].sort((a, b) => a.year - b.year);
+        });
+      }
+
+      // Guard against double-processing across devices: if a newer turn already exists,
+      // another device already handled this. Call poll() to sync UI then exit.
+      const { data: existingNext } = await db
+        .from('turns')
+        .select('id')
+        .eq('game_id', g.id)
+        .gt('created_at', ct.created_at)
+        .limit(1) as { data: { id: string }[] | null };
+      if (existingNext && existingNext.length > 0) {
+        await poll();
+        return;
+      }
+
       if (winnerId) {
         const winner = latestPlayers.find(p => p.id === winnerId) ?? null;
         if (winner) {
           const newTimeline = [...winner.timeline, movie.year].sort((a, b) => a - b);
           await db.from('players').update({ timeline: newTimeline }).eq('id', winnerId);
-        }
-        // Track the actual movie so the timeline modal shows the right card per slot
-        if (winnerId === myPlayerId) {
-          setMyMoviePairs(prev =>
-            [...prev, { year: movie.year, id: movie.id }].sort((a, b) => a.year - b.year)
-          );
         }
       }
 
@@ -606,9 +615,18 @@ export default function GameScreen() {
         .select('movie_id')
         .eq('game_id', g.id);
       const usedMovieIds = new Set<string>(pastTurns?.map((t: { movie_id: string }) => t.movie_id) ?? []);
-      // Also exclude starting cards (added directly to timelines, never in a turn row)
+      // Exclude starting cards (in timelines but never in a turn row).
+      // Use myMoviePairs for my own slots to handle same-year movies correctly.
       latestPlayers.forEach(p => {
-        p.timeline.forEach(year => {
+        const isMe = p.id === myPlayerId;
+        p.timeline.forEach((year, i) => {
+          const sortedTL = [...p.timeline].sort((a, b) => a - b);
+          if (isMe) {
+            const pairsForYear = myMoviePairs.filter(mp => mp.year === year);
+            const countBefore = sortedTL.slice(0, sortedTL.indexOf(year)).filter(y => y === year).length;
+            const pair = pairsForYear[countBefore];
+            if (pair) { usedMovieIds.add(pair.id); return; }
+          }
           const mv = activeMovies.find(m => m.year === year);
           if (mv) usedMovieIds.add(mv.id);
         });
@@ -628,8 +646,6 @@ export default function GameScreen() {
         console.warn('[NXT] insert failed:', insertError.message, insertError.code);
         return;
       }
-      // Drive the UI to the new turn immediately via poll() rather than a
-      // separate SELECT (which can return the old turn if the DB hasn't flushed yet).
       await poll();
     } finally {
       nextTurnInProgress.current = false;
@@ -1273,7 +1289,10 @@ export default function GameScreen() {
     const winnerTimeline = winnerPlayer
       ? (winnerPlayer.timeline ?? []).slice().sort((a, b) => a - b)
       : timeline;
-    const revealInterval = winnerPlayer
+    // For active-player wins: use their actual placed_interval (they chose the slot).
+    // For challenger wins: compute where the year falls in the challenger's own timeline.
+    // For trash: use placed_interval (shows where the active player put it).
+    const revealInterval = (winnerPlayer && winnerId !== currentTurn.active_player_id)
       ? computeCorrectInterval(m.year, winnerTimeline)
       : currentTurn.placed_interval;
 
@@ -1287,9 +1306,11 @@ export default function GameScreen() {
       ? currentTurn.placed_interval
       : revealInterval;
 
-    // Use the display timeline's own movies for lookup — avoids cross-player year collisions
+    // Use resolveMovie so same-year slots (e.g. two 2024 films) show the correct movie.
+    // When the display timeline is the winner's and the winner is me, myMoviePairs is used.
+    const revealIsMyTimeline = winnerId === myPlayerId || (!winnerPlayer && amActive);
     const revealPlacedMovies: Movie[] = displayTimeline
-      .map((year) => activeMovies.find((mv) => mv.year === year))
+      .map((_, i) => resolveMovie(displayTimeline, i, revealIsMyTimeline))
       .filter((mv): mv is Movie => mv !== undefined);
 
     // During reveal, if I'm the winner, show the new card in my timeline modal immediately
