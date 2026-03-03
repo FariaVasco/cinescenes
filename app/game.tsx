@@ -120,6 +120,10 @@ export default function GameScreen() {
   const [movieGuess, setMovieGuess] = useState('');
   const [directorGuess, setDirectorGuess] = useState('');
   const [revealLocked, setRevealLocked] = useState(true);
+  // Ordered list of { year, id } pairs for MY timeline — one entry per card in insertion order.
+  // Sorted by year so index i aligns with myTimeline.sort()[i].
+  // Handles duplicate years (e.g. two 2024 films) correctly.
+  const [myMoviePairs, setMyMoviePairs] = useState<{ year: number; id: string }[]>([]);
   const introShownRef = useRef(false);
 
   const [voiceState, setVoiceState] = useState<'idle' | 'listening' | 'processing' | 'error'>('idle');
@@ -150,11 +154,22 @@ export default function GameScreen() {
     return () => stopPolling();
   }, []);
 
-  // Switch from 'flip' → 'result' after the FlippingMovieCard animation completes
+  // Switch from 'flip' → 'result' after the FlippingMovieCard animation completes.
+  // Fetch fresh challenges at the 1200ms mark (not fire-and-forget) so the result
+  // is guaranteed to have current data before it renders. Only challenges are
+  // fetched here — updating players mid-reveal can mutate `timeline` and cause
+  // `activeCorrect` to flicker if another device already ran handleNextTurn.
   useEffect(() => {
     if (currentTurn?.status !== 'revealing') return;
     setRevealPhase('flip');
-    const t = setTimeout(() => setRevealPhase('result'), 1200);
+    const turn = currentTurnRef.current;
+    const t = setTimeout(async () => {
+      if (turn) {
+        const { data: cData } = await db.from('challenges').select('*').eq('turn_id', turn.id);
+        if (cData) { setLocalChallenges(cData); setChallenges(cData); }
+      }
+      setRevealPhase('result');
+    }, 1200);
     return () => clearTimeout(t);
   }, [currentTurn?.status]);
 
@@ -351,6 +366,25 @@ export default function GameScreen() {
       setChallenges(loaded);
     }
 
+    // Build ordered pairs for my timeline so the modal shows the correct movie per slot,
+    // even when multiple movies share the same year.
+    // Strategy: prefer movies that appear in the game's turns (won cards) over first-match.
+    // usedIds prevents the same movie being assigned to two slots.
+    const { data: allTurns } = await db
+      .from('turns').select('movie_id').eq('game_id', g.id) as { data: { movie_id: string }[] | null };
+    const turnMovieIds = new Set((allTurns ?? []).map(t => t.movie_id));
+    const myTL = loadedPlayers.find(p => p.id === myPlayerId)?.timeline ?? [];
+    const sortedTL = [...myTL].sort((a, b) => a - b);
+    const usedIds = new Set<string>();
+    const pairs: { year: number; id: string }[] = sortedTL.map(year => {
+      const fromTurn = activeMovies.find(mv => mv.year === year && turnMovieIds.has(mv.id) && !usedIds.has(mv.id));
+      const fallback  = activeMovies.find(mv => mv.year === year && !usedIds.has(mv.id));
+      const best = fromTurn ?? fallback ?? activeMovies.find(mv => mv.year === year);
+      if (best) usedIds.add(best.id);
+      return { year, id: best?.id ?? '' };
+    });
+    setMyMoviePairs(pairs);
+
     const isGameStart = loadedPlayers.every(p => (p.timeline ?? []).length <= 1);
     if (isGameStart && !introShownRef.current) {
       setShowIntro(true);
@@ -444,14 +478,17 @@ export default function GameScreen() {
   }
 
   async function handleReveal() {
-    if (!currentTurn) return;
+    // Use the ref to avoid stale closure — placed_interval may be set by handleConfirmPlacement
+    // after the poll closure was last captured, so currentTurn here could be stale.
+    const ct = currentTurnRef.current ?? currentTurn;
+    if (!ct) return;
     // Award coin to active player if placement correct AND they named the movie + director
-    if (myPlayerId === currentTurn.active_player_id && movieGuess.trim() && directorGuess.trim()) {
-      const m = activeMovies.find(mv => mv.id === currentTurn.movie_id);
+    if (myPlayerId === ct.active_player_id && movieGuess.trim() && directorGuess.trim()) {
+      const m = activeMovies.find(mv => mv.id === ct.movie_id);
       if (m) {
         const validIntervals = computeValidIntervals(m.year, getActivePlayerTimeline());
-        const isCorrect = currentTurn.placed_interval !== null &&
-          validIntervals.includes(currentTurn.placed_interval);
+        const isCorrect = ct.placed_interval !== null &&
+          validIntervals.includes(ct.placed_interval);
         if (isCorrect) {
           const titleOK = movieGuess.trim().toLowerCase() === m.title.toLowerCase();
           const directorOK = directorGuess.trim().toLowerCase() === (m.director ?? '').toLowerCase();
@@ -464,11 +501,11 @@ export default function GameScreen() {
         }
       }
     }
-    const optimistic = { ...currentTurn, status: 'revealing' as const };
+    const optimistic = { ...ct, status: 'revealing' as const };
     setLocalTurn(optimistic);
     setCurrentTurn(optimistic);
     currentTurnRef.current = optimistic;
-    await db.from('turns').update({ status: 'revealing' }).eq('id', currentTurn.id);
+    await db.from('turns').update({ status: 'revealing' }).eq('id', ct.id);
   }
 
   async function submitReport(reason: string) {
@@ -509,19 +546,21 @@ export default function GameScreen() {
     nextTurnInProgress.current = true;
     try {
       const g = game;
-      if (!g || !currentTurn) return;
+      // Use the ref so we never act on a stale closure value
+      const ct = currentTurnRef.current;
+      if (!g || !ct) return;
 
-      // Atomically claim this turn: only update to 'done' if still in 'revealing'.
-      // If two devices race here, only one will match the WHERE clause and get rows back.
-      const { data: claimed } = await db
+      // Guard against double-processing across devices: if a newer turn already exists,
+      // another device already handled this. nextTurnInProgress handles same-device taps.
+      const { data: existingNext } = await db
         .from('turns')
-        .update({ status: 'done' as any })
-        .eq('id', currentTurn.id)
-        .eq('status', 'revealing')
-        .select('id') as { data: { id: string }[] | null };
-      if (!claimed || claimed.length === 0) return; // Another device already processed it
+        .select('id')
+        .eq('game_id', g.id)
+        .gt('created_at', ct.created_at)
+        .limit(1) as { data: { id: string }[] | null };
+      if (existingNext && existingNext.length > 0) return;
 
-      const movie = getMovie();
+      const movie = activeMovies.find((m) => m.id === ct.movie_id) ?? null;
       if (!movie) return;
 
       // Fetch fresh player data so winner.timeline is never stale
@@ -530,19 +569,19 @@ export default function GameScreen() {
       const latestPlayers: Player[] = freshPlayers ?? players;
       if (freshPlayers) { setLocalPlayers(freshPlayers); setPlayers(freshPlayers); }
 
-      const activeTL = latestPlayers.find(p => p.id === currentTurn.active_player_id)?.timeline ?? [];
+      const activeTL = latestPlayers.find(p => p.id === ct.active_player_id)?.timeline ?? [];
       const validIntervals = computeValidIntervals(movie.year, activeTL);
       const activeCorrect =
-        currentTurn.placed_interval !== null &&
-        currentTurn.placed_interval !== undefined &&
-        validIntervals.includes(currentTurn.placed_interval);
+        ct.placed_interval !== null &&
+        ct.placed_interval !== undefined &&
+        validIntervals.includes(ct.placed_interval);
       // A challenger wins only if the active player was wrong and they placed in a valid interval
       const winningChallenger = activeCorrect
         ? null
         : challenges.find((c) => c.interval_index !== -1 && validIntervals.includes(c.interval_index));
 
       let winnerId: string | null = null;
-      if (activeCorrect) winnerId = currentTurn.active_player_id;
+      if (activeCorrect) winnerId = ct.active_player_id;
       else if (winningChallenger) winnerId = winningChallenger.challenger_id;
 
       if (winnerId) {
@@ -551,9 +590,15 @@ export default function GameScreen() {
           const newTimeline = [...winner.timeline, movie.year].sort((a, b) => a - b);
           await db.from('players').update({ timeline: newTimeline }).eq('id', winnerId);
         }
+        // Track the actual movie so the timeline modal shows the right card per slot
+        if (winnerId === myPlayerId) {
+          setMyMoviePairs(prev =>
+            [...prev, { year: movie.year, id: movie.id }].sort((a, b) => a.year - b.year)
+          );
+        }
       }
 
-      const currentIdx = latestPlayers.findIndex((p) => p.id === currentTurn.active_player_id);
+      const currentIdx = latestPlayers.findIndex((p) => p.id === ct.active_player_id);
       const nextPlayer = latestPlayers[(currentIdx + 1) % latestPlayers.length];
 
       const { data: pastTurns } = await db
@@ -573,12 +618,19 @@ export default function GameScreen() {
         ? pool[Math.floor(Math.random() * pool.length)]
         : activeMovies[Math.floor(Math.random() * activeMovies.length)];
 
-      await db.from('turns').insert({
+      const { error: insertError } = await db.from('turns').insert({
         game_id: g.id,
         active_player_id: nextPlayer.id,
         movie_id: nextMovie.id,
         status: 'drawing',
       });
+      if (insertError) {
+        console.warn('[NXT] insert failed:', insertError.message, insertError.code);
+        return;
+      }
+      // Drive the UI to the new turn immediately via poll() rather than a
+      // separate SELECT (which can return the old turn if the DB hasn't flushed yet).
+      await poll();
     } finally {
       nextTurnInProgress.current = false;
     }
@@ -597,7 +649,10 @@ export default function GameScreen() {
   if (showIntro) {
     const myPlayer = players.find(p => p.id === myPlayerId) ?? null;
     const startingYear = myPlayer?.timeline[0];
-    const startingMovie = activeMovies.find(m => m.year === startingYear) ?? null;
+    const startingPair = startingYear !== undefined ? myMoviePairs.find(p => p.year === startingYear) : undefined;
+    const startingMovie = startingPair
+      ? (activeMovies.find(m => m.id === startingPair.id) ?? activeMovies.find(m => m.year === startingYear) ?? null)
+      : (activeMovies.find(m => m.year === startingYear) ?? null);
     return (
       <GameIntroScreen
         startingMovie={startingMovie}
@@ -649,7 +704,10 @@ export default function GameScreen() {
           ) : (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.myTimelineScroll}>
               {myTimeline.map((year, i) => {
-                const m = activeMovies.find(mv => mv.year === year);
+                const pairsForYear = myMoviePairs.filter(p => p.year === year);
+                const countBefore = myTimeline.slice(0, i).filter(y => y === year).length;
+                const pair = pairsForYear[countBefore];
+                const m = pair ? activeMovies.find(mv => mv.id === pair.id) : activeMovies.find(mv => mv.year === year);
                 return m
                   ? <CardFront key={i} movie={m} width={90} height={126} />
                   : <View key={i} style={styles.myTimelinePlaceholder}><Text style={styles.myTimelinePlaceholderYear}>{year}</Text></View>;
@@ -1203,11 +1261,12 @@ export default function GameScreen() {
       ? computeCorrectInterval(m.year, winnerTimeline)
       : currentTurn.placed_interval;
 
-    // Phase 'flip': always show ACTIVE PLAYER's timeline with card flipping at placed_interval
-    // Phase 'result': show WINNER's timeline (filter m.year to avoid duplicate) + result strip
+    // Phase 'flip': show ACTIVE PLAYER's current timeline with the card flipping at placed_interval
+    // Phase 'result': show WINNER's current timeline (before handleNextTurn adds the new card)
+    // Do NOT filter by m.year — the winner may already have another card with that same year
     const displayTimeline = revealPhase === 'flip'
       ? timeline  // active player's timeline
-      : winnerTimeline.filter(y => y !== m.year);  // winner's timeline minus the card being inserted
+      : winnerTimeline;
     const displayInterval = revealPhase === 'flip'
       ? currentTurn.placed_interval
       : revealInterval;
@@ -1217,9 +1276,55 @@ export default function GameScreen() {
       .map((year) => activeMovies.find((mv) => mv.year === year))
       .filter((mv): mv is Movie => mv !== undefined);
 
+    // During reveal, if I'm the winner, show the new card in my timeline modal immediately
+    const revealMyTimeline = (winnerId === myPlayerId && revealPhase === 'result')
+      ? [...myTimeline, m.year].sort((a, b) => a - b)
+      : myTimeline;
+    const revealMyPlacedMovies: Movie[] = revealMyTimeline
+      .map(year => activeMovies.find(mv => mv.year === year))
+      .filter((mv): mv is Movie => mv !== undefined);
+    const revealMyTimelineModal = (
+      <Modal visible={showMyTimeline} transparent animationType="slide" onRequestClose={() => setShowMyTimeline(false)}>
+        <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowMyTimeline(false)}>
+          <TouchableOpacity activeOpacity={1} style={styles.myTimelineSheet}>
+            <View style={styles.myTimelineHeader}>
+              <Text style={styles.myTimelineTitle}>My Timeline</Text>
+              <TouchableOpacity onPress={() => setShowMyTimeline(false)} style={styles.reportCloseBtn}>
+                <Text style={styles.reportCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            {revealMyTimeline.length === 0 ? (
+              <Text style={styles.myTimelineEmpty}>No cards yet</Text>
+            ) : (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.myTimelineScroll}>
+                {revealMyTimeline.map((year, i) => {
+                  // The newly-won card is the last occurrence of m.year in revealMyTimeline
+                  // (myMoviePairs isn't updated until handleNextTurn runs)
+                  const isNewSlot = winnerId === myPlayerId && year === m.year &&
+                    i === revealMyTimeline.lastIndexOf(m.year);
+                  let mid: string | undefined;
+                  if (isNewSlot) {
+                    mid = m.id;
+                  } else {
+                    const pairsForYear = myMoviePairs.filter(p => p.year === year);
+                    const countBefore = revealMyTimeline.slice(0, i).filter(y => y === year).length;
+                    mid = pairsForYear[countBefore]?.id;
+                  }
+                  const mv = mid ? activeMovies.find(mv => mv.id === mid) : activeMovies.find(mv => mv.year === year);
+                  return mv
+                    ? <CardFront key={i} movie={mv} width={90} height={126} />
+                    : <View key={i} style={styles.myTimelinePlaceholder}><Text style={styles.myTimelinePlaceholderYear}>{year}</Text></View>;
+                })}
+              </ScrollView>
+            )}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+    );
+
     return (
       <SafeAreaView style={styles.container}>
-        {myTimelineModal}
+        {revealMyTimelineModal}
         <View style={styles.revealTimelineWrapper}>
           <Timeline
             timeline={displayTimeline}
@@ -1306,7 +1411,7 @@ function ScoreBar({ players, myId, onShowTimeline }: { players: Player[]; myId: 
           <View key={p.id} style={[styles.scoreChip, p.id === myId && styles.scoreChipMe]}>
             <Text style={styles.scoreChipName}>{p.display_name}</Text>
             <Text style={styles.scoreChipCount}>{p.timeline.length}</Text>
-            <Text style={styles.scoreChipCoins}>🪙{p.coins}</Text>
+            <Text style={styles.scoreChipCoins}>🪙 {p.coins}</Text>
           </View>
         ))}
       </ScrollView>
