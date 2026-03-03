@@ -125,7 +125,9 @@ export function Timeline({
   }
 
   function renderPlacedCard(year: number, idx: number) {
-    const movie = placedMovies?.find((m) => m.year === year);
+    // Use index, not year-match — placedMovies is in the same sorted order as sortedYears,
+    // so find(m => m.year === year) would return the wrong movie when two cards share a year.
+    const movie = placedMovies?.[idx];
     if (movie) {
       return <CardFront key={`card-${idx}`} movie={movie} width={80} height={100} />;
     }
