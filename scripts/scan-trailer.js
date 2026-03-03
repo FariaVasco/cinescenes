@@ -428,84 +428,47 @@ function findFlaggedIntervals(segments, spoilerWords) {
   return flagged;
 }
 
-// ── OCR verification pass ─────────────────────────────────────────────────────
+// ── Vision verification pass ──────────────────────────────────────────────────
 
-const OCR_FPS = 1;   // 1 frame/s — catches title cards visible for ≥ 1s
+const VERIFY_FPS = 1;   // 1 frame/s — 2× denser than the full-scan to catch short title cards
 
 /**
- * Runs Tesseract OCR on every frame within the proposed safe window.
- * Used as a deterministic second check after the Vision-LLM first pass —
- * title-card text like "Director of Black Panther" is reliably read by
- * Tesseract even when the LLM misses it.
+ * Re-scans the candidate safe window with the Vision LLM at VERIFY_FPS (1fps).
  *
- * Re-extracts the window from the original video at OCR_FPS (1fps) so that
- * title cards visible for ≥ 1s are never missed by sparse 0.5fps sampling.
+ * The full-video scan runs at 0.5fps (1 frame every 2s).  A title card visible
+ * for ~1.5s can fall entirely between two sample points and be missed.
+ * Running the Vision LLM on the shorter, already-selected window at 1fps ensures
+ * every 1s+ title card is seen, without the cost of re-scanning the whole trailer.
+ *
+ * Each call clears and recreates verifyFramesDir so stale frames from a
+ * previous iteration never pollute the results.
  *
  * Returns flagged intervals in the same shape as audio/visual flags.
- * Silently skips (returns []) if Tesseract is not installed.
  */
-function verifyWindowWithOCR(videoPath, windowStart, windowEnd, ocrFramesDir, spoilerWords) {
-  const tessCheck = spawnSync('which', ['tesseract'], { encoding: 'utf-8' });
-  if (tessCheck.status !== 0) return [];   // not installed — skip silently
+async function verifyWindowWithVision(videoPath, windowStart, windowEnd, verifyFramesDir, spoilerWords, groq) {
+  // Clear stale frames from any previous iteration
+  try { fs.rmSync(verifyFramesDir, { recursive: true, force: true }); } catch {}
+  fs.mkdirSync(verifyFramesDir, { recursive: true });
 
-  // Extract 1fps frames for only the candidate window (fast — typically 60 frames)
-  fs.mkdirSync(ocrFramesDir, { recursive: true });
   spawnSync('ffmpeg', [
-    '-ss',   String(windowStart),
-    '-to',   String(windowEnd),
-    '-i',    videoPath,
-    '-vf',   `fps=${OCR_FPS}`,
-    `${ocrFramesDir}/ocr_%05d.jpg`,
+    '-ss', String(windowStart),
+    '-to', String(windowEnd),
+    '-i',  videoPath,
+    '-vf', `fps=${VERIFY_FPS}`,
+    `${verifyFramesDir}/verify_%05d.jpg`,
     '-y',
   ], { encoding: 'utf-8' });
 
-  const ocrFiles = fs.readdirSync(ocrFramesDir)
-    .filter(f => f.startsWith('ocr_') && f.endsWith('.jpg'))
+  const files = fs.readdirSync(verifyFramesDir)
+    .filter(f => f.startsWith('verify_') && f.endsWith('.jpg'))
     .sort();
 
-  const regexes = buildSpoilerRegexes(spoilerWords);
-  const flagged  = [];
+  const frames = files.map((f, i) => ({
+    framePath: path.join(verifyFramesDir, f),
+    timestamp: windowStart + i / VERIFY_FPS,
+  }));
 
-  for (let i = 0; i < ocrFiles.length; i++) {
-    const framePath  = path.join(ocrFramesDir, ocrFiles[i]);
-    const timestamp  = windowStart + i / OCR_FPS;
-
-    // Preprocess: grayscale → 2× upscale → hard threshold at luma 30/255.
-    // Trailer title cards use low-contrast styled text (gray-on-black with film
-    // grain texture) that Tesseract cannot binarize correctly from raw JPEG.
-    // Thresholding produces clean white-on-black text that Tesseract reads reliably.
-    const processedPath = framePath.replace(/\.jpg$/, '_proc.png');
-    spawnSync('ffmpeg', [
-      '-i', framePath,
-      '-vf', "hue=s=0,scale=iw*2:ih*2,lutrgb=r='if(gt(val,30),255,0)':g='if(gt(val,30),255,0)':b='if(gt(val,30),255,0)'",
-      processedPath, '-y',
-    ], { encoding: 'utf-8' });
-
-    const result = spawnSync(
-      'tesseract', [processedPath, 'stdout', '--psm', '6', '-l', 'eng'],
-      { encoding: 'utf-8' },
-    );
-
-    try { fs.unlinkSync(processedPath); } catch {}
-
-    const text = (result.stdout ?? '').trim();
-    if (!text) continue;
-
-    const matched = regexes
-      .filter(({ regex }) => regex.test(text))
-      .map(({ word }) => word);
-
-    if (matched.length > 0) {
-      flagged.push({
-        start:   timestamp,
-        end:     timestamp + 1 / OCR_FPS,
-        text:    text.replace(/\n/g, ' ').slice(0, 120),
-        matched,
-      });
-    }
-  }
-
-  return flagged;
+  return detectVisualSpoilers(frames, spoilerWords, groq);
 }
 
 // ── Safe window algorithm ─────────────────────────────────────────────────────
@@ -732,8 +695,8 @@ async function main() {
   const tmpBase    = path.join(tmpDir, `cinescenes_${Date.now()}`);
   const videoPath  = `${tmpBase}.mp4`;
   const audioPath  = `${tmpBase}.mp3`;
-  const framesDir  = `${tmpBase}_frames`;
-  const ocrFramesDir = `${tmpBase}_ocr`;
+  const framesDir     = `${tmpBase}_frames`;
+  const verifyFramesDir = `${tmpBase}_verify`;
 
   console.log(`\n📥  Downloading video (≤480p)…`);
   try {
@@ -804,33 +767,38 @@ async function main() {
       });
     }
 
-    // ── Step 9: Find safe window + OCR verification ────────────────────────────
+    // ── Step 9: Find safe window + Vision LLM verification ────────────────────
 
     const allFlagged = [...audioFlagged, ...visualFlagged];
     let candidateWindow = findSafeWindow(duration, allFlagged);
 
     if (candidateWindow) {
-      console.log(`\n🔬  Second-pass OCR verification  (${fmt(candidateWindow.start)} – ${fmt(candidateWindow.end)})…`);
+      console.log(`\n🔬  Second-pass vision verification  (${fmt(candidateWindow.start)} – ${fmt(candidateWindow.end)})…`);
+      console.log(`    Re-scanning at ${VERIFY_FPS}fps — 2× denser than full-video scan…`);
       const MAX_ITER = 3;
       let iter = 0;
       let windowClean = false;
 
       while (!windowClean && candidateWindow && iter < MAX_ITER) {
-        const ocrFlagged = verifyWindowWithOCR(
-          videoPath, candidateWindow.start, candidateWindow.end, ocrFramesDir, spoilerWords,
+        const verifyFlagged = await verifyWindowWithVision(
+          videoPath, candidateWindow.start, candidateWindow.end, verifyFramesDir, spoilerWords, groq,
         );
 
-        if (ocrFlagged.length === 0) {
+        if (verifyFlagged.length === 0) {
           windowClean = true;
           console.log(`    ✅  Window is clean`);
         } else {
           iter++;
-          ocrFlagged.forEach(f =>
+          verifyFlagged.forEach(f =>
             console.log(`    ⚠️   [${fmt(f.start)} – ${fmt(f.end)}]  "${f.text}"  → matched: ${f.matched.join(', ')}`),
           );
-          allFlagged.push(...ocrFlagged);
+          allFlagged.push(...verifyFlagged);
           candidateWindow = findSafeWindow(duration, allFlagged);
-          if (!candidateWindow) console.log(`    ❌  No clean window remains after OCR verification`);
+          if (!candidateWindow) {
+            console.log(`    ❌  No clean window remains after vision verification`);
+          } else {
+            console.log(`    ↩️   Retrying with window ${fmt(candidateWindow.start)} – ${fmt(candidateWindow.end)}…`);
+          }
         }
       }
 
@@ -841,8 +809,8 @@ async function main() {
     // ── Step 10: Cleanup ──────────────────────────────────────────────────────
     try { fs.unlinkSync(videoPath); } catch {}
     try { fs.unlinkSync(audioPath); } catch {}
-    try { fs.rmSync(framesDir,    { recursive: true, force: true }); } catch {}
-    try { fs.rmSync(ocrFramesDir, { recursive: true, force: true }); } catch {}
+    try { fs.rmSync(framesDir,      { recursive: true, force: true }); } catch {}
+    try { fs.rmSync(verifyFramesDir, { recursive: true, force: true }); } catch {}
   }
 
   console.log('\n' + '─'.repeat(56));
