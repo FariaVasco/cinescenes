@@ -676,16 +676,32 @@ export default function GameScreen() {
   const amActive = isActivePlayer();
   const timeline = getActivePlayerTimeline();
 
-  // Only use the ACTIVE player's movies for timeline display.
-  // Using all players caused wrong movies to appear when multiple movies share the same year.
-  const placedMovies: Movie[] = timeline
-    .map((year) => activeMovies.find((mv) => mv.year === year))
-    .filter((m): m is Movie => m !== undefined);
-
   // My own timeline (for "my timeline" modal and drawing phase display)
   const myTimeline = (players.find(p => p.id === myPlayerId)?.timeline ?? []).slice().sort((a, b) => a - b);
+
+  // Helper: look up the correct movie for slot i in a year array, using myMoviePairs when
+  // this is my own timeline (handles duplicate years like two 2025 films).
+  function resolveMovie(years: number[], i: number, isMyTimeline: boolean): Movie | undefined {
+    const year = years[i];
+    if (isMyTimeline && myMoviePairs.length > 0) {
+      const pairsForYear = myMoviePairs.filter(p => p.year === year);
+      const countBefore  = years.slice(0, i).filter(y => y === year).length;
+      const pair = pairsForYear[countBefore];
+      if (pair) return activeMovies.find(m => m.id === pair.id);
+    }
+    return activeMovies.find(mv => mv.year === year);
+  }
+
+  const amIActive = currentTurn?.active_player_id === myPlayerId;
+
+  // Active player's timeline movies — uses myMoviePairs when I'm the active player.
+  const placedMovies: Movie[] = timeline
+    .map((_, i) => resolveMovie(timeline, i, amIActive))
+    .filter((m): m is Movie => m !== undefined);
+
+  // My own placed movies (drawing phase) — always uses myMoviePairs.
   const myPlacedMovies: Movie[] = myTimeline
-    .map(year => activeMovies.find(m => m.year === year))
+    .map((_, i) => resolveMovie(myTimeline, i, true))
     .filter((m): m is Movie => m !== undefined);
 
   // ── "My Timeline" modal — overlaid on every game screen ──
