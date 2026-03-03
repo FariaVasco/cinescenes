@@ -25,6 +25,7 @@ import { TrailerPlayer, TrailerPlayerHandle } from '@/components/TrailerPlayer';
 import { Timeline } from '@/components/Timeline';
 import { ChallengeTimer } from '@/components/ChallengeTimer';
 import { CardBack, CardFront } from '@/components/MovieCard';
+import Svg, { Circle, Path } from 'react-native-svg';
 
 const REPORT_OPTIONS = [
   { id: 'spoiler',       label: '🎬  Title or info is revealed in the clip' },
@@ -39,6 +40,7 @@ const REPORT_OPTIONS = [
 
 const db = supabase as unknown as { from: (t: string) => any };
 const POLL_MS = 2000;
+const WIN_CARDS = 10;
 
 async function interpretVoiceInput(transcript: string): Promise<{ movie: string; director: string } | null> {
   const apiKey = process.env.EXPO_PUBLIC_GROQ_API_KEY;
@@ -124,6 +126,7 @@ export default function GameScreen() {
   // Sorted by year so index i aligns with myTimeline.sort()[i].
   // Handles duplicate years (e.g. two 2024 films) correctly.
   const [myMoviePairs, setMyMoviePairs] = useState<{ year: number; id: string }[]>([]);
+  const [gameOver, setGameOver] = useState<Player | null>(null);
   const introShownRef = useRef(false);
 
   const [voiceState, setVoiceState] = useState<'idle' | 'listening' | 'processing' | 'error'>('idle');
@@ -250,6 +253,22 @@ export default function GameScreen() {
       .order('created_at', { ascending: false })
       .limit(1)
       .single() as { data: Turn | null };
+
+    // Check if game has been marked finished by any device
+    const { data: gameRow } = await db.from('games').select('status').eq('id', gId).single();
+    if (gameRow?.status === 'finished') {
+      const { data: freshPlayers } = await db.from('players').select('*').eq('game_id', gId).order('created_at');
+      const fp = (freshPlayers ?? []) as Player[];
+      const winner = fp.reduce((best: Player | null, p) =>
+        !best || p.timeline.length > best.timeline.length ? p : best, null);
+      if (winner) {
+        setLocalPlayers(fp);
+        setPlayers(fp);
+        setGameOver(winner);
+        stopPolling();
+      }
+      return;
+    }
 
     if (latestTurn) {
       const prevTurn = currentTurnRef.current;
@@ -604,6 +623,14 @@ export default function GameScreen() {
         if (winner) {
           const newTimeline = [...winner.timeline, movie.year].sort((a, b) => a - b);
           await db.from('players').update({ timeline: newTimeline }).eq('id', winnerId);
+
+          // Game over — winner reached the target card count
+          if (newTimeline.length >= WIN_CARDS) {
+            await db.from('games').update({ status: 'finished' }).eq('id', g.id);
+            setGameOver({ ...winner, timeline: newTimeline });
+            stopPolling();
+            return;
+          }
         }
       }
 
@@ -653,6 +680,10 @@ export default function GameScreen() {
   }
 
   // ── Phase renderers ──
+
+  if (gameOver) {
+    return <GameOverScreen winner={gameOver} players={players} myId={myPlayerId} />;
+  }
 
   if (loading || !currentTurn) {
     return (
@@ -1386,31 +1417,30 @@ export default function GameScreen() {
                 </Text>
               </View>
             )}
-            <View style={styles.revealResultStrip}>
-              <Text style={styles.revealResultEmoji}>
-                {activeCorrect ? '🎉' : winningChallenger ? '🎯' : '🗑️'}
+            <View style={styles.revealResultPanel}>
+              <View style={[
+                styles.revealResultAccent,
+                { backgroundColor: activeCorrect || winningChallenger ? C.gold : C.danger },
+              ]} />
+              <ResultIcon result={activeCorrect ? 'correct' : winningChallenger ? 'challenge' : 'trash'} />
+              <Text style={styles.revealResultHeadline}>
+                {resultName
+                  ? <><Text style={styles.revealResultPlayerHL}>{resultName}</Text>{'\n'}{resultText}</>
+                  : resultText}
               </Text>
-              <View style={styles.revealResultTextBlock}>
-                <Text style={styles.revealResultText}>
-                  {resultName
-                    ? <><Text style={styles.revealResultPlayer}>{resultName}</Text>{' '}{resultText}</>
-                    : resultText}
+              {coinBackNames.length > 0 && (
+                <Text style={styles.revealCoinBack}>
+                  <Text style={styles.revealCoinBackName}>{coinBackNames.join(', ')}</Text>
+                  {' also had it right — coin returned'}
                 </Text>
-                {coinBackNames.length > 0 && (
-                  <Text style={styles.revealCoinBack}>
-                    {'🪙 '}
-                    <Text style={styles.revealCoinBackName}>{coinBackNames.join(', ')}</Text>
-                    {' also had it right — coin returned'}
-                  </Text>
-                )}
-                {didSubmitBonus && (
-                  <Text style={styles.revealCoinBack}>
-                    {gotBonusCoin
-                      ? <><Text style={styles.revealCoinBackName}>🪙 +1 bonus coin!</Text>{' Movie + director correct'}</>
-                      : '❌ No bonus coin — movie or director incorrect'}
-                  </Text>
-                )}
-              </View>
+              )}
+              {didSubmitBonus && (
+                <Text style={styles.revealCoinBack}>
+                  {gotBonusCoin
+                    ? <><Text style={styles.revealCoinBackName}>+1 bonus coin!</Text>{' Movie + director correct'}</>
+                    : 'No bonus coin — movie or director incorrect'}
+                </Text>
+              )}
             </View>
 
             <View style={styles.revealFooter}>
@@ -1475,9 +1505,119 @@ function LoadingScreen() {
   );
 }
 
+// ── Game Over screen ──────────────────────────────────────────────────────────
+
+function GameOverScreen({ winner, players, myId }: { winner: Player; players: Player[]; myId: string | null }) {
+  const router = useRouter();
+  const scaleAnim = useRef(new Animated.Value(0.7)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, damping: 10, stiffness: 120 }),
+      Animated.timing(opacityAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  const sorted = [...players].sort((a, b) => b.timeline.length - a.timeline.length);
+  const isMe = winner.id === myId;
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.gameOverContent}>
+        {/* Trophy icon */}
+        <Animated.View style={{ transform: [{ scale: scaleAnim }], opacity: opacityAnim }}>
+          <Svg width={96} height={96} viewBox="0 0 96 96">
+            <Circle cx={48} cy={48} r={46} fill="rgba(245,197,24,0.12)" />
+            <Circle cx={48} cy={48} r={38} fill="none" stroke="rgba(245,197,24,0.35)" strokeWidth={1.5} />
+            {/* Cup body */}
+            <Path d="M34 28 L62 28 L58 56 Q48 62 38 56 Z" fill="none" stroke="#f5c518" strokeWidth={3} strokeLinejoin="round" />
+            {/* Handles */}
+            <Path d="M34 32 Q24 32 24 42 Q24 50 34 50" fill="none" stroke="#f5c518" strokeWidth={2.5} strokeLinecap="round" />
+            <Path d="M62 32 Q72 32 72 42 Q72 50 62 50" fill="none" stroke="#f5c518" strokeWidth={2.5} strokeLinecap="round" />
+            {/* Base */}
+            <Path d="M40 56 L38 64 L58 64 L56 56" fill="none" stroke="#f5c518" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+            <Path d="M33 68 L63 68" stroke="#f5c518" strokeWidth={3} strokeLinecap="round" />
+          </Svg>
+        </Animated.View>
+
+        <Text style={styles.gameOverLabel}>GAME OVER</Text>
+        <Text style={styles.gameOverWinner}>
+          {isMe ? 'You win!' : `${winner.display_name} wins!`}
+        </Text>
+        <Text style={styles.gameOverCards}>
+          {winner.timeline.length} cards collected
+        </Text>
+
+        {/* Leaderboard */}
+        <View style={styles.gameOverLeaderboard}>
+          {sorted.map((p, i) => (
+            <View key={p.id} style={[styles.gameOverRow, p.id === myId && styles.gameOverRowMe]}>
+              <Text style={styles.gameOverRank}>{i + 1}</Text>
+              <Text style={styles.gameOverPlayerName} numberOfLines={1}>{p.display_name}</Text>
+              <Text style={styles.gameOverPlayerCards}>{p.timeline.length}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.gameOverFooter}>
+        <TouchableOpacity style={styles.revealNextBtn} onPress={() => router.replace('/')} activeOpacity={0.85}>
+          <Text style={styles.revealNextBtnText}>Back to Home</Text>
+        </TouchableOpacity>
+      </View>
+
+      <ConfettiBurst />
+    </SafeAreaView>
+  );
+}
+
+// ── Result icon ───────────────────────────────────────────────────────────────
+
+type ResultType = 'correct' | 'challenge' | 'trash';
+
+function ResultIcon({ result }: { result: ResultType }) {
+  const scale = useRef(new Animated.Value(0.5)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(scale, { toValue: 1, useNativeDriver: true, damping: 12, stiffness: 150 }),
+      Animated.timing(opacity, { toValue: 1, duration: 220, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  const isTrash = result === 'trash';
+  const color = isTrash ? '#e63946' : '#f5c518';
+  const glowBg = isTrash ? 'rgba(230,57,70,0.14)' : 'rgba(245,197,24,0.14)';
+  const ringColor = isTrash ? 'rgba(230,57,70,0.4)' : 'rgba(245,197,24,0.4)';
+
+  return (
+    <Animated.View style={{ transform: [{ scale }], opacity }}>
+      <Svg width={72} height={72} viewBox="0 0 72 72">
+        <Circle cx={36} cy={36} r={34} fill={glowBg} />
+        <Circle cx={36} cy={36} r={28} fill="none" stroke={ringColor} strokeWidth={1.5} />
+        {result === 'correct' && (
+          <Path d="M20 36 L30 47 L52 23" stroke={color} strokeWidth={4.5}
+            strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        )}
+        {result === 'challenge' && (
+          <>
+            <Circle cx={36} cy={36} r={11} fill="none" stroke={color} strokeWidth={1.5} />
+            <Circle cx={36} cy={36} r={5} fill={color} />
+          </>
+        )}
+        {result === 'trash' && (
+          <Path d="M23 23 L49 49 M49 23 L23 49" stroke={color} strokeWidth={4.5} strokeLinecap="round" />
+        )}
+      </Svg>
+    </Animated.View>
+  );
+}
+
 // ── Confetti burst (correct answer) ──────────────────────────────────────────
 
-const CONFETTI_COLORS = ['#f5c518', '#e63946', '#2a9d8f', '#e9c46a', '#f4a261', '#ffffff', '#c77dff', '#ff6b6b'];
+const CONFETTI_COLORS = ['#f5c518', '#ffffff', '#f0d060', '#ffe082', '#fff5cc', '#f5c518', '#ffffff', '#fad44b'];
 const CONFETTI_COUNT = 28;
 
 function ConfettiBurst() {
@@ -2103,24 +2243,33 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
   },
-  revealResultStrip: {
-    flexDirection: 'row',
+  revealResultPanel: {
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    gap: 12,
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: 16,
+    gap: 10,
     backgroundColor: C.surface,
     borderTopWidth: 1,
     borderTopColor: C.border,
+    overflow: 'hidden',
   },
-  revealResultTextBlock: {
-    flex: 1,
-    gap: 4,
+  revealResultAccent: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 2,
   },
-  revealResultEmoji: { fontSize: 36 },
-  revealResultText: { color: C.textPrimary, fontSize: FS.md, fontWeight: '700', lineHeight: 22 },
-  revealResultPlayer: { color: C.gold, fontWeight: '900' },
-  revealCoinBack: { color: C.textSub, fontSize: FS.sm, lineHeight: 17 },
+  revealResultHeadline: {
+    color: C.textPrimary,
+    fontSize: FS.lg,
+    fontWeight: '700',
+    textAlign: 'center',
+    lineHeight: 27,
+  },
+  revealResultPlayerHL: { color: C.gold, fontWeight: '900' },
+  revealCoinBack: { color: C.textSub, fontSize: FS.sm, lineHeight: 17, textAlign: 'center' },
   revealCoinBackName: { color: C.gold, fontWeight: '700' },
   revealFooter: { paddingHorizontal: 24, paddingBottom: 10 },
   revealNextBtn: {
@@ -2360,4 +2509,74 @@ const styles = StyleSheet.create({
 
   // Coin count in ScoreBar
   scoreChipCoins: { color: C.textMuted, fontSize: FS.xs, fontWeight: '600' },
+
+  // ── Game Over ──
+  gameOverContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+    gap: 12,
+  },
+  gameOverLabel: {
+    color: C.gold,
+    fontSize: FS.xs,
+    fontWeight: '700',
+    letterSpacing: 4,
+    textTransform: 'uppercase',
+    marginTop: 8,
+  },
+  gameOverWinner: {
+    color: C.textPrimary,
+    fontSize: FS['2xl'],
+    fontWeight: '900',
+    textAlign: 'center',
+    letterSpacing: 0.3,
+  },
+  gameOverCards: {
+    color: C.textSub,
+    fontSize: FS.base,
+    fontWeight: '500',
+  },
+  gameOverLeaderboard: {
+    width: '100%',
+    marginTop: 8,
+    gap: 6,
+  },
+  gameOverRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: C.surface,
+    borderRadius: R.sm,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 12,
+  },
+  gameOverRowMe: {
+    borderWidth: 1,
+    borderColor: 'rgba(245,197,24,0.35)',
+    backgroundColor: C.goldFaint,
+  },
+  gameOverRank: {
+    color: C.textMuted,
+    fontSize: FS.sm,
+    fontWeight: '700',
+    width: 18,
+    textAlign: 'center',
+  },
+  gameOverPlayerName: {
+    flex: 1,
+    color: C.textPrimary,
+    fontSize: FS.base,
+    fontWeight: '600',
+  },
+  gameOverPlayerCards: {
+    color: C.gold,
+    fontSize: FS.base,
+    fontWeight: '800',
+  },
+  gameOverFooter: {
+    paddingHorizontal: 24,
+    paddingBottom: 16,
+  },
 });
