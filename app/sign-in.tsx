@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { C, R, FS } from '@/constants/theme';
@@ -49,27 +49,33 @@ export default function SignInScreen() {
         <Text style={styles.headline}>Sign in to unlock Premium</Text>
 
         <View style={styles.buttons}>
-          <TouchableOpacity
-            style={styles.appleBtn}
-            onPress={handleApple}
-            disabled={loading}
-            activeOpacity={0.85}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.appleBtnText}>Continue with Apple</Text>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.googleBtn}
-            onPress={handleGoogle}
-            disabled={loading}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.googleBtnText}>Continue with Google</Text>
-          </TouchableOpacity>
+          {Platform.OS === 'ios' ? (
+            <TouchableOpacity
+              style={styles.appleBtn}
+              onPress={handleApple}
+              disabled={loading}
+              activeOpacity={0.85}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.appleBtnText}>Continue with Apple</Text>
+              )}
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.googleBtn}
+              onPress={handleGoogle}
+              disabled={loading}
+              activeOpacity={0.85}
+            >
+              {loading ? (
+                <ActivityIndicator color="#111" />
+              ) : (
+                <Text style={styles.googleBtnText}>Continue with Google</Text>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
 
         <Text style={styles.hint}>Only needed to host premium games</Text>
