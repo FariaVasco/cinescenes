@@ -9,7 +9,7 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import { C, R, FS } from '@/constants/theme';
 import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
-import { UpgradeSheet } from '@/components/UpgradeSheet';
+import { presentPaywall, presentCustomerCenter, checkPremium } from '@/lib/revenuecat';
 import { Collection } from '@/lib/database.types';
 
 const db = supabase as unknown as { from: (t: string) => any };
@@ -17,11 +17,10 @@ const db = supabase as unknown as { from: (t: string) => any };
 export default function ModeSelectScreen() {
   const router = useRouter();
   const {
-    authUser, isPremium,
+    authUser, isPremium, setIsPremium,
     setSelectedGameMode, setSelectedCollectionId,
   } = useAppStore();
 
-  const [upgradeVisible, setUpgradeVisible] = useState(false);
   const [collectionPickerVisible, setCollectionPickerVisible] = useState(false);
   const [collections, setCollections] = useState<Collection[]>([]);
   const [loadingCollections, setLoadingCollections] = useState(false);
@@ -52,16 +51,25 @@ export default function ModeSelectScreen() {
     router.push('/local-lobby');
   }
 
-  function handleCollections() {
+  async function handleCollections() {
     if (!authUser) {
       router.push('/sign-in?returnTo=mode-select');
       return;
     }
     if (!isPremium) {
-      setUpgradeVisible(true);
+      const purchased = await presentPaywall();
+      if (purchased) {
+        const premium = await checkPremium();
+        setIsPremium(premium);
+        if (premium) setCollectionPickerVisible(true);
+      }
       return;
     }
     setCollectionPickerVisible(true);
+  }
+
+  async function handleAccount() {
+    await presentCustomerCenter();
   }
 
   function handleSelectCollection(col: Collection) {
@@ -73,9 +81,16 @@ export default function ModeSelectScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-        <Text style={styles.backBtnText}>← Back</Text>
-      </TouchableOpacity>
+      <View style={styles.topBar}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <Text style={styles.backBtnText}>← Back</Text>
+        </TouchableOpacity>
+        {authUser && (
+          <TouchableOpacity style={styles.accountBtn} onPress={handleAccount}>
+            <Text style={styles.accountBtnText}>Account</Text>
+          </TouchableOpacity>
+        )}
+      </View>
 
       <View style={styles.content}>
         <Text style={styles.heading}>Choose a Mode</Text>
@@ -129,16 +144,6 @@ export default function ModeSelectScreen() {
         </View>
       </View>
 
-      {/* Upgrade sheet */}
-      <UpgradeSheet
-        visible={upgradeVisible}
-        onDismiss={() => setUpgradeVisible(false)}
-        onSuccess={() => {
-          setUpgradeVisible(false);
-          setCollectionPickerVisible(true);
-        }}
-      />
-
       {/* Collection picker */}
       <Modal
         visible={collectionPickerVisible}
@@ -184,8 +189,11 @@ export default function ModeSelectScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
+  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   backBtn: { paddingHorizontal: 20, paddingVertical: 12 },
   backBtnText: { color: 'rgba(255,255,255,0.4)', fontSize: FS.base },
+  accountBtn: { paddingHorizontal: 20, paddingVertical: 12 },
+  accountBtnText: { color: C.textSub, fontSize: FS.sm },
   content: {
     flex: 1, justifyContent: 'center',
     paddingHorizontal: 28, gap: 14,
