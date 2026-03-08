@@ -61,7 +61,7 @@ export default function PlayScreen() {
           >
             <MaterialCommunityIcons name="cards-playing-outline" size={36} color="#0a0a0a" />
             <Text style={styles.cardTitle}>Use Your Deck</Text>
-            <Text style={styles.cardSub}>Scan the QR code on your physical cards</Text>
+            <Text style={styles.cardSub}>Scan the QR code on your physical cards · rotates to landscape</Text>
           </TouchableOpacity>
 
           <TouchableOpacity

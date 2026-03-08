@@ -1624,49 +1624,49 @@ function GameOverScreen({ winner, players, myId }: { winner: Player; players: Pl
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.gameOverContent}>
-        {/* Trophy icon */}
-        <Animated.View style={{ transform: [{ scale: scaleAnim }], opacity: opacityAnim }}>
-          <Svg width={96} height={96} viewBox="0 0 96 96">
-            <Circle cx={48} cy={48} r={46} fill="rgba(245,197,24,0.12)" />
-            <Circle cx={48} cy={48} r={38} fill="none" stroke="rgba(245,197,24,0.35)" strokeWidth={1.5} />
-            {/* Cup body */}
-            <Path d="M34 28 L62 28 L58 56 Q48 62 38 56 Z" fill="none" stroke="#f5c518" strokeWidth={3} strokeLinejoin="round" />
-            {/* Handles */}
-            <Path d="M34 32 Q24 32 24 42 Q24 50 34 50" fill="none" stroke="#f5c518" strokeWidth={2.5} strokeLinecap="round" />
-            <Path d="M62 32 Q72 32 72 42 Q72 50 62 50" fill="none" stroke="#f5c518" strokeWidth={2.5} strokeLinecap="round" />
-            {/* Base */}
-            <Path d="M40 56 L38 64 L58 64 L56 56" fill="none" stroke="#f5c518" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-            <Path d="M33 68 L63 68" stroke="#f5c518" strokeWidth={3} strokeLinecap="round" />
-          </Svg>
-        </Animated.View>
+      <View style={styles.gameOverLayout}>
 
-        <Text style={styles.gameOverLabel}>GAME OVER</Text>
-        <Text style={styles.gameOverWinner}>
-          {isMe ? 'You win!' : `${winner.display_name} wins!`}
-        </Text>
-        <Text style={styles.gameOverCards}>
-          {winner.timeline.length} cards collected
-        </Text>
+        {/* ── Left panel: trophy + winner info + button ── */}
+        <View style={styles.gameOverLeft}>
+          <Animated.View style={{ transform: [{ scale: scaleAnim }], opacity: opacityAnim }}>
+            <Svg width={64} height={64} viewBox="0 0 96 96">
+              <Circle cx={48} cy={48} r={46} fill="rgba(245,197,24,0.12)" />
+              <Circle cx={48} cy={48} r={38} fill="none" stroke="rgba(245,197,24,0.35)" strokeWidth={1.5} />
+              <Path d="M34 28 L62 28 L58 56 Q48 62 38 56 Z" fill="none" stroke="#f5c518" strokeWidth={3} strokeLinejoin="round" />
+              <Path d="M34 32 Q24 32 24 42 Q24 50 34 50" fill="none" stroke="#f5c518" strokeWidth={2.5} strokeLinecap="round" />
+              <Path d="M62 32 Q72 32 72 42 Q72 50 62 50" fill="none" stroke="#f5c518" strokeWidth={2.5} strokeLinecap="round" />
+              <Path d="M40 56 L38 64 L58 64 L56 56" fill="none" stroke="#f5c518" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+              <Path d="M33 68 L63 68" stroke="#f5c518" strokeWidth={3} strokeLinecap="round" />
+            </Svg>
+          </Animated.View>
 
-        {/* Leaderboard */}
-        <View style={styles.gameOverLeaderboard}>
-          {sorted.map((p, i) => (
-            <View key={p.id} style={[styles.gameOverRow, p.id === myId && styles.gameOverRowMe]}>
-              <Text style={styles.gameOverRank}>{i + 1}</Text>
-              <Text style={styles.gameOverPlayerName} numberOfLines={1}>{p.display_name}</Text>
-              <Text style={styles.gameOverPlayerCards}>{p.timeline.length}</Text>
-            </View>
-          ))}
+          <Text style={styles.gameOverLabel}>GAME OVER</Text>
+          <Text style={styles.gameOverWinner}>
+            {isMe ? 'You win!' : `${winner.display_name} wins!`}
+          </Text>
+          <Text style={styles.gameOverCards}>
+            {winner.timeline.length} cards collected
+          </Text>
+
+          <TouchableOpacity style={[styles.revealNextBtn, { marginTop: 8, alignSelf: 'stretch' }]} onPress={() => router.replace('/')} activeOpacity={0.85}>
+            <Text style={styles.revealNextBtnText}>Back to Home</Text>
+          </TouchableOpacity>
         </View>
-      </View>
 
-      <View style={styles.gameOverFooter}>
-        <TouchableOpacity style={styles.revealNextBtn} onPress={() => router.replace('/')} activeOpacity={0.85}>
-          <Text style={styles.revealNextBtnText}>Back to Home</Text>
-        </TouchableOpacity>
-      </View>
+        {/* ── Right panel: leaderboard ── */}
+        <View style={styles.gameOverRight}>
+          <ScrollView contentContainerStyle={styles.gameOverLeaderboard} showsVerticalScrollIndicator={false}>
+            {sorted.map((p, i) => (
+              <View key={p.id} style={[styles.gameOverRow, p.id === myId && styles.gameOverRowMe]}>
+                <Text style={styles.gameOverRank}>{i + 1}</Text>
+                <Text style={styles.gameOverPlayerName} numberOfLines={1}>{p.display_name}</Text>
+                <Text style={styles.gameOverPlayerCards}>{p.timeline.length}</Text>
+              </View>
+            ))}
+          </ScrollView>
+        </View>
 
+      </View>
       <ConfettiBurst />
     </SafeAreaView>
   );
@@ -2637,12 +2637,23 @@ const styles = StyleSheet.create({
   scoreChipCoins: { color: C.textMuted, fontSize: FS.xs, fontWeight: '600' },
 
   // ── Game Over ──
-  gameOverContent: {
+  gameOverLayout: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  gameOverLeft: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 32,
-    gap: 12,
+    gap: 8,
+    borderRightWidth: 1,
+    borderRightColor: C.border,
+  },
+  gameOverRight: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
   },
   gameOverLabel: {
     color: C.gold,
@@ -2650,23 +2661,21 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 4,
     textTransform: 'uppercase',
-    marginTop: 8,
+    marginTop: 4,
   },
   gameOverWinner: {
     color: C.textPrimary,
-    fontSize: FS['2xl'],
+    fontSize: FS.xl,
     fontWeight: '900',
     textAlign: 'center',
     letterSpacing: 0.3,
   },
   gameOverCards: {
     color: C.textSub,
-    fontSize: FS.base,
+    fontSize: FS.sm,
     fontWeight: '500',
   },
   gameOverLeaderboard: {
-    width: '100%',
-    marginTop: 8,
     gap: 6,
   },
   gameOverRow: {
@@ -2700,9 +2709,5 @@ const styles = StyleSheet.create({
     color: C.gold,
     fontSize: FS.base,
     fontWeight: '800',
-  },
-  gameOverFooter: {
-    paddingHorizontal: 24,
-    paddingBottom: 16,
   },
 });
