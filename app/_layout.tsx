@@ -1,10 +1,20 @@
+import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { PaperProvider } from 'react-native-paper';
 import { cinemaTheme } from '@/lib/theme';
+import { initRevenueCat } from '@/lib/revenuecat';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function RootLayout() {
+  const { restoreSession } = useAuth();
+
+  useEffect(() => {
+    initRevenueCat();
+    restoreSession();
+  }, []);
+
   return (
     <SafeAreaProvider>
       <PaperProvider theme={cinemaTheme}>

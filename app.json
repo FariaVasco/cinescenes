@@ -18,7 +18,8 @@
       "bundleIdentifier": "com.cinescenes.app",
       "infoPlist": {
         "NSCameraUsageDescription": "Cinescenes needs camera access to scan movie card QR codes.",
-        "NSMicrophoneUsageDescription": "Cinescenes needs microphone access for the camera.",
+        "NSMicrophoneUsageDescription": "Cinescenes needs the microphone to let you speak your movie and director guess.",
+        "NSSpeechRecognitionUsageDescription": "Cinescenes uses speech recognition to let you name the movie and director.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -46,7 +47,9 @@
         {
           "cameraPermission": "Cinescenes needs camera access to scan movie card QR codes."
         }
-      ]
+      ],
+      "expo-speech-recognition",
+      "expo-apple-authentication"
     ],
     "extra": {
       "router": {},

@@ -21,6 +21,8 @@ export interface Database {
           poster_url: string | null;
           flagged: boolean;
           active: boolean;
+          standard_pool: boolean;
+          tags: string[];
           created_at: string;
         };
         Insert: {
@@ -34,6 +36,8 @@ export interface Database {
           poster_url?: string | null;
           flagged?: boolean;
           active?: boolean;
+          standard_pool?: boolean;
+          tags?: string[];
           created_at?: string;
         };
         Update: Partial<Database['public']['Tables']['movies']['Insert']>;
@@ -46,6 +50,8 @@ export interface Database {
           multiplayer_type: 'local' | 'online';
           status: 'lobby' | 'active' | 'finished';
           game_code: string;
+          game_mode: 'standard' | 'collection';
+          collection_id: string | null;
           created_at: string;
         };
         Insert: {
@@ -55,9 +61,49 @@ export interface Database {
           multiplayer_type?: 'local' | 'online';
           status?: 'lobby' | 'active' | 'finished';
           game_code: string;
+          game_mode?: 'standard' | 'collection';
+          collection_id?: string | null;
           created_at?: string;
         };
         Update: Partial<Database['public']['Tables']['games']['Insert']>;
+      };
+      profiles: {
+        Row: {
+          id: string;
+          is_premium: boolean;
+          premium_expires_at: string | null;
+          trial_used_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id: string;
+          is_premium?: boolean;
+          premium_expires_at?: string | null;
+          trial_used_at?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['profiles']['Insert']>;
+      };
+      collections: {
+        Row: {
+          id: string;
+          name: string;
+          description: string | null;
+          display_type: string;
+          tag: string;
+          cover_movie_id: string | null;
+          is_active: boolean;
+        };
+        Insert: {
+          id: string;
+          name: string;
+          description?: string | null;
+          display_type?: string;
+          tag: string;
+          cover_movie_id?: string | null;
+          is_active?: boolean;
+        };
+        Update: Partial<Database['public']['Tables']['collections']['Insert']>;
       };
       players: {
         Row: {
@@ -145,3 +191,5 @@ export type Player = Database['public']['Tables']['players']['Row'];
 export type Turn = Database['public']['Tables']['turns']['Row'];
 export type Challenge = Database['public']['Tables']['challenges']['Row'];
 export type Report = Database['public']['Tables']['reports']['Row'];
+export type Profile = Database['public']['Tables']['profiles']['Row'];
+export type Collection = Database['public']['Tables']['collections']['Row'];

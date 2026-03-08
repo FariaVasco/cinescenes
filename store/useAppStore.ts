@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { User } from '@supabase/supabase-js';
 import { Movie, Game, Player, Turn, Challenge } from '@/lib/database.types';
 
 interface AppState {
@@ -18,6 +19,18 @@ interface AppState {
   tvMode: boolean;
   setTvMode: (v: boolean) => void;
 
+  // Auth + premium
+  authUser: User | null;
+  isPremium: boolean;
+  setAuthUser: (u: User | null) => void;
+  setIsPremium: (v: boolean) => void;
+
+  // Game mode selection
+  selectedGameMode: 'standard' | 'collection';
+  selectedCollectionId: string | null;
+  setSelectedGameMode: (m: 'standard' | 'collection') => void;
+  setSelectedCollectionId: (id: string | null) => void;
+
   // Phase 3+: game state
   gameId: string | null;
   playerId: string | null;
@@ -30,11 +43,13 @@ interface AppState {
   currentTurn: Turn | null;
   challenges: Challenge[];
   isHost: boolean;
+  startingMovieIds: string[];
   setGame: (g: Game | null) => void;
   setPlayers: (p: Player[]) => void;
   setCurrentTurn: (t: Turn | null) => void;
   setChallenges: (c: Challenge[]) => void;
   setIsHost: (v: boolean) => void;
+  setStartingMovieIds: (ids: string[]) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -50,6 +65,16 @@ export const useAppStore = create<AppState>((set) => ({
   tvMode: false,
   setTvMode: (v) => set({ tvMode: v }),
 
+  authUser: null,
+  isPremium: false,
+  setAuthUser: (u) => set({ authUser: u }),
+  setIsPremium: (v) => set({ isPremium: v }),
+
+  selectedGameMode: 'standard',
+  selectedCollectionId: null,
+  setSelectedGameMode: (m) => set({ selectedGameMode: m }),
+  setSelectedCollectionId: (id) => set({ selectedCollectionId: id }),
+
   gameId: null,
   playerId: null,
   setGameId: (id) => set({ gameId: id }),
@@ -60,9 +85,11 @@ export const useAppStore = create<AppState>((set) => ({
   currentTurn: null,
   challenges: [],
   isHost: false,
+  startingMovieIds: [],
   setGame: (g) => set({ game: g }),
   setPlayers: (p) => set({ players: p }),
   setCurrentTurn: (t) => set({ currentTurn: t }),
   setChallenges: (c) => set({ challenges: c }),
   setIsHost: (v) => set({ isHost: v }),
+  setStartingMovieIds: (ids) => set({ startingMovieIds: ids }),
 }));

@@ -383,6 +383,7 @@ insert into movies (title, year, director, active) values
   ('Drive', 2011, 'Nicolas Winding Refn', false),
   ('Midnight in Paris', 2011, 'Woody Allen', false),
   ('A Separation (جدایی نادر از سیمین)', 2011, 'Asghar Farhadi', false),
+  ('Incendies', 2011, 'Denis Villeneuve', false)
   ('The Intouchables', 2011, 'Olivier Nakache & Eric Toledano', false),
   ('Carnage', 2011, 'Roman Polanski', false),
   ('Les Misérables', 2012, 'Tom Hooper', false),

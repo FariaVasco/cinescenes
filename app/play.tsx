@@ -66,7 +66,7 @@ export default function PlayScreen() {
 
           <TouchableOpacity
             style={[styles.card, styles.cardSecondary]}
-            onPress={() => router.push('/local-lobby')}
+            onPress={() => router.push('/mode-select')}
             activeOpacity={0.8}
           >
             <MaterialCommunityIcons name="account-group" size={36} color="#f5c518" />

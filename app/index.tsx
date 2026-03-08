@@ -1,21 +1,30 @@
-import { useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useCallback } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { CinescenesLogo } from '@/components/CinescenesLogo';
+import { CinemaButton } from '@/components/CinemaButton';
+import { DecoFilmReel, DecoClapperboard, DecoStar } from '@/components/CinemaIcons';
+import { C, T, SP } from '@/constants/theme';
 
-const DECORATIONS = [
-  { emoji: '🎬', top: '5%',  left: '5%',   rotate: '-15deg', opacity: 0.09 },
-  { emoji: '🍿', top: '10%', right: '6%',  rotate: '10deg',  opacity: 0.08 },
-  { emoji: '⭐', top: '3%',  left: '48%',  rotate: '5deg',   opacity: 0.07 },
-  { emoji: '🎭', top: '70%', left: '3%',   rotate: '20deg',  opacity: 0.09 },
-  { emoji: '🎥', top: '74%', right: '5%',  rotate: '-12deg', opacity: 0.1  },
-  { emoji: '🌟', top: '42%', left: '52%',  rotate: '15deg',  opacity: 0.06 },
-  { emoji: '🎬', top: '83%', left: '30%',  rotate: '-8deg',  opacity: 0.07 },
-  { emoji: '🍿', top: '29%', left: '8%',   rotate: '22deg',  opacity: 0.07 },
-  { emoji: '⭐', top: '56%', right: '10%', rotate: '-5deg',  opacity: 0.07 },
-  { emoji: '🎭', top: '20%', left: '62%',  rotate: '30deg',  opacity: 0.06 },
+type DecoEntry = {
+  Component: React.ComponentType<{ size?: number; opacity?: number }>;
+  size: number; top: string; rotate: string; opacity: number;
+  left?: string; right?: string;
+};
+
+const DECOS: DecoEntry[] = [
+  { Component: DecoClapperboard, size: 80,  top: '5%',  left: '5%',   rotate: '-15deg', opacity: 0.07 },
+  { Component: DecoFilmReel,     size: 96,  top: '10%', right: '6%',  rotate: '10deg',  opacity: 0.08 },
+  { Component: DecoStar,         size: 64,  top: '3%',  left: '48%',  rotate: '5deg',   opacity: 0.07 },
+  { Component: DecoClapperboard, size: 72,  top: '70%', left: '3%',   rotate: '20deg',  opacity: 0.06 },
+  { Component: DecoFilmReel,     size: 88,  top: '74%', right: '5%',  rotate: '-12deg', opacity: 0.07 },
+  { Component: DecoStar,         size: 56,  top: '42%', left: '52%',  rotate: '15deg',  opacity: 0.06 },
+  { Component: DecoClapperboard, size: 68,  top: '83%', left: '30%',  rotate: '-8deg',  opacity: 0.06 },
+  { Component: DecoFilmReel,     size: 80,  top: '29%', left: '8%',   rotate: '22deg',  opacity: 0.07 },
+  { Component: DecoStar,         size: 48,  top: '56%', right: '10%', rotate: '-5deg',  opacity: 0.06 },
+  { Component: DecoStar,         size: 60,  top: '20%', left: '62%',  rotate: '30deg',  opacity: 0.05 },
 ];
 
 export default function LandingScreen() {
@@ -29,22 +38,21 @@ export default function LandingScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {DECORATIONS.map((d, i) => (
-        <Text
+      {/* SVG decorative background */}
+      {DECOS.map(({ Component, size, top, left, right, rotate, opacity }, i) => (
+        <View
           key={i}
           style={{
             position: 'absolute',
-            fontSize: 36,
-            opacity: d.opacity,
-            top: d.top as any,
-            left: d.left as any,
-            right: d.right as any,
-            transform: [{ rotate: d.rotate }],
+            top: top as any,
+            left: left as any,
+            right: right as any,
+            transform: [{ rotate }],
           }}
           pointerEvents="none"
         >
-          {d.emoji}
-        </Text>
+          <Component size={size} opacity={opacity} />
+        </View>
       ))}
 
       <View style={styles.hero}>
@@ -53,21 +61,13 @@ export default function LandingScreen() {
       </View>
 
       <View style={styles.actions}>
-        <TouchableOpacity
-          style={styles.playButton}
-          onPress={() => router.push('/play')}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.playButtonText}>Let's Play  →</Text>
-        </TouchableOpacity>
+        <CinemaButton size="lg" onPress={() => router.push('/play')} style={styles.fullWidth}>
+          LET'S PLAY
+        </CinemaButton>
 
-        <TouchableOpacity
-          style={styles.rulesButton}
-          onPress={() => router.push('/rules')}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.rulesButtonText}>Rules</Text>
-        </TouchableOpacity>
+        <CinemaButton variant="ghost" size="md" onPress={() => router.push('/rules')} style={styles.fullWidth}>
+          HOW TO PLAY
+        </CinemaButton>
       </View>
     </SafeAreaView>
   );
@@ -76,56 +76,24 @@ export default function LandingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#100a20',
-    paddingHorizontal: 28,
+    backgroundColor: C.bg,
+    paddingHorizontal: SP.lg + 4,
   },
   hero: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 16,
+    gap: SP.md,
   },
   tagline: {
-    fontSize: 14,
-    color: '#9a9aaa',
-    letterSpacing: 2.5,
-    textAlign: 'center',
-    textTransform: 'uppercase',
-    fontWeight: '500',
-    marginTop: 4,
+    ...T.overline,
+    marginTop: SP.xs,
   },
   actions: {
-    paddingBottom: 16,
-    gap: 12,
+    paddingBottom: SP.md,
+    gap: SP.sm + 4,
   },
-  playButton: {
-    backgroundColor: '#f5c518',
-    borderRadius: 22,
-    paddingVertical: 18,
-    alignItems: 'center',
-    shadowColor: '#f5c518',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  playButtonText: {
-    fontSize: 19,
-    fontWeight: '900',
-    color: '#0a0a0a',
-    letterSpacing: 0.5,
-  },
-  rulesButton: {
-    borderRadius: 22,
-    paddingVertical: 16,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
-  },
-  rulesButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.6)',
-    letterSpacing: 0.5,
+  fullWidth: {
+    width: '100%',
   },
 });

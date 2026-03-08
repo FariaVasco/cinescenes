@@ -34,7 +34,7 @@ const { createClient } = require('@supabase/supabase-js');
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const TMDB_BASE          = 'https://api.themoviedb.org/3';
-const FRAMES_FPS         = 0.5;   // 1 frame every 2s — title cards stay on screen ≥ 2s
+const FRAMES_FPS         = 1;     // 1 frame every 1s — catches short title cards
 const MAX_CLIP_S         = 60;    // max safe window length (seconds)
 const MIN_CLIP_S         = 30;    // minimum useful window
 const BUFFER_S           = 2;     // seconds of padding around flagged segments

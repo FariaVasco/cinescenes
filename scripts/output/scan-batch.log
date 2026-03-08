@@ -1,0 +1,189 @@
+[2026-03-01T15:00:30.616Z] ❌  Supabase error: column movies.tmdb_id does not exist
+[2026-03-01T15:01:47.571Z] ✅  Nothing to scan — all movies already have safe_start set.
+[2026-03-01T15:04:04.612Z] 
+────────────────────────────────────────────────────────────
+[2026-03-01T15:04:04.614Z] 🎬  Batch scan starting — 10 movie(s) to process
+[2026-03-01T15:04:04.615Z] ────────────────────────────────────────────────────────────
+[2026-03-01T15:04:04.615Z] 
+[1/10]  "Anora" (2024)
+[2026-03-01T15:39:06.602Z]   ✅  [1/10]  "Anora" (2024)  →  done
+[2026-03-01T15:39:06.609Z]   ⏳  Waiting 3s before next movie…
+[2026-03-01T15:39:09.611Z] 
+[2/10]  "A Complete Unknown" (2024)
+[2026-03-01T17:06:02.434Z]   ✅  [2/10]  "A Complete Unknown" (2024)  →  done
+[2026-03-01T17:06:02.436Z]   ⏳  Waiting 3s before next movie…
+[2026-03-01T17:06:05.435Z] 
+[3/10]  "The Brutalist" (2024)
+[2026-03-01T17:58:26.876Z]   ✅  [3/10]  "The Brutalist" (2024)  →  done
+[2026-03-01T17:58:26.876Z]   ⏳  Waiting 3s before next movie…
+[2026-03-01T17:58:29.876Z] 
+[4/10]  "Wicked" (2024)
+[2026-03-01T18:59:08.865Z]   ⏱  [4/10]  "Wicked" (2024)  →  timed out after 10 min — skipping
+[2026-03-01T18:59:09.805Z]   ⏳  Waiting 3s before next movie…
+[2026-03-01T18:59:12.805Z] 
+[5/10]  "Gladiator II" (2024)
+[2026-03-01T20:03:25.495Z]   ⏱  [5/10]  "Gladiator II" (2024)  →  timed out after 10 min — skipping
+[2026-03-01T20:03:25.506Z]   ⏳  Waiting 3s before next movie…
+[2026-03-01T20:03:28.509Z] 
+[6/10]  "Dune: Part Two" (2024)
+[2026-03-01T20:43:03.092Z]   ✅  [6/10]  "Dune: Part Two" (2024)  →  done
+[2026-03-01T20:43:03.092Z]   ⏳  Waiting 3s before next movie…
+[2026-03-01T20:43:06.093Z] 
+[7/10]  "The Substance" (2024)
+[2026-03-01T20:45:09.075Z]   ✅  [7/10]  "The Substance" (2024)  →  done
+[2026-03-01T20:45:09.076Z]   ⏳  Waiting 3s before next movie…
+[2026-03-01T21:00:13.754Z] 
+[8/10]  "Conclave" (2024)
+[2026-03-01T21:01:58.084Z]   ✅  [8/10]  "Conclave" (2024)  →  done
+[2026-03-01T21:01:58.084Z]   ⏳  Waiting 3s before next movie…
+[2026-03-01T21:02:01.087Z] 
+[9/10]  "All We Imagine as Light" (2024)
+[2026-03-01T21:34:36.704Z]   ✅  [9/10]  "All We Imagine as Light" (2024)  →  done
+[2026-03-01T21:34:36.704Z]   ⏳  Waiting 3s before next movie…
+[2026-03-01T21:34:39.705Z] 
+[10/10]  "I'm Still Here (Ainda Estou Aqui)" (2024)
+[2026-03-01T21:44:18.345Z]   ✅  [10/10]  "I'm Still Here (Ainda Estou Aqui)" (2024)  →  done
+[2026-03-01T21:44:18.345Z] 
+────────────────────────────────────────────────────────────
+[2026-03-01T21:44:18.345Z] 📊  Batch complete
+[2026-03-01T21:44:18.345Z]     ✅  Success:  8
+[2026-03-01T21:44:18.345Z]     ⏱  Timed out: 2
+[2026-03-01T21:44:18.345Z]     Log: /Users/vascolencastre/cinescenes/scripts/output/scan-batch.log
+[2026-03-01T21:44:18.345Z] ────────────────────────────────────────────────────────────
+
+[2026-03-01T22:27:40.984Z] 
+────────────────────────────────────────────────────────────
+[2026-03-01T22:27:40.988Z] 🎬  Batch scan starting — 1 movie(s) to process
+[2026-03-01T22:27:40.988Z] ────────────────────────────────────────────────────────────
+[2026-03-01T22:27:40.989Z] 
+[1/1]  "Wicked" (2024)
+[2026-03-01T22:32:57.630Z]   ✅  [1/1]  "Wicked" (2024)  →  done
+[2026-03-01T22:32:57.633Z] 
+────────────────────────────────────────────────────────────
+[2026-03-01T22:32:57.633Z] 📊  Batch complete
+[2026-03-01T22:32:57.634Z]     ✅  Success:  1
+[2026-03-01T22:32:57.634Z]     Log: /Users/vascolencastre/cinescenes/scripts/output/scan-batch.log
+[2026-03-01T22:32:57.634Z] ────────────────────────────────────────────────────────────
+
+[2026-03-03T18:32:08.749Z] ✅  Nothing to scan — all movies already have safe_start set.
+[2026-03-03T18:32:21.674Z] ✅  Nothing to scan — all movies already have safe_start set.
+[2026-03-03T18:34:56.192Z] 
+────────────────────────────────────────────────────────────
+[2026-03-03T18:34:56.195Z] 🎬  Batch scan starting — 11 movie(s) to process
+[2026-03-03T18:34:56.196Z] ────────────────────────────────────────────────────────────
+[2026-03-03T18:34:56.196Z] 
+[1/11]  "Barbie" (2023)
+[2026-03-03T18:36:47.504Z]   ✅  [1/11]  "Barbie" (2023)  →  done
+[2026-03-03T18:36:47.506Z]   ⏳  Waiting 3s before next movie…
+[2026-03-03T18:36:50.508Z] 
+[2/11]  "The Super Mario Bros. Movie" (2023)
+[2026-03-03T18:36:57.313Z]   ❌  [2/11]  "The Super Mario Bros. Movie" (2023)  →  exited with code 1
+[2026-03-03T18:36:57.395Z]   ⏳  Waiting 3s before next movie…
+[2026-03-03T18:37:00.395Z] 
+[3/11]  "Oppenheimer" (2023)
+[2026-03-03T18:41:24.080Z]   ✅  [3/11]  "Oppenheimer" (2023)  →  done
+[2026-03-03T18:41:24.080Z]   ⏳  Waiting 3s before next movie…
+[2026-03-03T18:41:27.081Z] 
+[4/11]  "The Zone of Interest" (2023)
+[2026-03-03T18:44:34.900Z]   ✅  [4/11]  "The Zone of Interest" (2023)  →  done
+[2026-03-03T18:44:34.900Z]   ⏳  Waiting 3s before next movie…
+[2026-03-03T18:44:37.901Z] 
+[5/11]  "Poor Things" (2023)
+[2026-03-03T18:47:40.511Z]   ✅  [5/11]  "Poor Things" (2023)  →  done
+[2026-03-03T18:47:40.512Z]   ⏳  Waiting 3s before next movie…
+[2026-03-03T18:47:43.514Z] 
+[6/11]  "All of us strangers" (2023)
+[2026-03-03T19:16:14.518Z]   ✅  [6/11]  "All of us strangers" (2023)  →  done
+[2026-03-03T19:16:14.520Z]   ⏳  Waiting 3s before next movie…
+[2026-03-03T19:16:17.522Z] 
+[7/11]  "Killers of the Flower Moon" (2023)
+[2026-03-03T19:36:40.357Z]   ✅  [7/11]  "Killers of the Flower Moon" (2023)  →  done
+[2026-03-03T19:36:40.357Z]   ⏳  Waiting 3s before next movie…
+[2026-03-03T19:36:43.359Z] 
+[8/11]  "Past Lives" (2023)
+[2026-03-03T20:26:05.678Z]   ✅  [8/11]  "Past Lives" (2023)  →  done
+[2026-03-03T20:26:05.681Z]   ⏳  Waiting 3s before next movie…
+[2026-03-03T20:26:08.683Z] 
+[9/11]  "Anatomy of a Fall (Anatomie d'une chute)" (2023)
+[2026-03-03T20:51:08.718Z]   ⏱  [9/11]  "Anatomy of a Fall (Anatomie d'une chute)" (2023)  →  timed out after 10 min — skipping
+[2026-03-03T20:51:09.613Z]   ⏳  Waiting 3s before next movie…
+[2026-03-03T20:51:12.615Z] 
+[10/11]  "Monster (怪物)" (2023)
+[2026-03-03T20:59:26.895Z]   ✅  [10/11]  "Monster (怪物)" (2023)  →  done
+[2026-03-03T20:59:26.896Z]   ⏳  Waiting 3s before next movie…
+[2026-03-03T20:59:29.898Z] 
+[11/11]  "Perfect Days" (2023)
+[2026-03-03T21:17:44.922Z]   ✅  [11/11]  "Perfect Days" (2023)  →  done
+[2026-03-03T21:17:44.922Z] 
+────────────────────────────────────────────────────────────
+[2026-03-03T21:17:44.922Z] 📊  Batch complete
+[2026-03-03T21:17:44.922Z]     ✅  Success:  9
+[2026-03-03T21:17:44.922Z]     ❌  Failed:   1  (safe_start set to -1 — rerun with --retry-failed)
+[2026-03-03T21:17:44.922Z]     ⏱  Timed out: 1
+[2026-03-03T21:17:44.922Z]     Log: /Users/vascolencastre/cinescenes/scripts/output/scan-batch.log
+[2026-03-03T21:17:44.922Z] ────────────────────────────────────────────────────────────
+
+[2026-03-08T17:07:18.251Z] 
+────────────────────────────────────────────────────────────
+[2026-03-08T17:07:18.255Z] 🎬  Batch scan starting — 10 movie(s) to process
+[2026-03-08T17:07:18.256Z] ────────────────────────────────────────────────────────────
+[2026-03-08T17:07:18.256Z] 
+[1/10]  "The Father" (2020)
+[2026-03-08T17:11:22.727Z]   ✅  [1/10]  "The Father" (2020)  →  done
+[2026-03-08T17:11:22.727Z]   ⏳  Waiting 3s before next movie…
+[2026-03-08T17:11:25.728Z] 
+[2/10]  "Ma Rainey's Black Bottom" (2020)
+[2026-03-08T17:19:21.981Z]   ✅  [2/10]  "Ma Rainey's Black Bottom" (2020)  →  done
+[2026-03-08T17:19:21.984Z]   ⏳  Waiting 3s before next movie…
+[2026-03-08T17:19:24.985Z] 
+[3/10]  "Tenet" (2020)
+[2026-03-08T17:23:29.131Z]   ✅  [3/10]  "Tenet" (2020)  →  done
+[2026-03-08T17:23:29.131Z]   ⏳  Waiting 3s before next movie…
+[2026-03-08T17:23:32.133Z] 
+[4/10]  "Da 5 Bloods" (2020)
+[2026-03-08T17:41:03.443Z]   ✅  [4/10]  "Da 5 Bloods" (2020)  →  done
+[2026-03-08T17:41:03.446Z]   ⏳  Waiting 3s before next movie…
+[2026-03-08T17:41:06.453Z] 
+[5/10]  "Nomadland" (2020)
+[2026-03-08T20:43:42.375Z]   ✅  [5/10]  "Nomadland" (2020)  →  done
+[2026-03-08T20:43:42.377Z]   ⏳  Waiting 3s before next movie…
+[2026-03-08T20:43:45.379Z] 
+[6/10]  "I'm Thinking of Ending Things" (2020)
+[2026-03-08T21:06:58.343Z]   ✅  [6/10]  "I'm Thinking of Ending Things" (2020)  →  done
+[2026-03-08T21:06:58.345Z]   ⏳  Waiting 3s before next movie…
+[2026-03-08T21:07:01.346Z] 
+[7/10]  "Mank" (2020)
+[2026-03-08T21:22:48.881Z]   ✅  [7/10]  "Mank" (2020)  →  done
+[2026-03-08T21:22:48.884Z]   ⏳  Waiting 3s before next movie…
+[2026-03-08T21:22:51.886Z] 
+[8/10]  "The Trial of the Chicago 7" (2020)
+[2026-03-08T21:31:42.189Z]   ✅  [8/10]  "The Trial of the Chicago 7" (2020)  →  done
+[2026-03-08T21:31:42.191Z]   ⏳  Waiting 3s before next movie…
+[2026-03-08T21:31:45.194Z] 
+[9/10]  "Another Round (Druk)" (2020)
+[2026-03-08T21:55:37.284Z]   ✅  [9/10]  "Another Round (Druk)" (2020)  →  done
+[2026-03-08T21:55:37.286Z]   ⏳  Waiting 3s before next movie…
+[2026-03-08T21:55:40.286Z] 
+[10/10]  "Quo Vadis, Aida?" (2020)
+[2026-03-08T22:09:23.261Z]   ✅  [10/10]  "Quo Vadis, Aida?" (2020)  →  done
+[2026-03-08T22:09:23.265Z] 
+────────────────────────────────────────────────────────────
+[2026-03-08T22:09:23.266Z] 📊  Batch complete
+[2026-03-08T22:09:23.266Z]     ✅  Success:  10
+[2026-03-08T22:09:23.266Z]     Log: /Users/vascolencastre/cinescenes/scripts/output/scan-batch.log
+[2026-03-08T22:09:23.266Z] ────────────────────────────────────────────────────────────
+
+[2026-03-08T22:09:38.087Z] 
+────────────────────────────────────────────────────────────
+[2026-03-08T22:09:38.101Z] 🎬  Batch scan starting — 10 movie(s) to process
+[2026-03-08T22:09:38.101Z] ────────────────────────────────────────────────────────────
+[2026-03-08T22:09:38.101Z] 
+[1/10]  "Licorice Pizza" (2021)
+[2026-03-08T22:11:44.775Z]   ✅  [1/10]  "Licorice Pizza" (2021)  →  done
+[2026-03-08T22:11:44.776Z]   ⏳  Waiting 3s before next movie…
+[2026-03-08T22:11:47.779Z] 
+[2/10]  "Belfast" (2021)
+[2026-03-08T22:13:37.340Z]   ✅  [2/10]  "Belfast" (2021)  →  done
+[2026-03-08T22:13:37.340Z]   ⏳  Waiting 3s before next movie…
+[2026-03-08T22:13:40.341Z] 
+[3/10]  "No Time to Die" (2021)

@@ -9,6 +9,7 @@ import {
   Animated,
 } from 'react-native';
 import { C, R, FS } from '@/constants/theme';
+import { CinemaButton } from '@/components/CinemaButton';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ScreenOrientation from 'expo-screen-orientation';
@@ -159,26 +160,33 @@ export default function RulesScreen() {
 
       {/* ── Navigation + CTA ── */}
       <View style={styles.nav}>
-        <TouchableOpacity
-          style={[styles.navBtn, page === 0 && styles.navBtnHidden]}
+        <CinemaButton
+          variant="ghost"
+          size="sm"
           onPress={() => goTo(page - 1)}
           disabled={page === 0}
+          style={[styles.navBtn, page === 0 && styles.navBtnHidden]}
         >
-          <Text style={styles.navBtnText}>← Prev</Text>
-        </TouchableOpacity>
+          ← Prev
+        </CinemaButton>
 
         {isLast ? (
-          <TouchableOpacity
-            style={styles.ctaButton}
+          <CinemaButton
+            size="lg"
             onPress={() => router.push('/play')}
-            activeOpacity={0.85}
+            style={styles.navFlex}
           >
-            <Text style={styles.ctaText}>Let's Play  →</Text>
-          </TouchableOpacity>
+            LET'S PLAY
+          </CinemaButton>
         ) : (
-          <TouchableOpacity style={styles.nextBtn} onPress={() => goTo(page + 1)}>
-            <Text style={styles.nextBtnText}>Next →</Text>
-          </TouchableOpacity>
+          <CinemaButton
+            variant="ghost"
+            size="md"
+            onPress={() => goTo(page + 1)}
+            style={styles.navFlex}
+          >
+            Next →
+          </CinemaButton>
         )}
       </View>
 
@@ -290,48 +298,13 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   navBtn: {
-    paddingVertical: 14,
-    paddingHorizontal: 20,
+    minWidth: 80,
   },
   navBtnHidden: {
     opacity: 0,
     pointerEvents: 'none',
   },
-  navBtnText: {
-    color: C.textMuted,
-    fontSize: FS.base,
-    fontWeight: '600',
-  },
-  nextBtn: {
+  navFlex: {
     flex: 1,
-    backgroundColor: C.surface,
-    borderRadius: R.card,
-    paddingVertical: 16,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: C.border,
-  },
-  nextBtnText: {
-    color: C.textPrimary,
-    fontSize: FS.md,
-    fontWeight: '700',
-  },
-  ctaButton: {
-    flex: 1,
-    backgroundColor: C.gold,
-    borderRadius: R.card,
-    paddingVertical: 16,
-    alignItems: 'center',
-    shadowColor: C.gold,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  ctaText: {
-    fontSize: FS.md,
-    fontWeight: '900',
-    color: C.textOnGold,
-    letterSpacing: 0.5,
   },
 });

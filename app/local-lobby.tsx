@@ -37,6 +37,9 @@ export default function LocalLobbyScreen() {
     setCurrentTurn,
     setChallenges,
     setGameId,
+    setStartingMovieIds,
+    selectedGameMode,
+    selectedCollectionId,
   } = useAppStore();
 
   const [view, setView] = useState<LobbyView>('choice');
@@ -127,7 +130,14 @@ export default function LocalLobbyScreen() {
       const code = generateCode();
       const { data: newGame, error: gameErr } = await db
         .from('games')
-        .insert({ game_code: code, status: 'lobby', mode: 'digital', multiplayer_type: 'local' })
+        .insert({
+          game_code: code,
+          status: 'lobby',
+          mode: 'digital',
+          multiplayer_type: 'local',
+          game_mode: selectedGameMode,
+          collection_id: selectedCollectionId,
+        })
         .select()
         .single() as { data: Game | null; error: any };
       if (gameErr || !newGame) throw gameErr ?? new Error('No game');
@@ -213,7 +223,19 @@ export default function LocalLobbyScreen() {
     if (!localGame || localPlayers.length < 1) return;
     setLoading(true);
     try {
-      const pool = [...activeMovies];
+      let pool: typeof activeMovies;
+      if (localGame.game_mode === 'collection' && localGame.collection_id) {
+        const { data: col } = await db
+          .from('collections')
+          .select('tag')
+          .eq('id', localGame.collection_id)
+          .single() as { data: { tag: string } | null };
+        pool = col
+          ? activeMovies.filter((m) => (m.tags ?? []).includes(col.tag))
+          : activeMovies.filter((m) => m.standard_pool === true);
+      } else {
+        pool = activeMovies.filter((m) => m.standard_pool === true);
+      }
       if (pool.length < localPlayers.length + 1) throw new Error('Not enough movies available');
 
       // Shuffle pool
@@ -238,10 +260,27 @@ export default function LocalLobbyScreen() {
       const firstTurnMovie = remaining[Math.floor(Math.random() * remaining.length)];
       const firstPlayer = localPlayers[0];
 
+      // Mark game active BEFORE inserting phantom turns so RLS policies (if any) allow the inserts
       await db
         .from('games')
         .update({ status: 'active' })
         .eq('id', localGame.id);
+
+      // Record each starting card as a completed turn so all devices exclude it from future draws.
+      // Also store in Zustand so the host device has a local backup.
+      const startingIds = [...usedIds];
+      setStartingMovieIds(startingIds);
+      for (const [i, movieId] of startingIds.entries()) {
+        const { error: phantomErr } = await db.from('turns').insert({
+          game_id: localGame.id,
+          active_player_id: localPlayers[i].id,
+          movie_id: movieId,
+          status: 'complete',
+        });
+        if (phantomErr) {
+          console.warn('[LOBBY] phantom turn insert failed:', phantomErr.message, phantomErr.code);
+        }
+      }
 
       await db.from('turns').insert({
         game_id: localGame.id,

@@ -9,8 +9,9 @@ import {
   Pressable,
 } from 'react-native';
 import { Snackbar } from 'react-native-paper';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
+import { CinemaButton } from '@/components/CinemaButton';
+import { C, R, FS } from '@/constants/theme';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { TrailerPlayer, TrailerPlayerHandle } from '@/components/TrailerPlayer';
@@ -210,25 +211,19 @@ export default function TrailerScreen() {
             </View>
 
             <View style={styles.endedCenter}>
-              <Text style={styles.endedTitle}>Ready to guess? 🎬</Text>
+              <Text style={styles.endedTitle}>Ready to guess?</Text>
               <Text style={styles.endedSubtitle}>What year is this movie from?</Text>
             </View>
 
             <View style={styles.endedActions}>
               {!hasReplayed && (
-                <TouchableOpacity
-                  style={[styles.actionButton, styles.replayButton]}
-                  onPress={handleReplay}
-                >
-                  <Text style={styles.replayButtonText}>↺  Replay</Text>
-                </TouchableOpacity>
+                <CinemaButton variant="ghost" size="md" onPress={handleReplay}>
+                  ↺  Replay
+                </CinemaButton>
               )}
-              <TouchableOpacity
-                style={[styles.actionButton, styles.nextButton]}
-                onPress={handleNext}
-              >
-                <Text style={styles.nextButtonText}>Let's guess! →</Text>
-              </TouchableOpacity>
+              <CinemaButton size="lg" onPress={handleNext}>
+                LET'S GUESS →
+              </CinemaButton>
             </View>
           </SafeAreaView>
         </View>
@@ -252,15 +247,16 @@ export default function TrailerScreen() {
               <Text style={styles.exitBody}>Your current trailer will be lost.</Text>
             </View>
             <View style={styles.exitSheetRight}>
-              <TouchableOpacity style={styles.stayBtn} onPress={() => setShowExitDialog(false)}>
-                <Text style={styles.stayBtnText}>Stay</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.leaveBtn}
+              <CinemaButton size="sm" onPress={() => setShowExitDialog(false)}>
+                Stay
+              </CinemaButton>
+              <CinemaButton
+                variant="ghost"
+                size="sm"
                 onPress={() => { setShowExitDialog(false); setFromScanner(false); router.replace('/play'); }}
               >
-                <Text style={styles.leaveBtnText}>Leave →</Text>
-              </TouchableOpacity>
+                Leave →
+              </CinemaButton>
             </View>
           </TouchableOpacity>
         </TouchableOpacity>
@@ -429,41 +425,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingBottom: 16,
   },
-  actionButton: {
-    paddingHorizontal: 32,
-    paddingVertical: 16,
-    borderRadius: 22,
-  },
-  replayButton: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 6,
-  },
-  replayButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
-  nextButton: {
-    backgroundColor: '#f5c518',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 6,
-  },
-  nextButtonText: {
-    color: '#0a0a0a',
-    fontSize: 17,
-    fontWeight: '800',
-    letterSpacing: 0.3,
-  },
 
   // ── Modals (landscape-optimised) ──
   modalBackdrop: {
@@ -479,8 +440,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 24,
-    backgroundColor: '#1a1a2e',
-    borderRadius: 18,
+    backgroundColor: C.surface,
+    borderRadius: R.card,
     paddingVertical: 22,
     paddingHorizontal: 28,
     width: '100%',
@@ -491,43 +452,23 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   exitTitle: {
-    color: '#fff',
-    fontSize: 17,
+    color: C.textPrimary,
+    fontSize: FS.md,
     fontWeight: '700',
   },
   exitBody: {
-    color: '#888',
-    fontSize: 13,
+    color: C.textMuted,
+    fontSize: FS.sm,
   },
   exitSheetRight: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
   },
-  stayBtn: {
-    backgroundColor: '#f5c518',
-    borderRadius: 22,
-    paddingVertical: 10,
-    paddingHorizontal: 22,
-  },
-  stayBtnText: {
-    color: '#0a0a0a',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  leaveBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-  },
-  leaveBtnText: {
-    color: '#777',
-    fontSize: 15,
-    fontWeight: '600',
-  },
 
   // Report — 2-column grid panel
   reportSheet: {
-    backgroundColor: '#1a1a2e',
+    backgroundColor: C.surface,
     borderRadius: 18,
     overflow: 'hidden',
     width: '100%',

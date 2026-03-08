@@ -5,16 +5,18 @@ import Svg, { Circle } from 'react-native-svg';
 interface ChallengeTimerProps {
   seconds: number;
   onExpire: () => void;
+  /** Content rendered inside the ring (e.g. a Challenge button) */
+  children?: React.ReactNode;
+  /** Outer diameter of the ring. Defaults to 108. */
+  size?: number;
 }
 
-const SIZE = 80;
 const STROKE = 5;
-const RADIUS = (SIZE - STROKE) / 2;
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
-
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
-export function ChallengeTimer({ seconds, onExpire }: ChallengeTimerProps) {
+export function ChallengeTimer({ seconds, onExpire, children, size = 108 }: ChallengeTimerProps) {
+  const radius = (size - STROKE) / 2;
+  const circumference = 2 * Math.PI * radius;
   const progress = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -29,7 +31,7 @@ export function ChallengeTimer({ seconds, onExpire }: ChallengeTimerProps) {
 
   const strokeDashoffset = progress.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, CIRCUMFERENCE],
+    outputRange: [0, circumference],
   });
 
   const strokeColor = progress.interpolate({
@@ -38,38 +40,24 @@ export function ChallengeTimer({ seconds, onExpire }: ChallengeTimerProps) {
   });
 
   return (
-    <View style={styles.container}>
-      <Svg width={SIZE} height={SIZE}>
-        {/* Background track */}
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      {/* SVG ring sits behind children */}
+      <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
         <Circle
-          cx={SIZE / 2}
-          cy={SIZE / 2}
-          r={RADIUS}
-          stroke="#333"
-          strokeWidth={STROKE}
-          fill="none"
+          cx={size / 2} cy={size / 2} r={radius}
+          stroke="#2a2a3a" strokeWidth={STROKE} fill="none"
         />
-        {/* Progress arc */}
         <AnimatedCircle
-          cx={SIZE / 2}
-          cy={SIZE / 2}
-          r={RADIUS}
+          cx={size / 2} cy={size / 2} r={radius}
           stroke={strokeColor as any}
-          strokeWidth={STROKE}
-          fill="none"
-          strokeDasharray={CIRCUMFERENCE}
+          strokeWidth={STROKE} fill="none"
+          strokeDasharray={circumference}
           strokeDashoffset={strokeDashoffset}
           strokeLinecap="round"
-          transform={`rotate(-90 ${SIZE / 2} ${SIZE / 2})`}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
         />
       </Svg>
+      {children}
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
