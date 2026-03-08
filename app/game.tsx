@@ -11,6 +11,8 @@ import {
   Easing,
   useWindowDimensions,
   TextInput,
+  BackHandler,
+  Alert,
 } from 'react-native';
 import { SpeechModule, speechAvailable, useSpeechRecognitionEvent } from '@/lib/speech-recognition';
 import { C, R, FS } from '@/constants/theme';
@@ -87,6 +89,7 @@ export default function GameScreen() {
     setPlayers,
     setCurrentTurn,
     setChallenges,
+    startingMovieIds,
   } = useAppStore();
 
   const [players, setLocalPlayers] = useState<Player[]>(storePlayers);
@@ -103,6 +106,7 @@ export default function GameScreen() {
   const [showLandscapePrompt, setShowLandscapePrompt] = useState(false);
   const [trailerKey, setTrailerKey] = useState(0);
   const [showMyTimeline, setShowMyTimeline] = useState(false);
+  const [showLeaveDialog, setShowLeaveDialog] = useState(false);
 
   const [selectedInterval, setSelectedInterval] = useState<number | null>(null);
   const [hasPassed, setHasPassed] = useState(false);
@@ -138,23 +142,29 @@ export default function GameScreen() {
   const currentTurnRef = useRef<Turn | null>(null);
   const gameIdRef = useRef<string | null>(null);
 
-  // Portrait during intro/loading/guess input; landscape for the actual game
+  // Portrait during intro + landscape prompt; landscape for everything after
   useEffect(() => {
-    const amActivePlayer = myPlayerId === currentTurn?.active_player_id;
-    if (loading || showIntro) {
-      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
-    } else if (trailerEnded && !readyToPlace && amActivePlayer) {
+    if (loading || showIntro || showLandscapePrompt) {
       ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
     } else {
       ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
     }
-  }, [loading, showIntro, trailerEnded, readyToPlace, myPlayerId, currentTurn?.active_player_id]);
+  }, [loading, showIntro, showLandscapePrompt]);
 
   useEffect(() => {
     if (!game) { router.replace('/'); return; }
     gameIdRef.current = game.id;
     loadState();
     return () => stopPolling();
+  }, []);
+
+  // Intercept Android hardware back button — show in-app confirmation dialog.
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      setShowLeaveDialog(true);
+      return true; // prevents default back action
+    });
+    return () => sub.remove();
   }, []);
 
   // Switch from 'flip' → 'result' after the FlippingMovieCard animation completes.
@@ -217,10 +227,10 @@ export default function GameScreen() {
     }
   });
 
-  useSpeechRecognitionEvent('error', () => {
+  useSpeechRecognitionEvent('error', (event) => {
     if (voiceStateRef.current === 'idle') return;
     voiceStateRef.current = 'error';
-    setVoiceError('Speech recognition failed. Please type instead.');
+    setVoiceError(event?.message ?? 'Speech recognition failed. Please type instead.');
     setVoiceState('error');
   });
 
@@ -245,19 +255,21 @@ export default function GameScreen() {
     const gId = gameIdRef.current;
     if (!gId) return;
 
-    // Fetch latest turn
-    const { data: latestTurn } = await db
-      .from('turns')
-      .select('*')
-      .eq('game_id', gId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single() as { data: Turn | null };
+    // Fetch turn, game status, and players in parallel so all state updates can be
+    // applied in a single synchronous block — React batches them into one render,
+    // preventing any intermediate frame where currentTurn and players are out of sync.
+    const [
+      { data: latestTurn },
+      { data: gameRow },
+      { data: freshPlayers },
+    ] = await Promise.all([
+      db.from('turns').select('*').eq('game_id', gId).neq('status', 'complete')
+        .order('created_at', { ascending: false }).limit(1).single() as Promise<{ data: Turn | null }>,
+      db.from('games').select('status').eq('id', gId).single(),
+      db.from('players').select('*').eq('game_id', gId).order('created_at'),
+    ]);
 
-    // Check if game has been marked finished by any device
-    const { data: gameRow } = await db.from('games').select('status').eq('id', gId).single();
     if (gameRow?.status === 'finished') {
-      const { data: freshPlayers } = await db.from('players').select('*').eq('game_id', gId).order('created_at');
       const fp = (freshPlayers ?? []) as Player[];
       const winner = fp.reduce((best: Player | null, p) =>
         !best || p.timeline.length > best.timeline.length ? p : best, null);
@@ -283,6 +295,12 @@ export default function GameScreen() {
 
         // Reset per-turn UI state when a new turn starts
         if (turnChanged) {
+          // Apply fresh players in the same synchronous block as setLocalTurn so React
+          // batches them into one render — no intermediate frame where currentTurn is the
+          // new drawing turn but players still has the old timeline (or vice versa).
+          // The DB timeline is always written before the new turn is inserted, so this is safe.
+          if (freshPlayers) { setLocalPlayers(freshPlayers as Player[]); setPlayers(freshPlayers as Player[]); }
+
           setTrailerEnded(false);
           setReadyToPlace(false);
           setUserPaused(false);
@@ -348,13 +366,6 @@ export default function GameScreen() {
       }
     }
 
-    // Fetch players (timeline updates after reveal)
-    const { data: pData } = await db
-      .from('players')
-      .select('*')
-      .eq('game_id', gId)
-      .order('created_at') as { data: Player[] | null };
-    if (pData) { setLocalPlayers(pData); setPlayers(pData); }
   }
 
   async function loadState() {
@@ -365,7 +376,7 @@ export default function GameScreen() {
     const [{ data: pData }, { data: tData }] = await Promise.all([
       db.from('players').select('*').eq('game_id', g.id).order('created_at'),
       db.from('turns').select('*').eq('game_id', g.id)
-        .order('created_at', { ascending: false }).limit(1).single(),
+        .neq('status', 'complete').order('created_at', { ascending: false }).limit(1).single(),
     ]) as [{ data: Player[] | null }, { data: Turn | null }];
 
     const loadedPlayers = pData ?? [];
@@ -430,13 +441,15 @@ export default function GameScreen() {
     return idx;
   }
 
-  // When the placed year already exists in the timeline, BOTH adjacent intervals are valid
-  // (before or after the existing card with the same year).
+  // When the placed year already exists in the timeline, ALL intervals spanning the run of
+  // same-year cards are valid (before the first, between any two, or after the last duplicate).
   function computeValidIntervals(year: number, timeline: number[]): number[] {
     const sorted = [...timeline].sort((a, b) => a - b);
-    const dupIdx = sorted.indexOf(year);
-    if (dupIdx !== -1) {
-      return [dupIdx, dupIdx + 1];
+    const firstDupIdx = sorted.indexOf(year);
+    if (firstDupIdx !== -1) {
+      const lastDupIdx = sorted.lastIndexOf(year);
+      // e.g. [2024, 2024, 2025] + new 2024 → firstDup=0, lastDup=1 → [0, 1, 2]
+      return Array.from({ length: lastDupIdx - firstDupIdx + 2 }, (_, k) => firstDupIdx + k);
     }
     return [computeCorrectInterval(year, timeline)];
   }
@@ -551,7 +564,18 @@ export default function GameScreen() {
     }
     voiceStateRef.current = 'listening';
     setVoiceState('listening');
-    SpeechModule.start({ lang: 'en-US', continuous: false, interimResults: false });
+    SpeechModule.start({
+      lang: 'en-US',
+      continuous: false,
+      interimResults: false,
+      androidIntentOptions: {
+        // Give the user enough time to say "Oppenheimer by Christopher Nolan"
+        // without Android's VAD cutting off too early
+        EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS: 8000,
+        EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: 1500,
+        EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS: 1000,
+      },
+    });
   }
 
   function stopVoice() {
@@ -577,7 +601,6 @@ export default function GameScreen() {
       const { data: freshPlayers } = await db
         .from('players').select('*').eq('game_id', g.id).order('created_at') as { data: Player[] | null };
       const latestPlayers: Player[] = freshPlayers ?? players;
-      if (freshPlayers) { setLocalPlayers(freshPlayers); setPlayers(freshPlayers); }
 
       // Compute winner — needed here so myMoviePairs stays correct regardless of which
       // device inserts the next turn.
@@ -605,12 +628,13 @@ export default function GameScreen() {
         });
       }
 
-      // Guard against double-processing across devices: if a newer turn already exists,
+      // Guard against double-processing across devices: if a newer real turn already exists,
       // another device already handled this. Call poll() to sync UI then exit.
       const { data: existingNext } = await db
         .from('turns')
         .select('id')
         .eq('game_id', g.id)
+        .neq('status', 'complete')
         .gt('created_at', ct.created_at)
         .limit(1) as { data: { id: string }[] | null };
       if (existingNext && existingNext.length > 0) {
@@ -618,11 +642,16 @@ export default function GameScreen() {
         return;
       }
 
+      let updatedPlayers = latestPlayers;
       if (winnerId) {
         const winner = latestPlayers.find(p => p.id === winnerId) ?? null;
         if (winner) {
           const newTimeline = [...winner.timeline, movie.year].sort((a, b) => a - b);
           await db.from('players').update({ timeline: newTimeline }).eq('id', winnerId);
+          // Keep updatedPlayers for nextPlayer calculation only — don't push to state here.
+          // poll() will re-fetch players when it detects the new turn, ensuring the drawing
+          // phase gets the correct timeline without the reveal phase ever seeing it early.
+          updatedPlayers = latestPlayers.map(p => p.id === winnerId ? { ...p, timeline: newTimeline } : p);
 
           // Game over — winner reached the target card count
           if (newTimeline.length >= WIN_CARDS) {
@@ -634,30 +663,39 @@ export default function GameScreen() {
         }
       }
 
-      const currentIdx = latestPlayers.findIndex((p) => p.id === ct.active_player_id);
-      const nextPlayer = latestPlayers[(currentIdx + 1) % latestPlayers.length];
+      // If no players remain (everyone left), there's nothing to do.
+      if (updatedPlayers.length === 0) return;
+      const currentIdx = updatedPlayers.findIndex((p) => p.id === ct.active_player_id);
+      // currentIdx is -1 when the active player deleted themselves (left mid-turn).
+      // Fall back to index 0 so the game continues with the first remaining player.
+      const nextIdx = currentIdx === -1 ? 0 : (currentIdx + 1) % updatedPlayers.length;
+      const nextPlayer = updatedPlayers[nextIdx];
 
       const { data: pastTurns } = await db
         .from('turns')
         .select('movie_id')
         .eq('game_id', g.id);
-      const usedMovieIds = new Set<string>(pastTurns?.map((t: { movie_id: string }) => t.movie_id) ?? []);
-      // Exclude starting cards (in timelines but never in a turn row).
-      // Use myMoviePairs for my own slots to handle same-year movies correctly.
-      latestPlayers.forEach(p => {
-        const isMe = p.id === myPlayerId;
-        p.timeline.forEach((year, i) => {
-          const sortedTL = [...p.timeline].sort((a, b) => a - b);
-          if (isMe) {
-            const pairsForYear = myMoviePairs.filter(mp => mp.year === year);
-            const countBefore = sortedTL.slice(0, sortedTL.indexOf(year)).filter(y => y === year).length;
-            const pair = pairsForYear[countBefore];
-            if (pair) { usedMovieIds.add(pair.id); return; }
-          }
-          const mv = activeMovies.find(m => m.year === year);
-          if (mv) usedMovieIds.add(mv.id);
-        });
-      });
+      // All past turn movie_ids — includes phantom 'complete' turns for starting cards.
+      // Build the exclusion set from three independent sources:
+      // 1. All past turn movie IDs (includes phantom 'complete' turns when they exist)
+      // 2. startingMovieIds from Zustand (host-device backup)
+      // 3. Inferred starting card years: any year in a player's timeline that has no
+      //    matching past turn must be a starting card year — robust against phantom turn
+      //    failures and Zustand being unavailable on non-host devices.
+      const pastTurnMovieIds = new Set<string>(pastTurns?.map((t: { movie_id: string }) => t.movie_id) ?? []);
+      const pastTurnYears = new Set<number>(
+        [...pastTurnMovieIds]
+          .map(id => activeMovies.find(m => m.id === id)?.year)
+          .filter((y): y is number => y !== undefined)
+      );
+      const startingCardYears = new Set<number>(
+        latestPlayers.flatMap(p => p.timeline ?? []).filter(year => !pastTurnYears.has(year))
+      );
+      const usedMovieIds = new Set<string>([
+        ...pastTurnMovieIds,
+        ...startingMovieIds,
+        ...activeMovies.filter(m => startingCardYears.has(m.year)).map(m => m.id),
+      ]);
       const pool = activeMovies.filter((m) => !usedMovieIds.has(m.id));
       const nextMovie = pool.length > 0
         ? pool[Math.floor(Math.random() * pool.length)]
@@ -751,6 +789,81 @@ export default function GameScreen() {
     .map((_, i) => resolveMovie(myTimeline, i, true))
     .filter((m): m is Movie => m !== undefined);
 
+  // ── Leave game ──
+  async function handleLeaveConfirmed() {
+    setShowLeaveDialog(false);
+    stopPolling();
+    const g = game;
+    const ct = currentTurnRef.current;
+    try {
+      if (g && ct && ct.active_player_id === myPlayerId &&
+          (ct.status === 'drawing' || ct.status === 'placing')) {
+        const { data: currentPlayers } = await db.from('players').select('*')
+          .eq('game_id', g.id).order('created_at');
+        const allPlayers = (currentPlayers ?? []) as Player[];
+        const remaining = allPlayers.filter(p => p.id !== myPlayerId);
+        if (remaining.length > 0) {
+          const myIdx = allPlayers.findIndex(p => p.id === myPlayerId);
+          const nextPlayer = remaining[myIdx % remaining.length] ?? remaining[0];
+          const { data: pastTurns } = await db.from('turns').select('movie_id').eq('game_id', g.id);
+          const leavePastIds = new Set<string>(pastTurns?.map((t: { movie_id: string }) => t.movie_id) ?? []);
+          const leavePastYears = new Set<number>(
+            [...leavePastIds]
+              .map(id => activeMovies.find(m => m.id === id)?.year)
+              .filter((y): y is number => y !== undefined)
+          );
+          const leaveStartYears = new Set<number>(
+            allPlayers.flatMap(p => p.timeline ?? []).filter(year => !leavePastYears.has(year))
+          );
+          const usedIds = new Set<string>([
+            ...leavePastIds,
+            ...startingMovieIds,
+            ...activeMovies.filter(m => leaveStartYears.has(m.year)).map(m => m.id),
+          ]);
+          const pool = activeMovies.filter(m => !usedIds.has(m.id));
+          const nextMovie = pool.length > 0
+            ? pool[Math.floor(Math.random() * pool.length)]
+            : activeMovies[Math.floor(Math.random() * activeMovies.length)];
+          await db.from('turns').insert({
+            game_id: g.id,
+            active_player_id: nextPlayer.id,
+            movie_id: nextMovie.id,
+            status: 'drawing',
+          });
+        }
+      }
+      if (myPlayerId) {
+        await db.from('players').delete().eq('id', myPlayerId);
+      }
+    } catch (_) {
+      // Best-effort — navigate away regardless.
+    }
+    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+    router.replace('/');
+  }
+
+  // ── Leave dialog — shown by back button, overlaid on every game screen ──
+  const leaveModal = (
+    <Modal visible={showLeaveDialog} transparent animationType="fade" onRequestClose={() => setShowLeaveDialog(false)}>
+      <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowLeaveDialog(false)}>
+        <TouchableOpacity activeOpacity={1} style={styles.leaveSheet}>
+          <Text style={styles.leaveTitle}>Leave game?</Text>
+          <Text style={styles.leaveBody}>
+            You'll be removed from the game. If it's your turn, the next player will go automatically.
+          </Text>
+          <View style={styles.leaveButtons}>
+            <TouchableOpacity style={styles.leaveExitBtn} onPress={handleLeaveConfirmed}>
+              <Text style={styles.leaveExitText}>Leave</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.leaveStayBtn} onPress={() => setShowLeaveDialog(false)}>
+              <Text style={styles.leaveStayText}>Stay</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  );
+
   // ── "My Timeline" modal — overlaid on every game screen ──
   const myTimelineModal = (
     <Modal visible={showMyTimeline} transparent animationType="slide" onRequestClose={() => setShowMyTimeline(false)}>
@@ -789,6 +902,7 @@ export default function GameScreen() {
     return (
       <SafeAreaView style={styles.container}>
         {myTimelineModal}
+        {leaveModal}
         <View style={styles.phaseCenter}>
           {amActive ? (
             <>
@@ -834,8 +948,9 @@ export default function GameScreen() {
       return (
         <SafeAreaView style={styles.container}>
           {myTimelineModal}
+        {leaveModal}
           <View style={styles.placingTopHalf}>
-            <Text style={styles.phaseLabel}>Waiting for {activePlayer?.display_name}…</Text>
+            <Text style={[styles.phaseLabel, styles.placingLabel]}>Waiting for {activePlayer?.display_name}…</Text>
             <View style={styles.floatingCardWrapper}>
               <CardBack width={80} height={CARD_H} />
             </View>
@@ -862,9 +977,10 @@ export default function GameScreen() {
       return (
         <SafeAreaView style={styles.container}>
           {myTimelineModal}
+        {leaveModal}
           {/* Top half: floating animated card */}
           <View style={styles.placingTopHalf}>
-            <Text style={styles.phaseLabel}>
+            <Text style={[styles.phaseLabel, styles.placingLabel]}>
               {amActive ? 'Where does it go?' : `Waiting for ${activePlayer?.display_name}…`}
             </Text>
             <View style={styles.floatingCardWrapper}>
@@ -909,6 +1025,7 @@ export default function GameScreen() {
       if (!amActive) {
         return (
           <View style={styles.endedOverlay}>
+            {leaveModal}
             <SafeAreaView style={styles.endedInner} edges={['top', 'bottom']}>
               <View style={styles.endedCenter}>
                 <Text style={styles.endedTitle}>🎬</Text>
@@ -922,29 +1039,18 @@ export default function GameScreen() {
       }
 
       return (
-        // No KeyboardAvoidingView — it fights with the landscape→portrait orientation
-        // transition and causes non-stop layout thrashing on iOS.
-        // automaticallyAdjustKeyboardInsets is a native iOS scroll-inset mechanism
-        // that is unaffected by orientation changes.
-        <SafeAreaView style={styles.guessScreen} edges={['top', 'bottom']}>
-          <ScrollView
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="on-drag"
-            showsVerticalScrollIndicator={false}
-            automaticallyAdjustKeyboardInsets
-            contentContainerStyle={styles.guessScrollContent}
-          >
-            {/* Header */}
-            <View style={styles.guessHeader}>
-              <Text style={styles.guessTitle}>🎬 Ready to guess?</Text>
-              <Text style={styles.guessSubtitle}>WHAT YEAR IS THIS MOVIE FROM?</Text>
-            </View>
+        <SafeAreaView style={styles.guessScreenL} edges={['top', 'bottom', 'left', 'right']}>
+          {leaveModal}
+          {/* Header */}
+          <View style={styles.guessHeaderL}>
+            <Text style={styles.guessTitleL}>What year is this movie from?</Text>
+            <Text style={styles.guessSubtitleL}>BONUS COIN — NAME THE MOVIE + DIRECTOR</Text>
+          </View>
 
-            {/* Bonus coin section */}
-            <View style={styles.guessBonusSection}>
-              <Text style={styles.guessBonusLabel}>🪙 Bonus coin</Text>
-              <Text style={styles.guessBonusDesc}>Name the movie + director to earn an extra coin</Text>
-
+          {/* Main two-panel row */}
+          <View style={styles.guessMainRow}>
+            {/* Left: text inputs */}
+            <View style={styles.guessLeftPanel}>
               <TextInput
                 style={styles.guessInput}
                 placeholder="Movie title…"
@@ -963,34 +1069,37 @@ export default function GameScreen() {
                 autoCorrect={false}
                 returnKeyType="done"
               />
+            </View>
 
-              {/* OR divider */}
-              <View style={styles.guessOrRow}>
-                <View style={styles.guessOrLine} />
-                <Text style={styles.guessOrText}>OR</Text>
-                <View style={styles.guessOrLine} />
-              </View>
+            {/* Divider */}
+            <View style={styles.guessDivider} />
 
-              {/* Voice input */}
-              {voiceState === 'idle' && (
+            {/* Right: voice input */}
+            <View style={styles.guessRightPanel}>
+              {voiceState === 'idle' && (movieGuess || directorGuess) ? (
+                <View style={styles.voicePreview}>
+                  {movieGuess    && <Text style={styles.voicePreviewText}>🎬 {movieGuess}</Text>}
+                  {directorGuess && <Text style={styles.voicePreviewText}>🎬 {directorGuess}</Text>}
+                  <TouchableOpacity onPress={() => { setMovieGuess(''); setDirectorGuess(''); }}>
+                    <Text style={styles.voiceRetryText}>Clear</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : voiceState === 'idle' ? (
                 <TouchableOpacity style={styles.voiceMicBtn} onPress={startVoice} activeOpacity={0.75}>
                   <Text style={styles.voiceMicIcon}>🎤</Text>
                   <Text style={styles.voiceMicText}>Speak your answer</Text>
                 </TouchableOpacity>
-              )}
-              {voiceState === 'listening' && (
+              ) : voiceState === 'listening' ? (
                 <TouchableOpacity style={[styles.voiceMicBtn, styles.voiceMicBtnListening]} onPress={stopVoice} activeOpacity={0.75}>
                   <Text style={styles.voiceMicIcon}>🎤</Text>
                   <Text style={styles.voiceMicText}>Listening… tap to stop</Text>
                 </TouchableOpacity>
-              )}
-              {voiceState === 'processing' && (
+              ) : voiceState === 'processing' ? (
                 <View style={[styles.voiceMicBtn, { opacity: 0.7 }]}>
                   <ActivityIndicator color={C.gold} size="small" />
                   <Text style={styles.voiceMicText}>Interpreting…</Text>
                 </View>
-              )}
-              {voiceState === 'error' && (
+              ) : (
                 <View style={styles.voiceErrorBox}>
                   <Text style={styles.voiceErrorText}>{voiceError}</Text>
                   <TouchableOpacity onPress={() => { voiceStateRef.current = 'idle'; setVoiceState('idle'); setVoiceError(''); }}>
@@ -999,39 +1108,39 @@ export default function GameScreen() {
                 </View>
               )}
             </View>
+          </View>
 
-            {/* Footer inside scroll so it's always reachable above the keyboard */}
-            <View style={styles.guessFooter}>
-              {!hasReplayed && (
-                <TouchableOpacity
-                  style={styles.guessReplayBtn}
-                  onPressIn={() => {
-                    setHasReplayed(true);
-                    setTrailerEnded(false);
-                    setUserPaused(false);
-                    setTrailerKey(k => k + 1);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.guessReplayText}>↺ Replay</Text>
-                </TouchableOpacity>
-              )}
+          {/* Footer */}
+          <View style={styles.guessFooterL}>
+            {!hasReplayed && (
               <TouchableOpacity
-                style={styles.guessSkipBtn}
-                onPressIn={() => { setMovieGuess(''); setDirectorGuess(''); setReadyToPlace(true); }}
+                style={styles.guessReplayBtn}
+                onPressIn={() => {
+                  setHasReplayed(true);
+                  setTrailerEnded(false);
+                  setUserPaused(false);
+                  setTrailerKey(k => k + 1);
+                }}
                 activeOpacity={0.7}
               >
-                <Text style={styles.guessSkipText}>Skip</Text>
+                <Text style={styles.guessReplayText}>↺ Replay</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.guessPlaceBtn}
-                onPressIn={() => setReadyToPlace(true)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.guessPlaceText}>Submit</Text>
-              </TouchableOpacity>
-            </View>
-          </ScrollView>
+            )}
+            <TouchableOpacity
+              style={styles.guessSkipBtn}
+              onPressIn={() => { setMovieGuess(''); setDirectorGuess(''); setReadyToPlace(true); }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.guessSkipText}>Skip</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.guessPlaceBtn, { flex: 2 }]}
+              onPressIn={() => setReadyToPlace(true)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.guessPlaceText}>Submit</Text>
+            </TouchableOpacity>
+          </View>
         </SafeAreaView>
       );
     }
@@ -1039,6 +1148,7 @@ export default function GameScreen() {
     // ── Trailer playing ──
     return (
       <View style={styles.trailerContainer}>
+        {leaveModal}
         <TrailerPlayer
           key={`${currentTurn.id}-${trailerKey}`}
           ref={trailerRef}
@@ -1171,6 +1281,7 @@ export default function GameScreen() {
     return (
       <SafeAreaView style={styles.container}>
         {myTimelineModal}
+        {leaveModal}
         {/* Full-width timeline + centered status overlay */}
         <View style={styles.challengeTimelineArea}>
           <Timeline
@@ -1393,6 +1504,7 @@ export default function GameScreen() {
     return (
       <SafeAreaView style={styles.container}>
         {revealMyTimelineModal}
+        {leaveModal}
         <View style={styles.revealTimelineWrapper}>
           <Timeline
             timeline={displayTimeline}
@@ -1403,56 +1515,44 @@ export default function GameScreen() {
             onConfirm={() => {}}
             placedInterval={displayInterval}
             placedMovies={revealPlacedMovies}
-            revealingMovie={m}
+            revealingMovie={isTrash && revealPhase === 'result' ? undefined : m}
           />
         </View>
 
-        {/* Result + button — appears after the flip completes */}
+        {/* Result strip — appears after the flip completes */}
         {revealPhase === 'result' && (
           <>
-            {winningChallenger && (
-              <View style={styles.revealTransferBanner}>
-                <Text style={styles.revealTransferText}>
-                  ↓ Card moves to {getPlayer(winningChallenger.challenger_id)?.display_name}'s timeline
+            <View style={styles.revealStrip}>
+              <View style={[styles.revealStripAccent, { backgroundColor: isTrash ? C.danger : C.gold }]} />
+              <ResultIcon result={activeCorrect ? 'correct' : winningChallenger ? 'challenge' : 'trash'} size={36} />
+              <View style={styles.revealStripBody}>
+                <Text style={styles.revealStripHeadline} numberOfLines={1}>
+                  {resultName
+                    ? <><Text style={styles.revealResultPlayerHL}>{resultName}</Text>{' '}{resultText}</>
+                    : resultText}
                 </Text>
+                {winningChallenger && (
+                  <Text style={styles.revealStripSub} numberOfLines={1}>
+                    Card moves to {getPlayer(winningChallenger.challenger_id)?.display_name}'s timeline
+                  </Text>
+                )}
+                {coinBackNames.length > 0 && (
+                  <Text style={styles.revealStripSub} numberOfLines={1}>
+                    {coinBackNames.join(', ')} also had it right
+                  </Text>
+                )}
+                {didSubmitBonus && (
+                  <Text style={styles.revealStripSub} numberOfLines={1}>
+                    {gotBonusCoin ? '+1 bonus coin! Movie + director correct' : 'No bonus coin — movie or director wrong'}
+                  </Text>
+                )}
               </View>
-            )}
-            <View style={styles.revealResultPanel}>
-              <View style={[
-                styles.revealResultAccent,
-                { backgroundColor: activeCorrect || winningChallenger ? C.gold : C.danger },
-              ]} />
-              <ResultIcon result={activeCorrect ? 'correct' : winningChallenger ? 'challenge' : 'trash'} />
-              <Text style={styles.revealResultHeadline}>
-                {resultName
-                  ? <><Text style={styles.revealResultPlayerHL}>{resultName}</Text>{'\n'}{resultText}</>
-                  : resultText}
-              </Text>
-              {coinBackNames.length > 0 && (
-                <Text style={styles.revealCoinBack}>
-                  <Text style={styles.revealCoinBackName}>{coinBackNames.join(', ')}</Text>
-                  {' also had it right — coin returned'}
-                </Text>
-              )}
-              {didSubmitBonus && (
-                <Text style={styles.revealCoinBack}>
-                  {gotBonusCoin
-                    ? <><Text style={styles.revealCoinBackName}>+1 bonus coin!</Text>{' Movie + director correct'}</>
-                    : 'No bonus coin — movie or director incorrect'}
-                </Text>
-              )}
-            </View>
-
-            <View style={styles.revealFooter}>
-              <TouchableOpacity style={styles.revealNextBtn} onPress={handleNextTurn} activeOpacity={0.85}>
-                <Text style={styles.revealNextBtnText}>Next Player →</Text>
+              <TouchableOpacity style={styles.revealStripBtn} onPress={handleNextTurn} activeOpacity={0.85}>
+                <Text style={styles.revealStripBtnText}>Next →</Text>
               </TouchableOpacity>
             </View>
 
-            {/* Confetti burst when active player got it right */}
             {activeCorrect && <ConfettiBurst />}
-
-            {/* Card flies to trash when nobody got it right */}
             {isTrash && <TrashCard movie={m} />}
           </>
         )}
@@ -1576,7 +1676,7 @@ function GameOverScreen({ winner, players, myId }: { winner: Player; players: Pl
 
 type ResultType = 'correct' | 'challenge' | 'trash';
 
-function ResultIcon({ result }: { result: ResultType }) {
+function ResultIcon({ result, size = 72 }: { result: ResultType; size?: number }) {
   const scale = useRef(new Animated.Value(0.5)).current;
   const opacity = useRef(new Animated.Value(0)).current;
 
@@ -1594,7 +1694,7 @@ function ResultIcon({ result }: { result: ResultType }) {
 
   return (
     <Animated.View style={{ transform: [{ scale }], opacity }}>
-      <Svg width={72} height={72} viewBox="0 0 72 72">
+      <Svg width={size} height={size} viewBox="0 0 72 72">
         <Circle cx={36} cy={36} r={34} fill={glowBg} />
         <Circle cx={36} cy={36} r={28} fill="none" stroke={ringColor} strokeWidth={1.5} />
         {result === 'correct' && (
@@ -2136,10 +2236,15 @@ const styles = StyleSheet.create({
   placingTopHalf: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'flex-start',
-    paddingTop: 8,
+    justifyContent: 'center',
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: C.borderSubtle,
+  },
+  // Absolutely positioned so it doesn't push the card down in landscape
+  placingLabel: {
+    position: 'absolute',
+    top: 6,
+    alignSelf: 'center',
   },
   placingBottomHalf: {
     flex: 1,
@@ -2147,7 +2252,6 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   floatingCardWrapper: {
-    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -2243,35 +2347,34 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
   },
-  revealResultPanel: {
+  revealResultPlayerHL: { color: C.gold, fontWeight: '900' },
+  revealStrip: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingTop: 20,
-    paddingBottom: 16,
-    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    gap: 12,
     backgroundColor: C.surface,
     borderTopWidth: 1,
     borderTopColor: C.border,
     overflow: 'hidden',
   },
-  revealResultAccent: {
+  revealStripAccent: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
+    top: 0, left: 0, right: 0,
     height: 2,
   },
-  revealResultHeadline: {
-    color: C.textPrimary,
-    fontSize: FS.lg,
-    fontWeight: '700',
-    textAlign: 'center',
-    lineHeight: 27,
+  revealStripBody: { flex: 1, gap: 2 },
+  revealStripHeadline: { color: C.textPrimary, fontSize: FS.base, fontWeight: '700' },
+  revealStripSub: { color: C.textSub, fontSize: FS.xs },
+  revealStripBtn: {
+    backgroundColor: C.gold,
+    borderRadius: R.btn,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
   },
-  revealResultPlayerHL: { color: C.gold, fontWeight: '900' },
-  revealCoinBack: { color: C.textSub, fontSize: FS.sm, lineHeight: 17, textAlign: 'center' },
-  revealCoinBackName: { color: C.gold, fontWeight: '700' },
-  revealFooter: { paddingHorizontal: 24, paddingBottom: 10 },
+  revealStripBtnText: { color: C.textOnGold, fontSize: FS.base, fontWeight: '900', letterSpacing: 0.3 },
+  // Used by GameOverScreen
   revealNextBtn: {
     backgroundColor: C.gold,
     borderRadius: R.btn,
@@ -2370,6 +2473,62 @@ const styles = StyleSheet.create({
   timelineMiniCard: { width: 7, height: 10, borderRadius: 1.5, backgroundColor: 'rgba(245,197,24,0.75)' },
   timelineMiniLine: { width: 4, height: 1.5, backgroundColor: 'rgba(245,197,24,0.35)' },
 
+  // ── Leave dialog ──
+  leaveSheet: {
+    backgroundColor: C.surface,
+    borderRadius: R.card,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    gap: 16,
+  },
+  leaveTitle: {
+    color: C.textPrimary,
+    fontSize: FS.lg,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  leaveBody: {
+    color: C.textSub,
+    fontSize: FS.sm,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  leaveButtons: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 4,
+  },
+  leaveExitBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: R.btn,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  leaveExitText: {
+    color: C.textSub,
+    fontSize: FS.base,
+    fontWeight: '600',
+  },
+  leaveStayBtn: {
+    flex: 2,
+    height: 48,
+    borderRadius: R.btn,
+    backgroundColor: C.gold,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  leaveStayText: {
+    color: C.textOnGold,
+    fontSize: FS.base,
+    fontWeight: '900',
+    letterSpacing: 0.3,
+  },
+
   // My Timeline modal
   myTimelineSheet: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
@@ -2411,44 +2570,21 @@ const styles = StyleSheet.create({
     color: C.textPrimary, fontSize: FS.base,
   },
 
-  // ── Portrait guess screen (trailer ended, active player) ──
-  guessScreen: {
-    flex: 1, backgroundColor: C.bg,
-    paddingHorizontal: 24,
+  // ── Landscape guess screen (trailer ended, active player) ──
+  guessScreenL: { flex: 1, backgroundColor: C.bg },
+  guessHeaderL: { paddingHorizontal: 20, paddingVertical: 10, gap: 4 },
+  guessTitleL: { color: C.textPrimary, fontSize: FS.lg, fontWeight: '900', letterSpacing: 0.3 },
+  guessSubtitleL: { color: C.gold, fontSize: FS.xs, fontWeight: '700', letterSpacing: 2.5, textTransform: 'uppercase' },
+  guessMainRow: { flex: 1, flexDirection: 'row', paddingHorizontal: 20, paddingBottom: 8, gap: 16 },
+  guessLeftPanel: { flex: 1.2, justifyContent: 'center', gap: 10 },
+  guessDivider: { width: 1, alignSelf: 'stretch', backgroundColor: C.border, marginVertical: 8 },
+  guessRightPanel: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
+  guessFooterL: { flexDirection: 'row', paddingHorizontal: 20, paddingBottom: 16, gap: 10 },
+  voicePreview: {
+    alignItems: 'center', gap: 6, padding: 12, borderRadius: R.md,
+    backgroundColor: 'rgba(245,197,24,0.07)', borderWidth: 1, borderColor: 'rgba(245,197,24,0.3)',
   },
-  guessScrollContent: {
-    flexGrow: 1,
-    justifyContent: 'space-between',
-  },
-  guessHeader: {
-    alignItems: 'center', paddingTop: 24, paddingBottom: 16, gap: 8,
-  },
-  guessTitle: {
-    color: C.textPrimary, fontSize: 26, fontWeight: '900', letterSpacing: 0.5,
-  },
-  guessSubtitle: {
-    color: C.gold, fontSize: FS.xs, fontWeight: '700',
-    letterSpacing: 2.5, textTransform: 'uppercase',
-  },
-  guessBonusSection: {
-    gap: 12, paddingTop: 4,
-  },
-  guessBonusLabel: {
-    color: C.gold, fontSize: FS.sm, fontWeight: '700',
-    letterSpacing: 0.5, textAlign: 'center',
-  },
-  guessBonusDesc: {
-    color: C.textMuted, fontSize: FS.sm, textAlign: 'center', lineHeight: 18, marginBottom: 4,
-  },
-  guessOrRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 2,
-  },
-  guessOrLine: {
-    flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: C.border,
-  },
-  guessOrText: {
-    color: C.textMuted, fontSize: FS.xs, fontWeight: '700', letterSpacing: 1.5,
-  },
+  voicePreviewText: { color: C.textPrimary, fontSize: FS.sm, fontWeight: '600', textAlign: 'center' },
   voiceMicBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 10, paddingVertical: 16, borderRadius: R.card,
@@ -2473,9 +2609,6 @@ const styles = StyleSheet.create({
   voiceRetryText: {
     color: C.gold, fontSize: FS.sm, fontWeight: '700',
   },
-  guessFooter: {
-    flexDirection: 'row', alignItems: 'center', paddingVertical: 20, gap: 10,
-  },
   guessReplayBtn: {
     flex: 1, height: 52, borderRadius: R.card,
     backgroundColor: 'rgba(255,255,255,0.06)',
@@ -2499,13 +2632,6 @@ const styles = StyleSheet.create({
     color: C.textOnGold, fontSize: FS.md, fontWeight: '900', letterSpacing: 0.4,
   },
 
-  // Reveal transfer banner (challenger win)
-  revealTransferBanner: {
-    backgroundColor: 'rgba(245,197,24,0.1)',
-    borderTopWidth: 1, borderTopColor: 'rgba(245,197,24,0.3)',
-    paddingVertical: 6, paddingHorizontal: 20, alignItems: 'center',
-  },
-  revealTransferText: { color: C.gold, fontSize: FS.sm, fontWeight: '700' },
 
   // Coin count in ScoreBar
   scoreChipCoins: { color: C.textMuted, fontSize: FS.xs, fontWeight: '600' },

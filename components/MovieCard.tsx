@@ -48,7 +48,7 @@ interface CardFrontProps extends CardSizeProps {
 
 export function CardFront({ movie, width, height }: CardFrontProps) {
   const radius = Math.max(6, width * 0.08);
-  const bg = cardColor(movie.id);
+  const bg = cardColor(movie.year);
 
   return (
     <View style={[s.shell, { width, height, borderRadius: radius, backgroundColor: bg }]}>
