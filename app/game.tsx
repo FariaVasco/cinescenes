@@ -948,24 +948,24 @@ export default function GameScreen() {
       return (
         <SafeAreaView style={styles.container}>
           {myTimelineModal}
-        {leaveModal}
-          <View style={styles.placingTopHalf}>
-            <Text style={[styles.phaseLabel, styles.placingLabel]}>Waiting for {activePlayer?.display_name}…</Text>
-            <View style={styles.floatingCardWrapper}>
+          {leaveModal}
+          <View style={styles.placingRow}>
+            <View style={styles.placingCardPanel}>
+              <Text style={[styles.phaseLabel, styles.placingLabel]}>Waiting for {activePlayer?.display_name}…</Text>
               <CardBack width={80} height={CARD_H} />
             </View>
-          </View>
-          <View style={styles.placingBottomHalf}>
-            <Timeline
-              timeline={timeline}
-              currentCardMovie={movie}
-              interactive={false}
-              selectedInterval={null}
-              onIntervalSelect={() => {}}
-              onConfirm={() => {}}
-              placedMovies={placedMovies}
-              hideFloatingCard
-            />
+            <View style={styles.placingTimelinePanel}>
+              <Timeline
+                timeline={timeline}
+                currentCardMovie={movie}
+                interactive={false}
+                selectedInterval={null}
+                onIntervalSelect={() => {}}
+                onConfirm={() => {}}
+                placedMovies={placedMovies}
+                hideFloatingCard
+              />
+            </View>
           </View>
           <ScoreBar players={players} myId={myPlayerId} onShowTimeline={() => setShowMyTimeline(true)} />
         </SafeAreaView>
@@ -977,13 +977,13 @@ export default function GameScreen() {
       return (
         <SafeAreaView style={styles.container}>
           {myTimelineModal}
-        {leaveModal}
-          {/* Top half: floating animated card */}
-          <View style={styles.placingTopHalf}>
-            <Text style={[styles.phaseLabel, styles.placingLabel]}>
-              {amActive ? 'Where does it go?' : `Waiting for ${activePlayer?.display_name}…`}
-            </Text>
-            <View style={styles.floatingCardWrapper}>
+          {leaveModal}
+          <View style={styles.placingRow}>
+            {/* Left panel: floating card */}
+            <View style={styles.placingCardPanel}>
+              <Text style={[styles.phaseLabel, styles.placingLabel]}>
+                {amActive ? 'Where does it go?' : `Waiting for ${activePlayer?.display_name}…`}
+              </Text>
               <Animated.View
                 style={[
                   styles.floatingCard,
@@ -996,23 +996,23 @@ export default function GameScreen() {
                 <CardBack width={80} height={CARD_H} />
               </Animated.View>
             </View>
-          </View>
 
-          {/* Bottom half: timeline */}
-          <View style={styles.placingBottomHalf}>
-            {amActive && selectedInterval === null && (
-              <Text style={styles.tapHint}>Tap + to pick a spot</Text>
-            )}
-            <Timeline
-              timeline={timeline}
-              currentCardMovie={movie}
-              interactive={amActive}
-              selectedInterval={selectedInterval}
-              onIntervalSelect={setSelectedInterval}
-              onConfirm={handleAnimatedConfirm}
-              placedMovies={placedMovies}
-              hideFloatingCard
-            />
+            {/* Right panel: timeline */}
+            <View style={styles.placingTimelinePanel}>
+              {amActive && selectedInterval === null && (
+                <Text style={styles.tapHint}>Tap + to pick a spot</Text>
+              )}
+              <Timeline
+                timeline={timeline}
+                currentCardMovie={movie}
+                interactive={amActive}
+                selectedInterval={selectedInterval}
+                onIntervalSelect={setSelectedInterval}
+                onConfirm={handleAnimatedConfirm}
+                placedMovies={placedMovies}
+                hideFloatingCard
+              />
+            </View>
           </View>
 
           <ScoreBar players={players} myId={myPlayerId} onShowTimeline={() => setShowMyTimeline(true)} />
@@ -2231,22 +2231,23 @@ const styles = StyleSheet.create({
   phaseLabel: { color: C.textSub, fontSize: FS.base, fontWeight: '600', textAlign: 'center' },
   tapHint: { color: C.textMuted, fontSize: FS.sm, textAlign: 'center', marginTop: 4 },
 
-  placingLayout: { flex: 1, justifyContent: 'center', gap: 12, paddingVertical: 12 },
-  placingHeader: { alignItems: 'center' },
-  placingTopHalf: {
+  placingRow: {
     flex: 1,
+    flexDirection: 'row',
+  },
+  placingCardPanel: {
+    width: 120,
     alignItems: 'center',
     justifyContent: 'center',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: C.borderSubtle,
+    gap: 10,
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderRightColor: C.borderSubtle,
+    paddingHorizontal: 8,
   },
-  // Absolutely positioned so it doesn't push the card down in landscape
   placingLabel: {
-    position: 'absolute',
-    top: 6,
-    alignSelf: 'center',
+    textAlign: 'center',
   },
-  placingBottomHalf: {
+  placingTimelinePanel: {
     flex: 1,
     justifyContent: 'center',
     paddingVertical: 8,
