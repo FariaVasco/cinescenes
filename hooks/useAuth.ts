@@ -1,5 +1,3 @@
-import * as AppleAuthentication from 'expo-apple-authentication';
-import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { supabase } from '@/lib/supabase';
 import { identifyUser, checkPremium } from '@/lib/revenuecat';
 import { useAppStore } from '@/store/useAppStore';
@@ -23,6 +21,7 @@ export function useAuth() {
   const { setAuthUser, setIsPremium } = useAppStore();
 
   async function signInWithApple() {
+    const AppleAuthentication = require('expo-apple-authentication');
     const credential = await AppleAuthentication.signInAsync({
       requestedScopes: [
         AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
@@ -41,6 +40,7 @@ export function useAuth() {
   }
 
   async function signInWithGoogle() {
+    const { GoogleSignin } = require('@react-native-google-signin/google-signin');
     await GoogleSignin.hasPlayServices();
     const userInfo = await GoogleSignin.signIn();
     const { idToken } = await GoogleSignin.getTokens();
