@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { Platform } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -7,10 +8,16 @@ import { cinemaTheme } from '@/lib/theme';
 import { initRevenueCat } from '@/lib/revenuecat';
 import { useAuth } from '@/hooks/useAuth';
 
+const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? '';
+
 export default function RootLayout() {
   const { restoreSession } = useAuth();
 
   useEffect(() => {
+    if (Platform.OS === 'android') {
+      const { GoogleSignin } = require('@react-native-google-signin/google-signin');
+      GoogleSignin.configure({ webClientId: GOOGLE_WEB_CLIENT_ID });
+    }
     initRevenueCat();
     restoreSession();
   }, []);
