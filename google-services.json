@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "158676998426",
+    "project_id": "cinescenes-4d40f",
+    "storage_bucket": "cinescenes-4d40f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:158676998426:android:65bb2d82b95e4ece0834a3",
+        "android_client_info": {
+          "package_name": "com.cinescenes.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "158676998426-ortcqhtr9snb7n2lcfb24r6jr956ctv5.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.cinescenes.app",
+            "certificate_hash": "398e28ce7817bc143ebec7fee7ee7a4052e31611"
+          }
+        },
+        {
+          "client_id": "158676998426-spo9bhj21j63d6oicjvlutiebta3cpu3.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA3O3HfjgjZLQvVtx8DzYTyCIcgKOPjLKI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "158676998426-spo9bhj21j63d6oicjvlutiebta3cpu3.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
