@@ -234,6 +234,18 @@ export default function GameScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trailerEnded, readyToPlace, myPlayerId, currentTurn?.active_player_id, currentTurn?.status, loading]);
 
+  // Auto-reveal: when all challengers have decided and the lock period has passed,
+  // trigger reveal automatically on the active player's device after a short grace period.
+  useEffect(() => {
+    const amActive = myPlayerId === currentTurn?.active_player_id;
+    if (currentTurn?.status !== 'challenging' || !amActive) return;
+    const canReveal = !revealLocked && !challenges.some(c => c.interval_index === -1);
+    if (!canReveal) return;
+    const t = setTimeout(() => { handleReveal(); }, 3000);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentTurn?.status, revealLocked, challenges, myPlayerId, currentTurn?.active_player_id]);
+
   // Speech recognition event handlers (must be called at component level)
   useSpeechRecognitionEvent('result', (event) => {
     // Try multiple formats: WebSpeech nested, flat array, direct property
@@ -332,19 +344,19 @@ export default function GameScreen() {
             setLocalPlayers(freshPlayers as Player[]);
             setPlayers(freshPlayers as Player[]);
             // Recompute activePlayerPairs for the new active player so challengers see
-            // the correct movies in their timeline (handles same-year collisions).
+            // the correct movies in their timeline. Use winner_id for exact movie→year mapping.
             const fp = freshPlayers as Player[];
-            const newActiveTL = fp.find(p => p.id === latestTurn.active_player_id)?.timeline ?? [];
-            const { data: pastTurns } = await db
-              .from('turns').select('movie_id').eq('game_id', gId)
-              .in('status', ['complete', 'revealing']) as { data: { movie_id: string }[] | null };
-            const pastIds = new Set((pastTurns ?? []).map(t => t.movie_id));
+            const newActiveId = latestTurn.active_player_id;
+            const newActiveTL = fp.find(p => p.id === newActiveId)?.timeline ?? [];
+            const { data: activeWonTurns } = await db
+              .from('turns').select('movie_id').eq('game_id', gId).eq('winner_id', newActiveId);
+            const activeWonIds = new Set((activeWonTurns ?? []).map((t: { movie_id: string }) => t.movie_id));
             const sorted = [...newActiveTL].sort((a, b) => a - b);
             const used = new Set<string>();
             const newPairs = sorted.map(year => {
-              const fromTurn = activeMovies.find(mv => mv.year === year && pastIds.has(mv.id) && !used.has(mv.id));
-              const fallback  = activeMovies.find(mv => mv.year === year && !used.has(mv.id));
-              const best = fromTurn ?? fallback ?? activeMovies.find(mv => mv.year === year);
+              const fromWin = activeMovies.find(mv => mv.year === year && activeWonIds.has(mv.id) && !used.has(mv.id));
+              const fallback = activeMovies.find(mv => mv.year === year && !used.has(mv.id));
+              const best = fromWin ?? fallback ?? activeMovies.find(mv => mv.year === year);
               if (best) used.add(best.id);
               return { year, id: best?.id ?? '' };
             });
@@ -464,31 +476,36 @@ export default function GameScreen() {
 
     // Build ordered pairs for a timeline so the correct movie is shown per year slot,
     // even when multiple movies share the same year.
-    // Strategy: prefer movies that appear in past completed turns over first-match.
-    // Only include complete/revealing turns — exclude the current active turn so a
-    // same-year collision between the active card and a starting card doesn't mis-map pairs.
-    const { data: allTurns } = await db
-      .from('turns').select('movie_id').eq('game_id', g.id)
-      .in('status', ['complete', 'revealing']) as { data: { movie_id: string }[] | null };
-    const turnMovieIds = new Set((allTurns ?? []).map(t => t.movie_id));
-
-    function buildPairs(years: number[]): { year: number; id: string }[] {
+    // Use winner_id to find exactly which movies each player won — no more guessing
+    // from a shared pool that may contain same-year movies from different players.
+    function buildPairsFromWins(years: number[], wonIds: Set<string>): { year: number; id: string }[] {
       const sorted = [...years].sort((a, b) => a - b);
       const used = new Set<string>();
       return sorted.map(year => {
-        const fromTurn = activeMovies.find(mv => mv.year === year && turnMovieIds.has(mv.id) && !used.has(mv.id));
-        const fallback  = activeMovies.find(mv => mv.year === year && !used.has(mv.id));
-        const best = fromTurn ?? fallback ?? activeMovies.find(mv => mv.year === year);
+        const fromWin = activeMovies.find(mv => mv.year === year && wonIds.has(mv.id) && !used.has(mv.id));
+        const fallback = activeMovies.find(mv => mv.year === year && !used.has(mv.id));
+        const best = fromWin ?? fallback ?? activeMovies.find(mv => mv.year === year);
         if (best) used.add(best.id);
         return { year, id: best?.id ?? '' };
       });
     }
 
     const myTL = loadedPlayers.find(p => p.id === myPlayerId)?.timeline ?? [];
-    setMyMoviePairs(buildPairs(myTL));
+    const activePlayerId = loadedTurn?.active_player_id ?? null;
+    const activeTL = loadedPlayers.find(p => p.id === activePlayerId)?.timeline ?? [];
 
-    const activeTL = loadedPlayers.find(p => p.id === loadedTurn?.active_player_id)?.timeline ?? [];
-    setActivePlayerPairs(buildPairs(activeTL));
+    const [{ data: myWonTurns }, { data: activeWonTurns }] = await Promise.all([
+      db.from('turns').select('movie_id').eq('game_id', g.id).eq('winner_id', myPlayerId ?? ''),
+      activePlayerId
+        ? db.from('turns').select('movie_id').eq('game_id', g.id).eq('winner_id', activePlayerId)
+        : Promise.resolve({ data: [] }),
+    ]) as [{ data: { movie_id: string }[] | null }, { data: { movie_id: string }[] | null }];
+
+    const myWonIds   = new Set((myWonTurns   ?? []).map(t => t.movie_id));
+    const activeWonIds = new Set((activeWonTurns ?? []).map(t => t.movie_id));
+
+    setMyMoviePairs(buildPairsFromWins(myTL, myWonIds));
+    setActivePlayerPairs(buildPairsFromWins(activeTL, activeWonIds));
 
     const isGameStart = loadedPlayers.every(p => (p.timeline ?? []).length <= 1);
     if (isGameStart && !introShownRef.current) {
@@ -583,6 +600,29 @@ export default function GameScreen() {
     await db.from('challenges').update({ interval_index: challengeInterval }).eq('id', myChallenge.id);
     setMyChallenge({ ...myChallenge, interval_index: challengeInterval });
     setChallengeConfirmed(true);
+  }
+
+  async function handleCancelChallenge() {
+    if (!myChallenge) return;
+    // Refund the coin that was deducted when Challenge was tapped
+    const me = players.find(p => p.id === myPlayerId);
+    if (me) {
+      const refunded = me.coins + 1;
+      await db.from('players').update({ coins: refunded }).eq('id', myPlayerId);
+      const newPlayers = players.map(p => p.id === myPlayerId ? { ...p, coins: refunded } : p);
+      setLocalPlayers(newPlayers);
+      setPlayers(newPlayers);
+    }
+    // Remove the challenge record so the pick count stays accurate
+    const cancelledId = myChallenge.id;
+    await db.from('challenges').delete().eq('id', cancelledId);
+    const remaining = challenges.filter(c => c.id !== cancelledId);
+    setLocalChallenges(remaining);
+    setChallenges(remaining);
+    setMyChallenge(null);
+    setChallengeInterval(null);
+    setChallengeConfirmed(false);
+    setHasPassed(false);
   }
 
   async function handleAnimatedConfirm() {
@@ -764,6 +804,13 @@ export default function GameScreen() {
       let winnerId: string | null = null;
       if (activeCorrect) winnerId = ct.active_player_id;
       else if (winningChallenger) winnerId = winningChallenger.challenger_id;
+
+      // Write winner_id on the current turn so every device can later reconstruct
+      // exact player→movie mappings without ambiguity (same-year collisions).
+      // Safe to run on all devices — idempotent same-value writes.
+      if (winnerId) {
+        await db.from('turns').update({ winner_id: winnerId }).eq('id', ct.id);
+      }
 
       // Sync myMoviePairs BEFORE the cross-device guard — this ensures that even when
       // another device processes the turn first (and we return early below), our local
@@ -1319,18 +1366,11 @@ export default function GameScreen() {
                 </TouchableOpacity>
               )}
               <TouchableOpacity
-                style={styles.guessSkipBtn}
-                onPressIn={() => { setMovieGuess(''); setDirectorGuess(''); setReadyToPlace(true); }}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.guessSkipText}>Skip</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
                 style={[styles.guessPlaceBtn, { flex: 2 }]}
                 onPressIn={() => setReadyToPlace(true)}
                 activeOpacity={0.7}
               >
-                <Text style={styles.guessPlaceText}>Submit</Text>
+                <Text style={styles.guessPlaceText}>Place it →</Text>
               </TouchableOpacity>
             </View>
           </KeyboardAvoidingView>
@@ -1526,35 +1566,42 @@ export default function GameScreen() {
               placedLabel={amActive ? 'your pick' : 'their pick'}
               placedMovies={placedMovies}
               challengerPlacements={challengerPlacements}
+              hideFloatingCard
             />
           </View>
         </View>
 
-        {/* ── Action strip: Challenge/Pass (undecided) or Reveal (active) ── */}
+        {/* ── Action strip ── */}
         {!amActive && !alreadyDecided && !isPickingInterval && (
           <View style={styles.challengeActionStrip}>
-            {canChallenge ? (
-              <>
-                <ChallengeTimer seconds={5} onExpire={handlePass} size={72}>
+            <ChallengeTimer seconds={10} onExpire={handlePass} barMode />
+            <View style={styles.challengeDecideBtns}>
+              {canChallenge ? (
+                <>
                   <TouchableOpacity
-                    style={[styles.challengeBtnCircle, !hasCoins && { opacity: 0.35 }]}
+                    style={[styles.challengePill, !hasCoins && { opacity: 0.35 }]}
                     onPress={hasCoins ? handleChallenge : undefined}
-                    activeOpacity={hasCoins ? 0.7 : 1}
+                    activeOpacity={hasCoins ? 0.75 : 1}
                   >
-                    <Text style={styles.challengeBtnText}>
-                      {hasCoins ? 'Challenge' : 'No coins'}
-                    </Text>
+                    <Text style={styles.challengePillText}>{hasCoins ? 'Challenge' : 'No coins'}</Text>
                   </TouchableOpacity>
-                </ChallengeTimer>
-                <TouchableOpacity style={styles.challengePassBtn} onPress={handlePass}>
-                  <Text style={styles.passBtnText}>Pass</Text>
+                  <TouchableOpacity style={styles.passPill} onPress={handlePass} activeOpacity={0.75}>
+                    <Text style={styles.passPillText}>Pass</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <TouchableOpacity style={[styles.passPill, { flex: 1 }]} onPress={handlePass} activeOpacity={0.75}>
+                  <Text style={styles.passPillText}>All spots taken — Pass</Text>
                 </TouchableOpacity>
-              </>
-            ) : (
-              <TouchableOpacity style={[styles.challengePassBtn, { flex: 1 }]} onPress={handlePass}>
-                <Text style={styles.passBtnText}>All spots taken — Pass</Text>
-              </TouchableOpacity>
-            )}
+              )}
+            </View>
+          </View>
+        )}
+        {!amActive && isPickingInterval && (
+          <View style={styles.challengeActionStrip}>
+            <TouchableOpacity style={[styles.passPill, { flex: 1 }]} onPress={handleCancelChallenge} activeOpacity={0.75}>
+              <Text style={styles.passPillText}>↩ Cancel & get coin back</Text>
+            </TouchableOpacity>
           </View>
         )}
         {amActive && (
@@ -2493,23 +2540,44 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   challengeActionStrip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
+    flexDirection: 'column',
     paddingHorizontal: 16,
     paddingVertical: 6,
+    gap: 6,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: C.borderSubtle,
   },
-  challengePassBtn: {
-    width: '100%',
-    borderRadius: R.sm,
-    paddingVertical: 8,
+  challengeDecideBtns: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  challengePill: {
+    flex: 1,
+    borderRadius: R.btn,
+    paddingVertical: 9,
+    alignItems: 'center',
+    backgroundColor: 'rgba(230,57,70,0.15)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(230,57,70,0.5)',
+  },
+  challengePillText: {
+    color: '#e63946',
+    fontSize: FS.sm,
+    fontWeight: '700',
+  },
+  passPill: {
+    flex: 1,
+    borderRadius: R.btn,
+    paddingVertical: 9,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  passPillText: {
+    color: C.textSub,
+    fontSize: FS.sm,
+    fontWeight: '600',
   },
   challengePickTitle: {
     color: C.textMuted,
@@ -2519,12 +2587,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     textTransform: 'uppercase',
     paddingBottom: 4,
-  },
-  challengeBtnText: { color: C.textPrimary, fontSize: FS.sm, fontWeight: '800' },
-  passBtn: {
-    borderRadius: R.sm, paddingVertical: 10, alignItems: 'center',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
-    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   passBtnText: { color: C.textSub, fontSize: FS.sm, fontWeight: '600' },
   revealNowBtn: {
@@ -2740,13 +2802,6 @@ const styles = StyleSheet.create({
   },
   myTimelinePlaceholderYear: { color: C.gold, fontSize: FS.md, fontWeight: '800' },
 
-  // Challenge button circle (inside ChallengeTimer ring)
-  challengeBtnCircle: {
-    width: 96, height: 96, borderRadius: 48,
-    backgroundColor: 'rgba(230,57,70,0.18)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-
   // Bonus coin guess inputs (trailerEnded screen)
   bonusCoinBox: {
     alignItems: 'stretch', gap: 8, marginTop: 12, width: '100%', paddingHorizontal: 16,
@@ -2806,14 +2861,6 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   guessReplayText: { color: C.textSub, fontSize: FS.base, fontWeight: '600' },
-  guessSkipBtn: {
-    flex: 1, height: 52, borderRadius: R.card,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  guessSkipText: {
-    color: C.textSub, fontSize: FS.md, fontWeight: '700',
-  },
   guessPlaceBtn: {
     flex: 1, height: 52, backgroundColor: C.gold, borderRadius: R.card,
     alignItems: 'center', justifyContent: 'center',
