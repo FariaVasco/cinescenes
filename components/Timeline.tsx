@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import {
   ScrollView,
   View,
@@ -18,13 +18,18 @@ interface TimelineProps {
   onIntervalSelect: (i: number) => void;
   onConfirm: () => void;
   placedInterval?: number | null;
+  placedLabel?: string;
   placedMovies?: Movie[];
   hideFloatingCard?: boolean;
   blockedIntervals?: number[];
   revealingMovie?: Movie;
 }
 
-export function Timeline({
+export interface TimelineHandle {
+  measureGap: () => Promise<{ pageX: number; pageY: number; width: number; height: number } | null>;
+}
+
+export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timeline({
   timeline,
   currentCardMovie,
   interactive,
@@ -32,12 +37,25 @@ export function Timeline({
   onIntervalSelect,
   onConfirm,
   placedInterval,
+  placedLabel = 'their pick',
   placedMovies,
   hideFloatingCard,
   blockedIntervals,
   revealingMovie,
-}: TimelineProps) {
+}, ref) {
   const scrollRef = useRef<React.ElementRef<typeof ScrollView>>(null);
+  const activeGapRef = useRef<View>(null);
+
+  useImperativeHandle(ref, () => ({
+    measureGap: () => new Promise((resolve) => {
+      if (!activeGapRef.current) { resolve(null); return; }
+      const timer = setTimeout(() => resolve(null), 200);
+      activeGapRef.current.measure((_x, _y, width, height, pageX, pageY) => {
+        clearTimeout(timer);
+        resolve({ pageX, pageY, width, height });
+      });
+    }),
+  }));
 
   // Auto-scroll to the placed card slot when switching to non-interactive mode
   useEffect(() => {
@@ -87,7 +105,8 @@ export function Timeline({
           );
         }
         return (
-          <View key={`gap-${index}`} style={{ marginHorizontal: 24 }}>
+          <View key={`gap-${index}`} style={styles.placedMarkerWrap}>
+            <Text style={styles.placedMarkerLabel}>{placedLabel}</Text>
             <CardBack width={80} height={100} outlined />
           </View>
         );
@@ -98,7 +117,7 @@ export function Timeline({
     // Interactive mode — active (selected): dashed card outline with checkmark
     if (isActive) {
       return (
-        <View key={`gap-${index}`} style={styles.activeGap}>
+        <View key={`gap-${index}`} ref={activeGapRef} style={styles.activeGap}>
           <View style={styles.cardPlaceholder}>
             <TouchableOpacity style={styles.confirmCheckmark} onPress={onConfirm} activeOpacity={0.7}>
               <Text style={styles.confirmCheckmarkText}>✓</Text>
@@ -164,7 +183,7 @@ export function Timeline({
       {items}
     </ScrollView>
   );
-}
+});
 
 const styles = StyleSheet.create({
   scroll: {
@@ -200,6 +219,19 @@ const styles = StyleSheet.create({
     fontSize: FS.micro,
     textAlign: 'center',
     lineHeight: 12,
+  },
+  placedMarkerWrap: {
+    marginHorizontal: 24,
+    alignItems: 'center',
+    gap: 4,
+  },
+  placedMarkerLabel: {
+    color: C.gold,
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    opacity: 0.9,
   },
   gapSpacer: {
     width: 20,

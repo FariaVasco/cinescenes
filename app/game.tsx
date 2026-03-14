@@ -13,6 +13,8 @@ import {
   TextInput,
   BackHandler,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SpeechModule, speechAvailable, useSpeechRecognitionEvent } from '@/lib/speech-recognition';
 import { C, R, FS } from '@/constants/theme';
@@ -24,7 +26,7 @@ import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
 import { Challenge, Movie, Player, Turn } from '@/lib/database.types';
 import { TrailerPlayer, TrailerPlayerHandle } from '@/components/TrailerPlayer';
-import { Timeline } from '@/components/Timeline';
+import { Timeline, TimelineHandle } from '@/components/Timeline';
 import { ChallengeTimer } from '@/components/ChallengeTimer';
 import { CardBack, CardFront } from '@/components/MovieCard';
 import Svg, { Circle, Path } from 'react-native-svg';
@@ -44,39 +46,49 @@ const db = supabase as unknown as { from: (t: string) => any };
 const POLL_MS = 2000;
 const WIN_CARDS = 10;
 
-async function interpretVoiceInput(transcript: string): Promise<{ movie: string; director: string } | null> {
-  const apiKey = process.env.EXPO_PUBLIC_GROQ_API_KEY;
-  if (!apiKey) return null;
-  try {
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
-        messages: [
-          {
-            role: 'system',
-            content: 'You extract movie titles and director names from game player voice input. Respond only with valid JSON, no prose.',
-          },
-          {
-            role: 'user',
-            content: `A player said: "${transcript}"\n\nThey are trying to name a movie and its director. Extract both. Return ONLY: {"movie":"...","director":"..."}\nIf you cannot confidently identify both from what was said, return: {"error":"cannot identify"}`,
-          },
-        ],
-        max_tokens: 80,
-        temperature: 0,
-      }),
-    });
-    const data = await res.json();
-    const content: string = data.choices?.[0]?.message?.content ?? '';
-    const match = content.match(/\{[\s\S]*?\}/);
-    if (!match) return null;
-    const parsed = JSON.parse(match[0]);
-    if (parsed.error || !parsed.movie || !parsed.director) return null;
-    return { movie: parsed.movie, director: parsed.director };
-  } catch {
-    return null;
+// Parse "Movie Title by Director Name" from a voice transcript — no network needed.
+function parseTranscript(transcript: string): { movie: string; director: string } | null {
+  const match = transcript.match(/^(.+?)\s+(?:directed by|by)\s+(.+)$/i);
+  if (match) return { movie: match[1].trim(), director: match[2].trim() };
+  return null;
+}
+
+// Normalize for fuzzy comparison: lowercase, strip leading article, strip punctuation.
+function normalize(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/^(the|a|an)\s+/i, '')
+    .replace(/[^\w\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function levenshtein(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, (_, i) =>
+    Array.from({ length: n + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0))
+  );
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = a[i - 1] === b[j - 1]
+        ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+  return dp[m][n];
+}
+
+// Fuzzy match: handles articles, small typos (≤2), and last-name-only for directors.
+function fuzzyMatch(input: string, target: string): boolean {
+  if (!input.trim()) return false;
+  const a = normalize(input), b = normalize(target);
+  if (a === b) return true;
+  if (levenshtein(a, b) <= 2) return true;
+  // "Kubrick" matches "Stanley Kubrick" — input equals the trailing words of target
+  const bWords = b.split(' '), aWords = a.split(' ');
+  if (bWords.length > aWords.length) {
+    const suffix = bWords.slice(bWords.length - aWords.length).join(' ');
+    if (suffix === a || levenshtein(suffix, a) <= 1) return true;
   }
+  return false;
 }
 
 export default function GameScreen() {
@@ -119,6 +131,13 @@ export default function GameScreen() {
   const cardAnimY = useRef(new Animated.Value(0)).current;
   const cardAnimScale = useRef(new Animated.Value(1)).current;
   const cardAnimOpacity = useRef(new Animated.Value(1)).current;
+  const flyAnimX = useRef(new Animated.Value(0)).current;
+  const flyAnimY = useRef(new Animated.Value(0)).current;
+  const flyAnimOpacity = useRef(new Animated.Value(1)).current;
+  const [flyVisible, setFlyVisible] = useState(false);
+  const [flyStart, setFlyStart] = useState({ x: 0, y: 0 });
+  const floatingCardRef = useRef<any>(null);
+  const timelineRef = useRef<TimelineHandle>(null);
   const challengeWindowStart = useRef<number | null>(null);
   const revealTriggered = useRef(false);
   const nextTurnInProgress = useRef(false);
@@ -130,6 +149,9 @@ export default function GameScreen() {
   // Sorted by year so index i aligns with myTimeline.sort()[i].
   // Handles duplicate years (e.g. two 2024 films) correctly.
   const [myMoviePairs, setMyMoviePairs] = useState<{ year: number; id: string }[]>([]);
+  // Same structure for the active player — kept in sync on all devices so challengers
+  // see the correct movie for each year slot in the active player's timeline.
+  const [activePlayerPairs, setActivePlayerPairs] = useState<{ year: number; id: string }[]>([]);
   const [gameOver, setGameOver] = useState<Player | null>(null);
   const introShownRef = useRef(false);
 
@@ -203,27 +225,34 @@ export default function GameScreen() {
     if (trailerEnded && !readyToPlace && amActive) {
       stopPolling();
     } else if (!loading) {
-      startPolling();
+      // Poll faster during placing so observers react quickly when the active player
+      // clicks "I know it!" — the placed_interval=-1 signal shows up within ~750 ms
+      // instead of up to 2 s.
+      const isObserverWatchingTrailer = !amActive && currentTurn?.status === 'placing';
+      startPolling(isObserverWatchingTrailer ? 750 : POLL_MS);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trailerEnded, readyToPlace, myPlayerId, currentTurn?.active_player_id, loading]);
+  }, [trailerEnded, readyToPlace, myPlayerId, currentTurn?.active_player_id, currentTurn?.status, loading]);
 
   // Speech recognition event handlers (must be called at component level)
-  useSpeechRecognitionEvent('result', async (event) => {
-    const transcript = (event.results as any)[0]?.[0]?.transcript ?? '';
+  useSpeechRecognitionEvent('result', (event) => {
+    // Try multiple formats: WebSpeech nested, flat array, direct property
+    const results = event.results as any;
+    const transcript =
+      results?.[0]?.[0]?.transcript ??
+      results?.[0]?.transcript ??
+      event.transcript ??
+      '';
     if (!transcript || voiceStateRef.current !== 'listening') return;
-    voiceStateRef.current = 'processing';
-    setVoiceState('processing');
-    const parsed = await interpretVoiceInput(transcript);
+    voiceStateRef.current = 'idle';
+    setVoiceState('idle');
+    const parsed = parseTranscript(transcript);
     if (parsed) {
       setMovieGuess(parsed.movie);
       setDirectorGuess(parsed.director);
-      voiceStateRef.current = 'idle';
-      setVoiceState('idle');
     } else {
-      voiceStateRef.current = 'error';
-      setVoiceError(`Heard: "${transcript}" — couldn't identify movie + director. Please type.`);
-      setVoiceState('error');
+      // No "by" found — put everything in the movie field, let user fill director
+      setMovieGuess(transcript);
     }
   });
 
@@ -246,9 +275,9 @@ export default function GameScreen() {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
   }
 
-  function startPolling() {
+  function startPolling(intervalMs = POLL_MS) {
     stopPolling();
-    pollRef.current = setInterval(poll, POLL_MS);
+    pollRef.current = setInterval(poll, intervalMs);
   }
 
   async function poll() {
@@ -299,8 +328,41 @@ export default function GameScreen() {
           // batches them into one render — no intermediate frame where currentTurn is the
           // new drawing turn but players still has the old timeline (or vice versa).
           // The DB timeline is always written before the new turn is inserted, so this is safe.
+          if (freshPlayers) {
+            setLocalPlayers(freshPlayers as Player[]);
+            setPlayers(freshPlayers as Player[]);
+            // Recompute activePlayerPairs for the new active player so challengers see
+            // the correct movies in their timeline (handles same-year collisions).
+            const fp = freshPlayers as Player[];
+            const newActiveTL = fp.find(p => p.id === latestTurn.active_player_id)?.timeline ?? [];
+            const { data: pastTurns } = await db
+              .from('turns').select('movie_id').eq('game_id', gId)
+              .in('status', ['complete', 'revealing']) as { data: { movie_id: string }[] | null };
+            const pastIds = new Set((pastTurns ?? []).map(t => t.movie_id));
+            const sorted = [...newActiveTL].sort((a, b) => a - b);
+            const used = new Set<string>();
+            const newPairs = sorted.map(year => {
+              const fromTurn = activeMovies.find(mv => mv.year === year && pastIds.has(mv.id) && !used.has(mv.id));
+              const fallback  = activeMovies.find(mv => mv.year === year && !used.has(mv.id));
+              const best = fromTurn ?? fallback ?? activeMovies.find(mv => mv.year === year);
+              if (best) used.add(best.id);
+              return { year, id: best?.id ?? '' };
+            });
+            setActivePlayerPairs(newPairs);
+          }
+        } else if (statusChanged && latestTurn.status === 'revealing') {
+          // Refresh players on every device when the turn goes to revealing so coin
+          // changes (written by handleReveal before flipping status) show up for all players.
           if (freshPlayers) { setLocalPlayers(freshPlayers as Player[]); setPlayers(freshPlayers as Player[]); }
+        }
 
+        // Observer: active player tapped "I know it!" — exit the trailer view
+        if (!turnChanged && placedIntervalChanged && latestTurn.placed_interval === -1
+            && myPlayerId !== latestTurn.active_player_id) {
+          setTrailerEnded(true);
+        }
+
+        if (turnChanged) {
           setTrailerEnded(false);
           setReadyToPlace(false);
           setUserPaused(false);
@@ -350,16 +412,20 @@ export default function GameScreen() {
         myPlayerId === latestTurn.active_player_id &&
         !revealTriggered.current
       ) {
+        // allSettled: no one is still picking (no interval_index === -1)
         const allSettled = (cData ?? []).every((c: Challenge) => c.interval_index !== -1);
+        // allDecided: every non-active player has a row (pass = -2 or real challenge ≥ 0)
+        const observers = players.filter(p => p.id !== latestTurn.active_player_id);
+        const allDecided = observers.length > 0 && (cData ?? []).length >= observers.length;
         // Initialize window if not set (e.g. fresh load into an already-challenging turn)
         if (challengeWindowStart.current === null) {
-          // If challenges are already settled, backdate so the next check fires quickly
-          challengeWindowStart.current = allSettled ? Date.now() - 14000 : Date.now();
+          challengeWindowStart.current = (allDecided && allSettled) ? Date.now() - 14000 : Date.now();
         }
         const elapsed = Date.now() - challengeWindowStart.current;
-        // Reveal after 6.5 s (5 s window + 1.5 s buffer) once everyone has confirmed
-        // Hard cutoff at 15 s in case a challenger's app froze
-        if (elapsed > 6500 && (allSettled || elapsed > 15000)) {
+        // Reveal immediately once every observer has decided and none are still picking.
+        // Fallback: 6.5 s after placement (handles disconnected players).
+        // Hard cutoff: 15 s.
+        if ((allDecided && allSettled) || (elapsed > 6500 && allSettled) || elapsed > 15000) {
           revealTriggered.current = true;
           handleReveal();
         }
@@ -396,24 +462,33 @@ export default function GameScreen() {
       setChallenges(loaded);
     }
 
-    // Build ordered pairs for my timeline so the modal shows the correct movie per slot,
+    // Build ordered pairs for a timeline so the correct movie is shown per year slot,
     // even when multiple movies share the same year.
-    // Strategy: prefer movies that appear in the game's turns (won cards) over first-match.
-    // usedIds prevents the same movie being assigned to two slots.
+    // Strategy: prefer movies that appear in past completed turns over first-match.
+    // Only include complete/revealing turns — exclude the current active turn so a
+    // same-year collision between the active card and a starting card doesn't mis-map pairs.
     const { data: allTurns } = await db
-      .from('turns').select('movie_id').eq('game_id', g.id) as { data: { movie_id: string }[] | null };
+      .from('turns').select('movie_id').eq('game_id', g.id)
+      .in('status', ['complete', 'revealing']) as { data: { movie_id: string }[] | null };
     const turnMovieIds = new Set((allTurns ?? []).map(t => t.movie_id));
+
+    function buildPairs(years: number[]): { year: number; id: string }[] {
+      const sorted = [...years].sort((a, b) => a - b);
+      const used = new Set<string>();
+      return sorted.map(year => {
+        const fromTurn = activeMovies.find(mv => mv.year === year && turnMovieIds.has(mv.id) && !used.has(mv.id));
+        const fallback  = activeMovies.find(mv => mv.year === year && !used.has(mv.id));
+        const best = fromTurn ?? fallback ?? activeMovies.find(mv => mv.year === year);
+        if (best) used.add(best.id);
+        return { year, id: best?.id ?? '' };
+      });
+    }
+
     const myTL = loadedPlayers.find(p => p.id === myPlayerId)?.timeline ?? [];
-    const sortedTL = [...myTL].sort((a, b) => a - b);
-    const usedIds = new Set<string>();
-    const pairs: { year: number; id: string }[] = sortedTL.map(year => {
-      const fromTurn = activeMovies.find(mv => mv.year === year && turnMovieIds.has(mv.id) && !usedIds.has(mv.id));
-      const fallback  = activeMovies.find(mv => mv.year === year && !usedIds.has(mv.id));
-      const best = fromTurn ?? fallback ?? activeMovies.find(mv => mv.year === year);
-      if (best) usedIds.add(best.id);
-      return { year, id: best?.id ?? '' };
-    });
-    setMyMoviePairs(pairs);
+    setMyMoviePairs(buildPairs(myTL));
+
+    const activeTL = loadedPlayers.find(p => p.id === loadedTurn?.active_player_id)?.timeline ?? [];
+    setActivePlayerPairs(buildPairs(activeTL));
 
     const isGameStart = loadedPlayers.every(p => (p.timeline ?? []).length <= 1);
     if (isGameStart && !introShownRef.current) {
@@ -477,14 +552,28 @@ export default function GameScreen() {
   async function handleChallenge() {
     if (!currentTurn || myChallenge) return;
     setHasPassed(false);
-    // Challenging always costs 1 coin
+    // Challenging always costs 1 coin — optimistic update first, then persist
     const challenger = players.find(p => p.id === myPlayerId);
     if (challenger && challenger.coins > 0) {
-      await db.from('players').update({ coins: challenger.coins - 1 }).eq('id', myPlayerId);
+      const updatedCoins = challenger.coins - 1;
+      const newPlayers = players.map(p => p.id === myPlayerId ? { ...p, coins: updatedCoins } : p);
+      setLocalPlayers(newPlayers);
+      setPlayers(newPlayers);
+      await db.from('players').update({ coins: updatedCoins }).eq('id', myPlayerId);
     }
     const { data: inserted } = await db
       .from('challenges')
       .insert({ turn_id: currentTurn.id, challenger_id: myPlayerId!, interval_index: -1 })
+      .select().single() as { data: Challenge | null };
+    if (inserted) setMyChallenge(inserted);
+  }
+
+  async function handlePass() {
+    setHasPassed(true);
+    if (!currentTurn) return;
+    const { data: inserted } = await db
+      .from('challenges')
+      .insert({ turn_id: currentTurn.id, challenger_id: myPlayerId!, interval_index: -2 })
       .select().single() as { data: Challenge | null };
     if (inserted) setMyChallenge(inserted);
   }
@@ -497,13 +586,67 @@ export default function GameScreen() {
   }
 
   async function handleAnimatedConfirm() {
-    await new Promise<void>((resolve) => {
-      Animated.parallel([
-        Animated.timing(cardAnimY, { toValue: 260, duration: 380, useNativeDriver: true }),
-        Animated.timing(cardAnimScale, { toValue: 0.3, duration: 380, useNativeDriver: true }),
-        Animated.timing(cardAnimOpacity, { toValue: 0, duration: 300, useNativeDriver: true }),
-      ]).start(() => resolve());
-    });
+    const measureCard = (): Promise<{ pageX: number; pageY: number } | null> =>
+      new Promise((resolve) => {
+        if (!floatingCardRef.current) { resolve(null); return; }
+        const timer = setTimeout(() => resolve(null), 200);
+        floatingCardRef.current.measure(
+          (_: number, __: number, _w: number, _h: number, pageX: number, pageY: number) => {
+            clearTimeout(timer);
+            resolve({ pageX, pageY });
+          },
+        );
+      });
+
+    const [cardPos, gapPos] = await Promise.all([
+      measureCard(),
+      timelineRef.current?.measureGap() ?? null,
+    ]);
+
+    if (cardPos && gapPos) {
+      flyAnimX.setValue(0);
+      flyAnimY.setValue(0);
+      flyAnimOpacity.setValue(1);
+      setFlyStart({ x: cardPos.pageX, y: cardPos.pageY });
+      setFlyVisible(true);
+      cardAnimOpacity.setValue(0);
+
+      await new Promise<void>((resolve) => {
+        Animated.parallel([
+          Animated.timing(flyAnimX, {
+            toValue: gapPos.pageX - cardPos.pageX,
+            duration: 420,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+          Animated.timing(flyAnimY, {
+            toValue: gapPos.pageY - cardPos.pageY,
+            duration: 420,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+          Animated.sequence([
+            Animated.delay(360),
+            Animated.timing(flyAnimOpacity, { toValue: 0, duration: 60, useNativeDriver: true }),
+          ]),
+        ]).start(() => resolve());
+      });
+
+      setFlyVisible(false);
+    } else {
+      // Fallback: card falls away
+      await new Promise<void>((resolve) => {
+        Animated.parallel([
+          Animated.timing(cardAnimY, { toValue: 260, duration: 380, useNativeDriver: true }),
+          Animated.timing(cardAnimScale, { toValue: 0.3, duration: 380, useNativeDriver: true }),
+          Animated.timing(cardAnimOpacity, { toValue: 0, duration: 300, useNativeDriver: true }),
+        ]).start(() => resolve());
+      });
+      cardAnimY.setValue(0);
+      cardAnimScale.setValue(1);
+      cardAnimOpacity.setValue(1);
+    }
+
     challengeWindowStart.current = Date.now();
     revealTriggered.current = false;
     handleConfirmPlacement();
@@ -522,12 +665,16 @@ export default function GameScreen() {
         const isCorrect = ct.placed_interval !== null &&
           validIntervals.includes(ct.placed_interval);
         if (isCorrect) {
-          const titleOK = movieGuess.trim().toLowerCase() === m.title.toLowerCase();
-          const directorOK = directorGuess.trim().toLowerCase() === (m.director ?? '').toLowerCase();
+          const titleOK = fuzzyMatch(movieGuess, m.title);
+          const directorOK = fuzzyMatch(directorGuess, m.director ?? '');
           if (titleOK && directorOK) {
             const myPlayer = players.find(p => p.id === myPlayerId);
             if (myPlayer) {
-              await db.from('players').update({ coins: myPlayer.coins + 1 }).eq('id', myPlayerId);
+              const updatedCoins = myPlayer.coins + 1;
+              await db.from('players').update({ coins: updatedCoins }).eq('id', myPlayerId);
+              const newPlayers = players.map(p => p.id === myPlayerId ? { ...p, coins: updatedCoins } : p);
+              setLocalPlayers(newPlayers);
+              setPlayers(newPlayers);
             }
           }
         }
@@ -628,6 +775,23 @@ export default function GameScreen() {
         });
       }
 
+      // Refund coin if this player challenged with a valid interval but active player also placed correctly.
+      // Both picked a "correct" spot for the same-year card — challenger didn't lose, so coin comes back.
+      // Each device handles its own player only, so no race condition.
+      if (myPlayerId !== ct.active_player_id && activeCorrect) {
+        const myC = challenges.find(c => c.challenger_id === myPlayerId);
+        if (myC && myC.interval_index >= 0 && validIntervals.includes(myC.interval_index)) {
+          const me = latestPlayers.find(p => p.id === myPlayerId);
+          if (me) {
+            const refunded = me.coins + 1;
+            await db.from('players').update({ coins: refunded }).eq('id', myPlayerId);
+            const newPlayers = latestPlayers.map(p => p.id === myPlayerId ? { ...p, coins: refunded } : p);
+            setLocalPlayers(newPlayers);
+            setPlayers(newPlayers);
+          }
+        }
+      }
+
       // Guard against double-processing across devices: if a newer real turn already exists,
       // another device already handled this. Call poll() to sync UI then exit.
       const { data: existingNext } = await db
@@ -656,6 +820,8 @@ export default function GameScreen() {
           // Game over — winner reached the target card count
           if (newTimeline.length >= WIN_CARDS) {
             await db.from('games').update({ status: 'finished' }).eq('id', g.id);
+            setLocalPlayers(updatedPlayers);
+            setPlayers(updatedPlayers);
             setGameOver({ ...winner, timeline: newTimeline });
             stopPolling();
             return;
@@ -779,10 +945,24 @@ export default function GameScreen() {
 
   const amIActive = currentTurn?.active_player_id === myPlayerId;
 
-  // Active player's timeline movies — uses myMoviePairs when I'm the active player.
-  const placedMovies: Movie[] = timeline
-    .map((_, i) => resolveMovie(timeline, i, amIActive))
-    .filter((m): m is Movie => m !== undefined);
+  // Active player's timeline movies.
+  // On the active player's device: use myMoviePairs (authoritative).
+  // On challenger devices: use activePlayerPairs (synced at turn start) so the
+  // correct movie is shown even when multiple movies share the same year.
+  const placedMovies: Movie[] = timeline.map((year, i) => {
+    if (amIActive && myMoviePairs.length > 0) {
+      const pairsForYear = myMoviePairs.filter(p => p.year === year);
+      const countBefore = timeline.slice(0, i).filter(y => y === year).length;
+      const pair = pairsForYear[countBefore];
+      if (pair) return activeMovies.find(m => m.id === pair.id);
+    } else if (!amIActive && activePlayerPairs.length > 0) {
+      const pairsForYear = activePlayerPairs.filter(p => p.year === year);
+      const countBefore = timeline.slice(0, i).filter(y => y === year).length;
+      const pair = pairsForYear[countBefore];
+      if (pair) return activeMovies.find(m => m.id === pair.id);
+    }
+    return activeMovies.find(mv => mv.year === year);
+  }).filter((m): m is Movie => m !== undefined);
 
   // My own placed movies (drawing phase) — always uses myMoviePairs.
   const myPlacedMovies: Movie[] = myTimeline
@@ -985,6 +1165,7 @@ export default function GameScreen() {
                 {amActive ? 'Where does it go?' : `Waiting for ${activePlayer?.display_name}…`}
               </Text>
               <Animated.View
+                ref={floatingCardRef}
                 style={[
                   styles.floatingCard,
                   {
@@ -1003,6 +1184,7 @@ export default function GameScreen() {
                 <Text style={styles.tapHint}>Tap + to pick a spot</Text>
               )}
               <Timeline
+                ref={timelineRef}
                 timeline={timeline}
                 currentCardMovie={movie}
                 interactive={amActive}
@@ -1016,6 +1198,21 @@ export default function GameScreen() {
           </View>
 
           <ScoreBar players={players} myId={myPlayerId} onShowTimeline={() => setShowMyTimeline(true)} />
+          {flyVisible && (
+            <View style={StyleSheet.absoluteFill} pointerEvents="none">
+              <Animated.View
+                style={{
+                  position: 'absolute',
+                  left: flyStart.x,
+                  top: flyStart.y,
+                  transform: [{ translateX: flyAnimX }, { translateY: flyAnimY }],
+                  opacity: flyAnimOpacity,
+                }}
+              >
+                <CardBack width={80} height={CARD_H} />
+              </Animated.View>
+            </View>
+          )}
         </SafeAreaView>
       );
     }
@@ -1039,108 +1236,104 @@ export default function GameScreen() {
       }
 
       return (
-        <SafeAreaView style={styles.guessScreenL} edges={['top', 'bottom', 'left', 'right']}>
+        <SafeAreaView style={styles.guessScreen} edges={['top', 'bottom', 'left', 'right']}>
           {leaveModal}
-          {/* Header */}
-          <View style={styles.guessHeaderL}>
-            <Text style={styles.guessTitleL}>What year is this movie from?</Text>
-            <Text style={styles.guessSubtitleL}>BONUS COIN — NAME THE MOVIE + DIRECTOR</Text>
-          </View>
-
-          {/* Main two-panel row */}
-          <View style={styles.guessMainRow}>
-            {/* Left: text inputs */}
-            <View style={styles.guessLeftPanel}>
-              <TextInput
-                style={styles.guessInput}
-                placeholder="Movie title…"
-                placeholderTextColor={C.textMuted}
-                value={movieGuess}
-                onChangeText={setMovieGuess}
-                autoCorrect={false}
-                returnKeyType="next"
-              />
-              <TextInput
-                style={styles.guessInput}
-                placeholder="Director name…"
-                placeholderTextColor={C.textMuted}
-                value={directorGuess}
-                onChangeText={setDirectorGuess}
-                autoCorrect={false}
-                returnKeyType="done"
-              />
+          <KeyboardAvoidingView
+            style={{ flex: 1 }}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          >
+            {/* Header */}
+            <View style={styles.guessHeader}>
+              <Text style={styles.guessTitle}>What year is this movie from?</Text>
+              <Text style={styles.guessSubtitle}>BONUS COIN — NAME THE MOVIE + DIRECTOR</Text>
             </View>
 
-            {/* Divider */}
-            <View style={styles.guessDivider} />
+            {/* Main two-panel row */}
+            <View style={styles.guessMainRow}>
+              {/* Left: text inputs */}
+              <View style={styles.guessLeftPanel}>
+                <TextInput
+                  style={styles.guessInput}
+                  placeholder="Movie title…"
+                  placeholderTextColor={C.textMuted}
+                  value={movieGuess}
+                  onChangeText={setMovieGuess}
+                  autoCorrect={false}
+                  returnKeyType="next"
+                />
+                <TextInput
+                  style={styles.guessInput}
+                  placeholder="Director name…"
+                  placeholderTextColor={C.textMuted}
+                  value={directorGuess}
+                  onChangeText={setDirectorGuess}
+                  autoCorrect={false}
+                  returnKeyType="done"
+                />
+              </View>
 
-            {/* Right: voice input */}
-            <View style={styles.guessRightPanel}>
-              {voiceState === 'idle' && (movieGuess || directorGuess) ? (
-                <View style={styles.voicePreview}>
-                  {movieGuess    && <Text style={styles.voicePreviewText}>🎬 {movieGuess}</Text>}
-                  {directorGuess && <Text style={styles.voicePreviewText}>🎬 {directorGuess}</Text>}
-                  <TouchableOpacity onPress={() => { setMovieGuess(''); setDirectorGuess(''); }}>
-                    <Text style={styles.voiceRetryText}>Clear</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : voiceState === 'idle' ? (
-                <TouchableOpacity style={styles.voiceMicBtn} onPress={startVoice} activeOpacity={0.75}>
-                  <Text style={styles.voiceMicIcon}>🎤</Text>
-                  <Text style={styles.voiceMicText}>Speak your answer</Text>
+              {/* Divider */}
+              <View style={styles.guessDivider} />
+
+              {/* Right: voice input */}
+              <View style={styles.guessRightPanel}>
+                {speechAvailable ? (
+                  voiceState === 'idle' ? (
+                    <TouchableOpacity style={styles.voiceMicBtn} onPress={startVoice} activeOpacity={0.75}>
+                      <Text style={styles.voiceMicIcon}>🎤</Text>
+                      <Text style={styles.voiceMicText}>Say "[movie] by [director]"</Text>
+                    </TouchableOpacity>
+                  ) : voiceState === 'listening' ? (
+                    <TouchableOpacity style={[styles.voiceMicBtn, styles.voiceMicBtnListening]} onPress={stopVoice} activeOpacity={0.75}>
+                      <Text style={styles.voiceMicIcon}>🎤</Text>
+                      <Text style={styles.voiceMicText}>Listening… tap to stop</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <View style={styles.voiceErrorBox}>
+                      <Text style={styles.voiceErrorText}>{voiceError}</Text>
+                      <TouchableOpacity onPress={() => { voiceStateRef.current = 'idle'; setVoiceState('idle'); setVoiceError(''); }}>
+                        <Text style={styles.voiceRetryText}>Try again</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )
+                ) : (
+                  <Text style={styles.voiceUnavailableText}>Type your answer on the left</Text>
+                )}
+              </View>
+            </View>
+
+            {/* Footer */}
+            <View style={styles.guessFooter}>
+              {!hasReplayed && (
+                <TouchableOpacity
+                  style={styles.guessReplayBtn}
+                  onPressIn={() => {
+                    setHasReplayed(true);
+                    setTrailerEnded(false);
+                    setUserPaused(false);
+                    setTrailerKey(k => k + 1);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.guessReplayText}>↺ Replay</Text>
                 </TouchableOpacity>
-              ) : voiceState === 'listening' ? (
-                <TouchableOpacity style={[styles.voiceMicBtn, styles.voiceMicBtnListening]} onPress={stopVoice} activeOpacity={0.75}>
-                  <Text style={styles.voiceMicIcon}>🎤</Text>
-                  <Text style={styles.voiceMicText}>Listening… tap to stop</Text>
-                </TouchableOpacity>
-              ) : voiceState === 'processing' ? (
-                <View style={[styles.voiceMicBtn, { opacity: 0.7 }]}>
-                  <ActivityIndicator color={C.gold} size="small" />
-                  <Text style={styles.voiceMicText}>Interpreting…</Text>
-                </View>
-              ) : (
-                <View style={styles.voiceErrorBox}>
-                  <Text style={styles.voiceErrorText}>{voiceError}</Text>
-                  <TouchableOpacity onPress={() => { voiceStateRef.current = 'idle'; setVoiceState('idle'); setVoiceError(''); }}>
-                    <Text style={styles.voiceRetryText}>Try again</Text>
-                  </TouchableOpacity>
-                </View>
               )}
-            </View>
-          </View>
-
-          {/* Footer */}
-          <View style={styles.guessFooterL}>
-            {!hasReplayed && (
               <TouchableOpacity
-                style={styles.guessReplayBtn}
-                onPressIn={() => {
-                  setHasReplayed(true);
-                  setTrailerEnded(false);
-                  setUserPaused(false);
-                  setTrailerKey(k => k + 1);
-                }}
+                style={styles.guessSkipBtn}
+                onPressIn={() => { setMovieGuess(''); setDirectorGuess(''); setReadyToPlace(true); }}
                 activeOpacity={0.7}
               >
-                <Text style={styles.guessReplayText}>↺ Replay</Text>
+                <Text style={styles.guessSkipText}>Skip</Text>
               </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              style={styles.guessSkipBtn}
-              onPressIn={() => { setMovieGuess(''); setDirectorGuess(''); setReadyToPlace(true); }}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.guessSkipText}>Skip</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.guessPlaceBtn, { flex: 2 }]}
-              onPressIn={() => setReadyToPlace(true)}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.guessPlaceText}>Submit</Text>
-            </TouchableOpacity>
-          </View>
+              <TouchableOpacity
+                style={[styles.guessPlaceBtn, { flex: 2 }]}
+                onPressIn={() => setReadyToPlace(true)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.guessPlaceText}>Submit</Text>
+              </TouchableOpacity>
+            </View>
+          </KeyboardAvoidingView>
         </SafeAreaView>
       );
     }
@@ -1177,14 +1370,17 @@ export default function GameScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.skipButton}
-                onPress={() => {
+                onPress={async () => {
                   trailerRef.current?.stop();
-                  setTrailerEnded(true);
                   setUserPaused(false);
-                  // Signal to observers: placed_interval = -1 means "I know it" phase
+                  // Signal observers first (awaited so they can poll it before we advance)
                   if (currentTurn) {
-                    db.from('turns').update({ placed_interval: -1 }).eq('id', currentTurn.id);
+                    const optimistic = { ...currentTurn, placed_interval: -1 };
+                    currentTurnRef.current = optimistic;
+                    setLocalTurn(optimistic);
+                    await db.from('turns').update({ placed_interval: -1 }).eq('id', currentTurn.id);
                   }
+                  setTrailerEnded(true);
                 }}
               >
                 <Text style={styles.skipButtonText}>I know it! →</Text>
@@ -1257,13 +1453,13 @@ export default function GameScreen() {
     if (currentTurn.placed_interval !== null && currentTurn.placed_interval !== undefined) {
       takenSet.add(currentTurn.placed_interval);
     }
-    challenges.forEach(c => { if (c.interval_index !== -1) takenSet.add(c.interval_index); });
+    challenges.forEach(c => { if (c.interval_index >= 0) takenSet.add(c.interval_index); });
     const blockedIntervals = Array.from(takenSet);
     const canChallenge = (timeline.length + 1) - takenSet.size > 0;
 
     // Dynamic status message visible to all players
     const pickingNow = challenges.filter(c => c.interval_index === -1);
-    const confirmedC = challenges.filter(c => c.interval_index !== -1);
+    const confirmedC = challenges.filter(c => c.interval_index >= 0);
     let statusMsg: string;
     let statusEmoji: string | null = null;
     if (pickingNow.length > 0) {
@@ -1278,103 +1474,124 @@ export default function GameScreen() {
       statusMsg = 'Waiting for everyone to decide…';
     }
 
+    const pendingChallengers = challenges.some(c => c.interval_index === -1);
+    const canRevealNow = !revealLocked && !pendingChallengers;
+    const myPlayerObj = players.find(p => p.id === myPlayerId);
+    const hasCoins = (myPlayerObj?.coins ?? 0) > 0;
+
+    // Challenger has committed to challenging and is now picking their interval
+    const isPickingInterval = !amActive && myChallenge !== null
+      && myChallenge.interval_index !== -2   // not passed
+      && !challengeConfirmed;
+
     return (
       <SafeAreaView style={styles.container}>
         {myTimelineModal}
         {leaveModal}
-        {/* Full-width timeline + centered status overlay */}
-        <View style={styles.challengeTimelineArea}>
-          <Timeline
-            timeline={timeline}
-            currentCardMovie={movie}
-            interactive={false}
-            selectedInterval={null}
-            onIntervalSelect={() => {}}
-            onConfirm={() => {}}
-            placedInterval={currentTurn.placed_interval}
-            placedMovies={placedMovies}
-          />
-          {/* Status message floats centered over the timeline */}
-          <View style={styles.challengeOverlayWrap} pointerEvents="none">
-            <View style={styles.challengeOverlayCard}>
-              {statusEmoji
-                ? <Text style={styles.challengeOverlayIcon}>{statusEmoji}</Text>
-                : <ActivityIndicator size="small" color={C.gold} />}
-              <Text style={styles.challengeOverlayText}>{statusMsg}</Text>
-            </View>
+
+        <View style={styles.placingRow}>
+
+          {/* ── Left panel: mystery card + status + actions ── */}
+          <View style={styles.challengeLeftPanel}>
+            <CardBack width={72} height={100} />
+            <Text style={styles.challengeFloatingLabel}>? ? ?</Text>
+
+            {/* Status (hidden while challenger is picking — they know what they're doing) */}
+            {!isPickingInterval && (
+              <View style={styles.challengeStatusBadge}>
+                {statusEmoji
+                  ? <Text style={styles.challengeOverlayIcon}>{statusEmoji}</Text>
+                  : <ActivityIndicator size="small" color={C.gold} />}
+                <Text style={styles.challengeOverlayText}>{statusMsg}</Text>
+              </View>
+            )}
+
+            {/* Challenger picking their slot: contextual label */}
+            {isPickingInterval && (
+              <Text style={styles.challengePickingHint}>
+                Pick where{'\n'}YOU think{'\n'}it goes
+              </Text>
+            )}
+          </View>
+
+          {/* ── Right panel ── */}
+          <View style={styles.placingTimelinePanel}>
+            {isPickingInterval ? (
+              // Challenger picking: single interactive timeline.
+              // Active player's picked slot shows as ✕ (it's in blockedIntervals),
+              // which prevents the challenger from picking the same spot.
+              <>
+                <Text style={styles.challengePickTitle}>
+                  Tap + to pick your spot  ·  ✕ = their pick
+                </Text>
+                <Timeline
+                  timeline={timeline}
+                  currentCardMovie={movie}
+                  interactive
+                  selectedInterval={challengeInterval}
+                  onIntervalSelect={setChallengeInterval}
+                  onConfirm={handleConfirmChallengeInterval}
+                  placedMovies={placedMovies}
+                  blockedIntervals={blockedIntervals}
+                />
+              </>
+            ) : (
+              // Everyone else: non-interactive, placed slot labelled "your pick" or "their pick"
+              <Timeline
+                timeline={timeline}
+                currentCardMovie={movie}
+                interactive={false}
+                selectedInterval={null}
+                onIntervalSelect={() => {}}
+                onConfirm={() => {}}
+                placedInterval={currentTurn.placed_interval}
+                placedLabel={amActive ? 'your pick' : 'their pick'}
+                placedMovies={placedMovies}
+              />
+            )}
           </View>
         </View>
 
-        {/* Challenger: interval picker (before confirming) */}
-        {!amActive && myChallenge && !challengeConfirmed && (
-          <View style={styles.challengePickStrip}>
-            <Text style={styles.challengePickTitle}>Where would YOU place it?</Text>
-            <Timeline
-              timeline={timeline}
-              currentCardMovie={movie}
-              interactive
-              selectedInterval={challengeInterval}
-              onIntervalSelect={setChallengeInterval}
-              onConfirm={handleConfirmChallengeInterval}
-              placedMovies={placedMovies}
-              blockedIntervals={blockedIntervals}
-            />
-            {challengeInterval === null && (
-              <Text style={styles.tapHint}>Tap + to pick a spot</Text>
+        {/* ── Action strip: always visible above ScoreBar ── */}
+        {!amActive && !alreadyDecided && (
+          <View style={styles.challengeActionStrip}>
+            {canChallenge ? (
+              <>
+                <ChallengeTimer seconds={5} onExpire={handlePass} size={72}>
+                  <TouchableOpacity
+                    style={[styles.challengeBtnCircle, !hasCoins && { opacity: 0.35 }]}
+                    onPress={hasCoins ? handleChallenge : undefined}
+                    activeOpacity={hasCoins ? 0.7 : 1}
+                  >
+                    <Text style={styles.challengeBtnText}>
+                      {hasCoins ? 'Challenge' : 'No coins'}
+                    </Text>
+                  </TouchableOpacity>
+                </ChallengeTimer>
+                <TouchableOpacity style={styles.challengePassBtn} onPress={handlePass}>
+                  <Text style={styles.passBtnText}>Pass</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <TouchableOpacity style={[styles.challengePassBtn, { flex: 1 }]} onPress={handlePass}>
+                <Text style={styles.passBtnText}>All spots taken — Pass</Text>
+              </TouchableOpacity>
             )}
           </View>
         )}
-
-        {/* Non-active players who haven't decided yet: Challenge / Pass */}
-        {!amActive && !alreadyDecided && (() => {
-          const myPlayerObj = players.find(p => p.id === myPlayerId);
-          const hasCoins = (myPlayerObj?.coins ?? 0) > 0;
-          return (
-            <View style={styles.challengeDecideStrip}>
-              {canChallenge ? (
-                <>
-                  <ChallengeTimer seconds={5} onExpire={() => setHasPassed(true)} size={108}>
-                    <TouchableOpacity
-                      style={[styles.challengeBtnCircle, !hasCoins && { opacity: 0.35 }]}
-                      onPress={hasCoins ? handleChallenge : undefined}
-                      activeOpacity={hasCoins ? 0.7 : 1}
-                    >
-                      <Text style={styles.challengeBtnText}>
-                        {hasCoins ? 'Challenge' : 'No coins'}
-                      </Text>
-                    </TouchableOpacity>
-                  </ChallengeTimer>
-                  <TouchableOpacity style={[styles.passBtn, { flex: 1 }]} onPress={() => setHasPassed(true)}>
-                    <Text style={styles.passBtnText}>Pass</Text>
-                  </TouchableOpacity>
-                </>
-              ) : (
-                <TouchableOpacity style={[styles.passBtn, { flex: 1 }]} onPress={() => setHasPassed(true)}>
-                  <Text style={styles.passBtnText}>All spots taken — Pass</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          );
-        })()}
-
-        {/* Active player: manual reveal button — only enabled once challenge window closed */}
-        {amActive && (() => {
-          const pendingChallengers = challenges.some(c => c.interval_index === -1);
-          const canRevealNow = !revealLocked && !pendingChallengers;
-          return (
-            <View style={styles.challengeDecideStrip}>
-              <TouchableOpacity
-                style={[styles.revealNowBtn, { flex: 1 }, !canRevealNow && { opacity: 0.35 }]}
-                onPress={canRevealNow ? handleReveal : undefined}
-                activeOpacity={canRevealNow ? 0.85 : 1}
-              >
-                <Text style={styles.revealNowBtnText}>
-                  {revealLocked ? 'Waiting for decisions…' : pendingChallengers ? 'Challenger deciding…' : 'Reveal →'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          );
-        })()}
+        {amActive && (
+          <View style={styles.challengeActionStrip}>
+            <TouchableOpacity
+              style={[styles.revealNowBtn, !canRevealNow && { opacity: 0.35 }]}
+              onPress={canRevealNow ? handleReveal : undefined}
+              activeOpacity={canRevealNow ? 0.85 : 1}
+            >
+              <Text style={styles.revealNowBtnText}>
+                {revealLocked ? 'Waiting…' : pendingChallengers ? 'Deciding…' : 'Reveal →'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         <ScoreBar players={players} myId={myPlayerId} onShowTimeline={() => setShowMyTimeline(true)} />
       </SafeAreaView>
@@ -1552,7 +1769,7 @@ export default function GameScreen() {
               </TouchableOpacity>
             </View>
 
-            {activeCorrect && <ConfettiBurst />}
+            {winnerId === myPlayerId && <ConfettiBurst />}
             {isTrash && <TrashCard movie={m} />}
           </>
         )}
@@ -1667,7 +1884,7 @@ function GameOverScreen({ winner, players, myId }: { winner: Player; players: Pl
         </View>
 
       </View>
-      <ConfettiBurst />
+      {isMe && <ConfettiBurst />}
     </SafeAreaView>
   );
 }
@@ -2280,68 +2497,83 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
 
-  challengeTimelineArea: { flex: 1 },
-  challengeOverlayWrap: {
-    ...StyleSheet.absoluteFillObject,
+  challengeLeftPanel: {
+    width: 130,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderRightColor: C.borderSubtle,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
   },
-  challengeOverlayCard: {
-    backgroundColor: 'rgba(10, 6, 24, 0.88)',
-    borderRadius: R.card,
-    borderWidth: 1,
-    borderColor: C.border,
-    paddingHorizontal: 22,
-    paddingVertical: 12,
+  challengeFloatingLabel: {
+    color: C.textSub,
+    fontSize: FS.xs,
+    fontWeight: '700',
+    letterSpacing: 3,
+  },
+  challengeStatusBadge: {
     alignItems: 'center',
-    gap: 6,
-    maxWidth: 260,
+    gap: 4,
+    paddingHorizontal: 6,
   },
-  challengeOverlayIcon: { fontSize: 24 },
+  challengeOverlayIcon: { fontSize: 20 },
   challengeOverlayText: {
     color: C.textSub,
-    fontSize: FS.sm,
+    fontSize: FS.xs,
     fontWeight: '600',
     textAlign: 'center',
   },
-  challengePickStrip: {
-    backgroundColor: C.surface,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: C.border,
+  challengeActionStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
     paddingVertical: 6,
-    gap: 4,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: C.borderSubtle,
+  },
+  challengePassBtn: {
+    width: '100%',
+    borderRadius: R.sm,
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  challengePickingHint: {
+    color: C.gold,
+    fontSize: FS.xs,
+    fontWeight: '700',
+    textAlign: 'center',
+    letterSpacing: 0.5,
+    lineHeight: 16,
   },
   challengePickTitle: {
     color: C.textMuted,
     fontSize: FS.xs,
     fontWeight: '600',
     textAlign: 'center',
-    letterSpacing: 1,
+    letterSpacing: 0.5,
     textTransform: 'uppercase',
+    paddingBottom: 4,
   },
-  challengeDecideStrip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: C.bg,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: C.borderSubtle,
-  },
-  challengeBtn: { backgroundColor: C.danger, borderRadius: R.sm, paddingVertical: 10, alignItems: 'center' },
-  challengeBtnText: { color: C.textPrimary, fontSize: FS.base, fontWeight: '800' },
+  challengeBtnText: { color: C.textPrimary, fontSize: FS.sm, fontWeight: '800' },
   passBtn: {
     borderRadius: R.sm, paddingVertical: 10, alignItems: 'center',
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
     backgroundColor: 'rgba(255,255,255,0.06)',
   },
-  passBtnText: { color: C.textSub, fontSize: FS.base, fontWeight: '600' },
+  passBtnText: { color: C.textSub, fontSize: FS.sm, fontWeight: '600' },
   revealNowBtn: {
-    borderRadius: R.sm, paddingVertical: 10, alignItems: 'center',
+    width: '100%',
+    borderRadius: R.sm, paddingVertical: 8, alignItems: 'center',
     borderWidth: 1.5, borderColor: C.gold, backgroundColor: 'rgba(245,197,24,0.12)',
   },
-  revealNowBtnText: { color: C.gold, fontSize: FS.base, fontWeight: '700' },
+  revealNowBtnText: { color: C.gold, fontSize: FS.sm, fontWeight: '700' },
 
   // ── Revealing phase ──
   revealTimelineWrapper: {
@@ -2572,23 +2804,18 @@ const styles = StyleSheet.create({
   },
 
   // ── Landscape guess screen (trailer ended, active player) ──
-  guessScreenL: { flex: 1, backgroundColor: C.bg },
-  guessHeaderL: { paddingHorizontal: 20, paddingVertical: 10, gap: 4 },
-  guessTitleL: { color: C.textPrimary, fontSize: FS.lg, fontWeight: '900', letterSpacing: 0.3 },
-  guessSubtitleL: { color: C.gold, fontSize: FS.xs, fontWeight: '700', letterSpacing: 2.5, textTransform: 'uppercase' },
+  guessScreen: { flex: 1, backgroundColor: C.bg },
+  guessHeader: { paddingHorizontal: 20, paddingVertical: 10, gap: 4 },
+  guessTitle: { color: C.textPrimary, fontSize: FS.lg, fontWeight: '900', letterSpacing: 0.3 },
+  guessSubtitle: { color: C.gold, fontSize: FS.xs, fontWeight: '700', letterSpacing: 2.5, textTransform: 'uppercase' },
   guessMainRow: { flex: 1, flexDirection: 'row', paddingHorizontal: 20, paddingBottom: 8, gap: 16 },
   guessLeftPanel: { flex: 1.2, justifyContent: 'center', gap: 10 },
   guessDivider: { width: 1, alignSelf: 'stretch', backgroundColor: C.border, marginVertical: 8 },
   guessRightPanel: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  guessFooterL: { flexDirection: 'row', paddingHorizontal: 20, paddingBottom: 16, gap: 10 },
-  voicePreview: {
-    alignItems: 'center', gap: 6, padding: 12, borderRadius: R.md,
-    backgroundColor: 'rgba(245,197,24,0.07)', borderWidth: 1, borderColor: 'rgba(245,197,24,0.3)',
-  },
-  voicePreviewText: { color: C.textPrimary, fontSize: FS.sm, fontWeight: '600', textAlign: 'center' },
+  guessFooter: { flexDirection: 'row', paddingHorizontal: 20, paddingBottom: 16, gap: 10 },
   voiceMicBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 10, paddingVertical: 16, borderRadius: R.card,
+    gap: 10, paddingVertical: 14, borderRadius: R.card,
     backgroundColor: 'rgba(245,197,24,0.07)',
     borderWidth: 1.5, borderColor: 'rgba(245,197,24,0.3)',
   },
@@ -2609,6 +2836,9 @@ const styles = StyleSheet.create({
   },
   voiceRetryText: {
     color: C.gold, fontSize: FS.sm, fontWeight: '700',
+  },
+  voiceUnavailableText: {
+    color: C.textMuted, fontSize: FS.sm, textAlign: 'center',
   },
   guessReplayBtn: {
     flex: 1, height: 52, borderRadius: R.card,
