@@ -16,6 +16,7 @@ export interface Database {
           year: number;
           director: string;
           youtube_id: string | null;
+          vimeo_id: string | null;
           safe_start: number | null;
           safe_end: number | null;
           poster_url: string | null;
@@ -31,6 +32,7 @@ export interface Database {
           year: number;
           director: string;
           youtube_id?: string | null;
+          vimeo_id?: string | null;
           safe_start?: number | null;
           safe_end?: number | null;
           poster_url?: string | null;
@@ -52,6 +54,7 @@ export interface Database {
           game_code: string;
           game_mode: 'standard' | 'collection';
           collection_id: string | null;
+          max_players: number;
           created_at: string;
         };
         Insert: {
@@ -63,6 +66,7 @@ export interface Database {
           game_code: string;
           game_mode?: 'standard' | 'collection';
           collection_id?: string | null;
+          max_players?: number;
           created_at?: string;
         };
         Update: Partial<Database['public']['Tables']['games']['Insert']>;

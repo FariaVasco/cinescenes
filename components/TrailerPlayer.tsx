@@ -1,6 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { View, StyleSheet, ActivityIndicator, useWindowDimensions } from 'react-native';
 import YoutubePlayer from 'react-native-youtube-iframe';
+import { WebView } from 'react-native-webview';
 import { Movie } from '@/lib/database.types';
 
 export interface TrailerPlayerHandle {
@@ -15,18 +16,31 @@ interface TrailerPlayerProps {
   onEnded?: () => void;
 }
 
-const UNMUTE_SCRIPT = `
+// Unmutes the YouTube player after it starts (IFrame API starts muted by policy)
+// and auto-clicks the skip-ad button whenever it appears.
+const YOUTUBE_INJECT = `
 (function() {
-  var poll = setInterval(function() {
+  // Unmute once playing
+  var unmutePoll = setInterval(function() {
     if (window.player && typeof window.player.getPlayerState === 'function') {
-      var state = window.player.getPlayerState();
-      if (state === 1) {
+      if (window.player.getPlayerState() === 1) {
         window.player.unMute();
         window.player.setVolume(100);
-        clearInterval(poll);
+        clearInterval(unmutePoll);
       }
     }
   }, 200);
+
+  // Auto-skip ads
+  setInterval(function() {
+    var skip = document.querySelector(
+      '.ytp-skip-ad-button, .ytp-ad-skip-button, .ytp-ad-skip-button-slot'
+    );
+    if (skip) { skip.click(); return; }
+    // Close non-skippable overlay ads
+    var close = document.querySelector('.ytp-ad-overlay-close-button');
+    if (close) close.click();
+  }, 300);
 })();
 true;
 `;
@@ -46,6 +60,9 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
     const safeStart = movie.safe_start ?? 0;
     const safeEnd = movie.safe_end ?? 60;
     const duration = Math.max(safeEnd - safeStart, 10) * 1000;
+
+    // Prefer Vimeo (no ads); fall back to YouTube
+    const useVimeo = !!movie.vimeo_id;
 
     function startEndTimer(ms: number = duration) {
       if (timerRef.current) clearTimeout(timerRef.current);
@@ -82,20 +99,21 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
         if (fallbackRef.current) clearTimeout(fallbackRef.current);
         setPlaying(false);
         setTimeout(() => {
-          playerRef.current?.seekTo(safeStart, true);
+          if (!useVimeo) playerRef.current?.seekTo(safeStart, true);
           setPlaying(true);
           fallbackRef.current = setTimeout(() => setLoading(false), 5000);
         }, 300);
       },
     }));
 
-    function handleReady() {
+    // ── YouTube handlers ────────────────────────────────────────────────────
+    function handleYouTubeReady() {
       playerRef.current?.seekTo(safeStart, true);
       if (fallbackRef.current) clearTimeout(fallbackRef.current);
       fallbackRef.current = setTimeout(() => setLoading(false), 5000);
     }
 
-    function handleChangeState(state: string) {
+    function handleYouTubeStateChange(state: string) {
       if (state === 'playing') {
         if (fallbackRef.current) clearTimeout(fallbackRef.current);
         setLoading(false);
@@ -115,33 +133,53 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
       };
     }, []);
 
+    // ── Vimeo embed URL ─────────────────────────────────────────────────────
+    // #t=Xs seeks to safeStart; autoplay=1 starts immediately.
+    const vimeoUrl = `https://player.vimeo.com/video/${movie.vimeo_id}`
+      + `?autoplay=1&muted=0&title=0&byline=0&portrait=0&controls=0`
+      + `#t=${safeStart}s`;
+
     return (
       <View style={styles.container}>
-        <YoutubePlayer
-          ref={playerRef}
-          height={height}
-          width={width}
-          videoId={movie.youtube_id!}
-          play={playing}
-          initialPlayerParams={{
-            start: safeStart,
-            end: safeEnd,
-            mute: true,
-            controls: false,
-            rel: false,
-            iv_load_policy: 3,
-            loop: false,
-            modestbranding: true,
-          }}
-          onReady={handleReady}
-          onChangeState={handleChangeState}
-          webViewProps={{
-            allowsInlineMediaPlayback: true,
-            mediaPlaybackRequiresUserAction: false,
-            injectedJavaScript: UNMUTE_SCRIPT,
-          }}
-        />
-        {/* Rendered after YoutubePlayer so it sits above it */}
+
+        {useVimeo ? (
+          <WebView
+            source={{ uri: vimeoUrl }}
+            style={{ width, height }}
+            allowsInlineMediaPlayback
+            mediaPlaybackRequiresUserAction={false}
+            onLoadEnd={() => {
+              setLoading(false);
+              startEndTimer();
+            }}
+          />
+        ) : (
+          <YoutubePlayer
+            ref={playerRef}
+            height={height}
+            width={width}
+            videoId={movie.youtube_id!}
+            play={playing}
+            initialPlayerParams={{
+              start: safeStart,
+              end: safeEnd,
+              mute: true,
+              controls: false,
+              rel: false,
+              iv_load_policy: 3,
+              loop: false,
+              modestbranding: true,
+            }}
+            onReady={handleYouTubeReady}
+            onChangeState={handleYouTubeStateChange}
+            webViewProps={{
+              allowsInlineMediaPlayback: true,
+              mediaPlaybackRequiresUserAction: false,
+              injectedJavaScript: YOUTUBE_INJECT,
+            }}
+          />
+        )}
+
         {loading && (
           <View style={styles.loader}>
             <ActivityIndicator size="large" color="#f5c518" />
