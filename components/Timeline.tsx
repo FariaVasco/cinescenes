@@ -10,6 +10,11 @@ import { Movie } from '@/lib/database.types';
 import { C, R, FS } from '@/constants/theme';
 import { FlippingMovieCard, CardBack, CardFront } from '@/components/MovieCard';
 
+interface ChallengerCoin {
+  interval: number;
+  label: string; // display name
+}
+
 interface TimelineProps {
   timeline: number[];
   currentCardMovie: Movie;
@@ -23,6 +28,7 @@ interface TimelineProps {
   hideFloatingCard?: boolean;
   blockedIntervals?: number[];
   revealingMovie?: Movie;
+  challengerPlacements?: ChallengerCoin[];
 }
 
 export interface TimelineHandle {
@@ -42,6 +48,7 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
   hideFloatingCard,
   blockedIntervals,
   revealingMovie,
+  challengerPlacements,
 }, ref) {
   const scrollRef = useRef<React.ElementRef<typeof ScrollView>>(null);
   const activeGapRef = useRef<View>(null);
@@ -75,47 +82,43 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
   // Build the display list: sorted years from timeline
   const sortedYears = [...timeline].sort((a, b) => a - b);
 
-  // Determine where to show the unknown card
-  // In interactive mode: at selectedInterval position (or at end if none selected)
-  // In observer mode: at placedInterval position
-  const showAtInterval = interactive ? selectedInterval : (placedInterval ?? null);
-
   function renderGap(index: number) {
-    const isActive = showAtInterval === index;
-    const isBlocked = interactive && blockedIntervals?.includes(index);
-
-    if (isBlocked) {
+    // ── Active player's placed card — visible in all modes ──
+    if (placedInterval === index) {
+      if (revealingMovie) {
+        return (
+          <View key={`gap-${index}`} style={{ marginHorizontal: 24 }}>
+            <FlippingMovieCard movie={revealingMovie} width={80} height={100} autoFlip />
+          </View>
+        );
+      }
       return (
-        <View key={`gap-${index}`} style={styles.gapBlocked}>
-          <Text style={styles.gapBlockedText}>✕</Text>
+        <View key={`gap-${index}`} style={styles.placedMarkerWrap}>
+          <Text style={styles.placedMarkerLabel}>{placedLabel}</Text>
+          <CardBack width={80} height={100} outlined />
+        </View>
+      );
+    }
+
+    // ── Challenger coin — visible in all modes ──
+    const coin = challengerPlacements?.find(c => c.interval === index);
+    if (coin) {
+      return (
+        <View key={`gap-${index}`} style={styles.coinWrap}>
+          <Text style={styles.coinLabel}>{coin.label}</Text>
+          <View style={styles.coinCircle}>
+            <Text style={styles.coinInitials}>{coin.label.slice(0, 2).toUpperCase()}</Text>
+          </View>
         </View>
       );
     }
 
     if (!interactive) {
-      // Show card at this position if placedInterval matches.
-      // Wrap with horizontal margin so the spacing to adjacent cards matches
-      // the regular inter-card gap (gap: 4 + gapSpacer 20 + gap: 4 = 28px each side).
-      if (placedInterval === index) {
-        if (revealingMovie) {
-          return (
-            <View key={`gap-${index}`} style={{ marginHorizontal: 24 }}>
-              <FlippingMovieCard movie={revealingMovie} width={80} height={100} autoFlip />
-            </View>
-          );
-        }
-        return (
-          <View key={`gap-${index}`} style={styles.placedMarkerWrap}>
-            <Text style={styles.placedMarkerLabel}>{placedLabel}</Text>
-            <CardBack width={80} height={100} outlined />
-          </View>
-        );
-      }
       return <View key={`gap-${index}`} style={styles.gapSpacer} />;
     }
 
-    // Interactive mode — active (selected): dashed card outline with checkmark
-    if (isActive) {
+    // ── Interactive: selected gap — dashed outline with confirm checkmark ──
+    if (selectedInterval === index) {
       return (
         <View key={`gap-${index}`} ref={activeGapRef} style={styles.activeGap}>
           <View style={styles.cardPlaceholder}>
@@ -127,7 +130,16 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
       );
     }
 
-    // Interactive mode — unselected: circular + button
+    // ── Interactive: any remaining blocked gap ──
+    if (blockedIntervals?.includes(index)) {
+      return (
+        <View key={`gap-${index}`} style={styles.gapBlocked}>
+          <Text style={styles.gapBlockedText}>✕</Text>
+        </View>
+      );
+    }
+
+    // ── Interactive: open gap ──
     return (
       <TouchableOpacity
         key={`gap-${index}`}
@@ -232,6 +244,35 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     textTransform: 'uppercase',
     opacity: 0.9,
+  },
+  coinWrap: {
+    marginHorizontal: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  coinLabel: {
+    color: C.gold,
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    opacity: 0.75,
+  },
+  coinCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: 'rgba(245,197,24,0.6)',
+    backgroundColor: 'rgba(245,197,24,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  coinInitials: {
+    color: C.gold,
+    fontSize: FS.xs,
+    fontWeight: '800',
   },
   gapSpacer: {
     width: 20,

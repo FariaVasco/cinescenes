@@ -1454,35 +1454,46 @@ export default function GameScreen() {
       takenSet.add(currentTurn.placed_interval);
     }
     challenges.forEach(c => { if (c.interval_index >= 0) takenSet.add(c.interval_index); });
-    const blockedIntervals = Array.from(takenSet);
     const canChallenge = (timeline.length + 1) - takenSet.size > 0;
-
-    // Dynamic status message visible to all players
-    const pickingNow = challenges.filter(c => c.interval_index === -1);
-    const confirmedC = challenges.filter(c => c.interval_index >= 0);
-    let statusMsg: string;
-    let statusEmoji: string | null = null;
-    if (pickingNow.length > 0) {
-      const names = pickingNow.map(c => getPlayer(c.challenger_id)?.display_name ?? '?').join(', ');
-      statusMsg = `${names} is picking a spot…`;
-      statusEmoji = '🤔';
-    } else if (confirmedC.length > 0) {
-      const names = confirmedC.map(c => getPlayer(c.challenger_id)?.display_name ?? '?').join(', ');
-      statusMsg = `${names} challenged! Revealing soon…`;
-      statusEmoji = '🎯';
-    } else {
-      statusMsg = 'Waiting for everyone to decide…';
-    }
 
     const pendingChallengers = challenges.some(c => c.interval_index === -1);
     const canRevealNow = !revealLocked && !pendingChallengers;
     const myPlayerObj = players.find(p => p.id === myPlayerId);
     const hasCoins = (myPlayerObj?.coins ?? 0) > 0;
 
-    // Challenger has committed to challenging and is now picking their interval
+    // Challenger has clicked Challenge and is now picking their spot on the shared board
     const isPickingInterval = !amActive && myChallenge !== null
-      && myChallenge.interval_index !== -2   // not passed
+      && myChallenge.interval_index === -1
       && !challengeConfirmed;
+
+    // Confirmed challenger placements — rendered as coins on the shared timeline
+    const challengerPlacements = challenges
+      .filter(c => c.interval_index >= 0)
+      .map(c => ({
+        interval: c.interval_index,
+        label: getPlayer(c.challenger_id)?.display_name ?? '?',
+      }));
+
+    // Left-panel status
+    const pickingNow = challenges.filter(c => c.interval_index === -1);
+    const confirmedC = challenges.filter(c => c.interval_index >= 0);
+    let statusMsg: string;
+    let statusEmoji: string;
+    if (isPickingInterval) {
+      statusMsg = 'Tap a gap to\nplace your coin';
+      statusEmoji = '🪙';
+    } else if (pickingNow.length > 0) {
+      const names = pickingNow.map(c => getPlayer(c.challenger_id)?.display_name ?? '?').join(', ');
+      statusMsg = `${names} is picking…`;
+      statusEmoji = '🤔';
+    } else if (confirmedC.length > 0) {
+      const names = confirmedC.map(c => getPlayer(c.challenger_id)?.display_name ?? '?').join(', ');
+      statusMsg = `${names} challenged!`;
+      statusEmoji = '🎯';
+    } else {
+      statusMsg = 'Waiting for\neveryone…';
+      statusEmoji = '⏳';
+    }
 
     return (
       <SafeAreaView style={styles.container}>
@@ -1491,69 +1502,36 @@ export default function GameScreen() {
 
         <View style={styles.placingRow}>
 
-          {/* ── Left panel: mystery card + status + actions ── */}
+          {/* ── Left panel: status ── */}
           <View style={styles.challengeLeftPanel}>
-            <CardBack width={72} height={100} />
-            <Text style={styles.challengeFloatingLabel}>? ? ?</Text>
-
-            {/* Status (hidden while challenger is picking — they know what they're doing) */}
-            {!isPickingInterval && (
-              <View style={styles.challengeStatusBadge}>
-                {statusEmoji
-                  ? <Text style={styles.challengeOverlayIcon}>{statusEmoji}</Text>
-                  : <ActivityIndicator size="small" color={C.gold} />}
-                <Text style={styles.challengeOverlayText}>{statusMsg}</Text>
-              </View>
-            )}
-
-            {/* Challenger picking their slot: contextual label */}
-            {isPickingInterval && (
-              <Text style={styles.challengePickingHint}>
-                Pick where{'\n'}YOU think{'\n'}it goes
-              </Text>
-            )}
+            <Text style={styles.challengeOverlayIcon}>{statusEmoji}</Text>
+            <Text style={styles.challengeOverlayText}>{statusMsg}</Text>
           </View>
 
-          {/* ── Right panel ── */}
+          {/* ── Right panel: shared board — card + coins in one timeline ── */}
           <View style={styles.placingTimelinePanel}>
-            {isPickingInterval ? (
-              // Challenger picking: single interactive timeline.
-              // Active player's picked slot shows as ✕ (it's in blockedIntervals),
-              // which prevents the challenger from picking the same spot.
-              <>
-                <Text style={styles.challengePickTitle}>
-                  Tap + to pick your spot  ·  ✕ = their pick
-                </Text>
-                <Timeline
-                  timeline={timeline}
-                  currentCardMovie={movie}
-                  interactive
-                  selectedInterval={challengeInterval}
-                  onIntervalSelect={setChallengeInterval}
-                  onConfirm={handleConfirmChallengeInterval}
-                  placedMovies={placedMovies}
-                  blockedIntervals={blockedIntervals}
-                />
-              </>
-            ) : (
-              // Everyone else: non-interactive, placed slot labelled "your pick" or "their pick"
-              <Timeline
-                timeline={timeline}
-                currentCardMovie={movie}
-                interactive={false}
-                selectedInterval={null}
-                onIntervalSelect={() => {}}
-                onConfirm={() => {}}
-                placedInterval={currentTurn.placed_interval}
-                placedLabel={amActive ? 'your pick' : 'their pick'}
-                placedMovies={placedMovies}
-              />
+            {isPickingInterval && (
+              <Text style={styles.challengePickTitle}>
+                Tap + to place your coin  ·  their pick = card
+              </Text>
             )}
+            <Timeline
+              timeline={timeline}
+              currentCardMovie={movie}
+              interactive={isPickingInterval}
+              selectedInterval={isPickingInterval ? challengeInterval : null}
+              onIntervalSelect={isPickingInterval ? setChallengeInterval : () => {}}
+              onConfirm={isPickingInterval ? handleConfirmChallengeInterval : () => {}}
+              placedInterval={currentTurn.placed_interval}
+              placedLabel={amActive ? 'your pick' : 'their pick'}
+              placedMovies={placedMovies}
+              challengerPlacements={challengerPlacements}
+            />
           </View>
         </View>
 
-        {/* ── Action strip: always visible above ScoreBar ── */}
-        {!amActive && !alreadyDecided && (
+        {/* ── Action strip: Challenge/Pass (undecided) or Reveal (active) ── */}
+        {!amActive && !alreadyDecided && !isPickingInterval && (
           <View style={styles.challengeActionStrip}>
             {canChallenge ? (
               <>
@@ -2507,18 +2485,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 8,
   },
-  challengeFloatingLabel: {
-    color: C.textSub,
-    fontSize: FS.xs,
-    fontWeight: '700',
-    letterSpacing: 3,
-  },
-  challengeStatusBadge: {
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 6,
-  },
-  challengeOverlayIcon: { fontSize: 20 },
+  challengeOverlayIcon: { fontSize: 24 },
   challengeOverlayText: {
     color: C.textSub,
     fontSize: FS.xs,
@@ -2543,14 +2510,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
     backgroundColor: 'rgba(255,255,255,0.06)',
-  },
-  challengePickingHint: {
-    color: C.gold,
-    fontSize: FS.xs,
-    fontWeight: '700',
-    textAlign: 'center',
-    letterSpacing: 0.5,
-    lineHeight: 16,
   },
   challengePickTitle: {
     color: C.textMuted,
