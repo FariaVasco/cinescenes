@@ -655,19 +655,19 @@ export default function GameScreen() {
         Animated.parallel([
           Animated.timing(flyAnimX, {
             toValue: gapPos.pageX - cardPos.pageX,
-            duration: 420,
+            duration: 650,
             easing: Easing.out(Easing.cubic),
             useNativeDriver: true,
           }),
           Animated.timing(flyAnimY, {
             toValue: gapPos.pageY - cardPos.pageY,
-            duration: 420,
+            duration: 650,
             easing: Easing.out(Easing.cubic),
             useNativeDriver: true,
           }),
           Animated.sequence([
-            Animated.delay(360),
-            Animated.timing(flyAnimOpacity, { toValue: 0, duration: 60, useNativeDriver: true }),
+            Animated.delay(580),
+            Animated.timing(flyAnimOpacity, { toValue: 0, duration: 70, useNativeDriver: true }),
           ]),
         ]).start(() => resolve());
       });
@@ -1756,8 +1756,9 @@ export default function GameScreen() {
             onIntervalSelect={() => {}}
             onConfirm={() => {}}
             placedInterval={displayInterval}
+            placedLabel={amActive ? 'your pick' : 'their pick'}
             placedMovies={revealPlacedMovies}
-            revealingMovie={isTrash && revealPhase === 'result' ? undefined : m}
+            revealingMovie={m}
           />
         </View>
 
@@ -1795,7 +1796,6 @@ export default function GameScreen() {
             </View>
 
             {winnerId === myPlayerId && <ConfettiBurst />}
-            {isTrash && <TrashCard movie={m} />}
           </>
         )}
 

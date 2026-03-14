@@ -206,7 +206,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingTop: 20,
+    paddingBottom: 8,
     gap: 4,
   },
   card: {
@@ -234,10 +235,13 @@ const styles = StyleSheet.create({
   },
   placedMarkerWrap: {
     marginHorizontal: 24,
+    height: 100,
     alignItems: 'center',
-    gap: 4,
+    justifyContent: 'center',
   },
   placedMarkerLabel: {
+    position: 'absolute',
+    top: -16,
     color: C.gold,
     fontSize: 9,
     fontWeight: '700',
@@ -247,11 +251,13 @@ const styles = StyleSheet.create({
   },
   coinWrap: {
     marginHorizontal: 6,
+    height: 100,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
   },
   coinLabel: {
+    position: 'absolute',
+    top: -16,
     color: C.gold,
     fontSize: 9,
     fontWeight: '700',
