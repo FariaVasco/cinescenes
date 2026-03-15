@@ -134,6 +134,7 @@ export default function GameScreen() {
   const flyAnimX = useRef(new Animated.Value(0)).current;
   const flyAnimY = useRef(new Animated.Value(0)).current;
   const flyAnimOpacity = useRef(new Animated.Value(1)).current;
+  const timelineFade = useRef(new Animated.Value(1)).current;
   const [flyVisible, setFlyVisible] = useState(false);
   const [flyStart, setFlyStart] = useState({ x: 0, y: 0 });
   const floatingCardRef = useRef<any>(null);
@@ -142,6 +143,7 @@ export default function GameScreen() {
   const revealTriggered = useRef(false);
   const nextTurnInProgress = useRef(false);
   const [revealPhase, setRevealPhase] = useState<'flip' | 'result'>('flip');
+  const [showChallengerTimeline, setShowChallengerTimeline] = useState(false);
   const [movieGuess, setMovieGuess] = useState('');
   const [directorGuess, setDirectorGuess] = useState('');
   const [revealLocked, setRevealLocked] = useState(true);
@@ -197,16 +199,44 @@ export default function GameScreen() {
   useEffect(() => {
     if (currentTurn?.status !== 'revealing') return;
     setRevealPhase('flip');
+    setShowChallengerTimeline(false);
+    timelineFade.setValue(1);
     const turn = currentTurnRef.current;
     const t = setTimeout(async () => {
       if (turn) {
         const { data: cData } = await db.from('challenges').select('*').eq('turn_id', turn.id);
         if (cData) { setLocalChallenges(cData); setChallenges(cData); }
       }
+      // Show result strip — timeline stays on active player's view first
       setRevealPhase('result');
     }, 1200);
     return () => clearTimeout(t);
   }, [currentTurn?.status]);
+
+  // After the result strip appears, if a challenger won, wait 1.8 s then
+  // fade the timeline over to the challenger's view so everyone can see
+  // where the card lands before pressing Next.
+  useEffect(() => {
+    if (revealPhase !== 'result') { setShowChallengerTimeline(false); return; }
+    const ct = currentTurnRef.current;
+    const m = movie;
+    if (!ct || !m) return;
+    const validIntervals = computeValidIntervals(m.year, getActivePlayerTimeline());
+    const activeCorrect = ct.placed_interval != null && validIntervals.includes(ct.placed_interval);
+    if (activeCorrect) return; // active player won — no timeline switch needed
+    const wc = challenges.find(c => c.interval_index !== -1 && validIntervals.includes(c.interval_index));
+    if (!wc) return; // trashed — no switch needed
+    const t = setTimeout(() => {
+      Animated.sequence([
+        Animated.timing(timelineFade, { toValue: 0, duration: 350, useNativeDriver: true }),
+        Animated.delay(120),
+      ]).start(() => {
+        setShowChallengerTimeline(true);
+        Animated.timing(timelineFade, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+      });
+    }, 1800);
+    return () => clearTimeout(t);
+  }, [revealPhase]);
 
   // Lock the Reveal button for 5.5 s after challenging starts
   // (gives everyone the challenge window + buffer before reveal is allowed)
@@ -1073,7 +1103,7 @@ export default function GameScreen() {
   const leaveModal = (
     <Modal visible={showLeaveDialog} transparent animationType="fade" onRequestClose={() => setShowLeaveDialog(false)}>
       <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowLeaveDialog(false)}>
-        <TouchableOpacity activeOpacity={1} style={styles.leaveSheet}>
+        <View style={styles.leaveSheet} onStartShouldSetResponder={() => true}>
           <Text style={styles.leaveTitle}>Leave game?</Text>
           <Text style={styles.leaveBody}>
             You'll be removed from the game. If it's your turn, the next player will go automatically.
@@ -1086,7 +1116,7 @@ export default function GameScreen() {
               <Text style={styles.leaveStayText}>Stay</Text>
             </TouchableOpacity>
           </View>
-        </TouchableOpacity>
+        </View>
       </TouchableOpacity>
     </Modal>
   );
@@ -1095,7 +1125,7 @@ export default function GameScreen() {
   const myTimelineModal = (
     <Modal visible={showMyTimeline} transparent animationType="slide" onRequestClose={() => setShowMyTimeline(false)}>
       <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowMyTimeline(false)}>
-        <TouchableOpacity activeOpacity={1} style={styles.myTimelineSheet}>
+        <View style={styles.myTimelineSheet} onStartShouldSetResponder={() => true}>
           <View style={styles.myTimelineHeader}>
             <Text style={styles.myTimelineTitle}>My Timeline</Text>
             <TouchableOpacity onPress={() => setShowMyTimeline(false)} style={styles.reportCloseBtn}>
@@ -1117,7 +1147,7 @@ export default function GameScreen() {
               })}
             </ScrollView>
           )}
-        </TouchableOpacity>
+        </View>
       </TouchableOpacity>
     </Modal>
   );
@@ -1176,12 +1206,8 @@ export default function GameScreen() {
         <SafeAreaView style={styles.container}>
           {myTimelineModal}
           {leaveModal}
-          <View style={styles.placingRow}>
-            <View style={styles.placingCardPanel}>
-              <Text style={[styles.phaseLabel, styles.placingLabel]}>Waiting for {activePlayer?.display_name}…</Text>
-              <CardBack width={80} height={CARD_H} />
-            </View>
-            <View style={styles.placingTimelinePanel}>
+          <View style={styles.gameArea}>
+            <View style={styles.timelineArea}>
               <Timeline
                 timeline={timeline}
                 currentCardMovie={movie}
@@ -1192,6 +1218,10 @@ export default function GameScreen() {
                 placedMovies={placedMovies}
                 hideFloatingCard
               />
+            </View>
+            <View style={styles.leftOverlay}>
+              <Text style={[styles.phaseLabel, styles.placingLabel]}>Waiting for {activePlayer?.display_name}…</Text>
+              <CardBack width={80} height={CARD_H} />
             </View>
           </View>
           <ScoreBar players={players} myId={myPlayerId} onShowTimeline={() => setShowMyTimeline(true)} />
@@ -1205,12 +1235,27 @@ export default function GameScreen() {
         <SafeAreaView style={styles.container}>
           {myTimelineModal}
           {leaveModal}
-          <View style={styles.placingRow}>
-            {/* Left panel: floating card */}
-            <View style={styles.placingCardPanel}>
+          <View style={styles.gameArea}>
+            <View style={styles.timelineArea}>
+              <Timeline
+                ref={timelineRef}
+                timeline={timeline}
+                currentCardMovie={movie}
+                interactive={amActive}
+                selectedInterval={selectedInterval}
+                onIntervalSelect={setSelectedInterval}
+                onConfirm={handleAnimatedConfirm}
+                placedMovies={placedMovies}
+                hideFloatingCard
+              />
+            </View>
+            <View style={styles.leftOverlay}>
               <Text style={[styles.phaseLabel, styles.placingLabel]}>
                 {amActive ? 'Where does it go?' : `Waiting for ${activePlayer?.display_name}…`}
               </Text>
+              {amActive && selectedInterval === null && (
+                <Text style={styles.tapHint}>Tap + to pick a spot</Text>
+              )}
               <Animated.View
                 ref={floatingCardRef}
                 style={[
@@ -1223,24 +1268,6 @@ export default function GameScreen() {
               >
                 <CardBack width={80} height={CARD_H} />
               </Animated.View>
-            </View>
-
-            {/* Right panel: timeline */}
-            <View style={styles.placingTimelinePanel}>
-              {amActive && selectedInterval === null && (
-                <Text style={styles.tapHint}>Tap + to pick a spot</Text>
-              )}
-              <Timeline
-                ref={timelineRef}
-                timeline={timeline}
-                currentCardMovie={movie}
-                interactive={amActive}
-                selectedInterval={selectedInterval}
-                onIntervalSelect={setSelectedInterval}
-                onConfirm={handleAnimatedConfirm}
-                placedMovies={placedMovies}
-                hideFloatingCard
-              />
             </View>
           </View>
 
@@ -1453,7 +1480,7 @@ export default function GameScreen() {
         {/* Report modal */}
         <Modal visible={showReportDialog} transparent animationType="fade" onRequestClose={() => setShowReportDialog(false)}>
           <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowReportDialog(false)}>
-            <TouchableOpacity activeOpacity={1} style={styles.reportSheet}>
+            <View style={styles.reportSheet} onStartShouldSetResponder={() => true}>
               <View style={styles.reportHeader}>
                 <Text style={styles.reportTitle}>What's wrong?</Text>
                 <TouchableOpacity onPress={() => setShowReportDialog(false)} style={styles.reportCloseBtn}>
@@ -1467,7 +1494,7 @@ export default function GameScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
-            </TouchableOpacity>
+            </View>
           </TouchableOpacity>
         </Modal>
 
@@ -1540,21 +1567,8 @@ export default function GameScreen() {
         {myTimelineModal}
         {leaveModal}
 
-        <View style={styles.placingRow}>
-
-          {/* ── Left panel: status ── */}
-          <View style={styles.challengeLeftPanel}>
-            <Text style={styles.challengeOverlayIcon}>{statusEmoji}</Text>
-            <Text style={styles.challengeOverlayText}>{statusMsg}</Text>
-          </View>
-
-          {/* ── Right panel: shared board — card + coins in one timeline ── */}
-          <View style={styles.placingTimelinePanel}>
-            {isPickingInterval && (
-              <Text style={styles.challengePickTitle}>
-                Tap + to place your coin  ·  their pick = card
-              </Text>
-            )}
+        <View style={styles.gameArea}>
+          <View style={styles.timelineArea}>
             <Timeline
               timeline={timeline}
               currentCardMovie={movie}
@@ -1569,54 +1583,55 @@ export default function GameScreen() {
               hideFloatingCard
             />
           </View>
-        </View>
-
-        {/* ── Action strip ── */}
-        {!amActive && !alreadyDecided && !isPickingInterval && (
-          <View style={styles.challengeActionStrip}>
-            <ChallengeTimer seconds={10} onExpire={handlePass} barMode />
-            <View style={styles.challengeDecideBtns}>
-              {canChallenge ? (
-                <>
-                  <TouchableOpacity
-                    style={[styles.challengePill, !hasCoins && { opacity: 0.35 }]}
-                    onPress={hasCoins ? handleChallenge : undefined}
-                    activeOpacity={hasCoins ? 0.75 : 1}
-                  >
-                    <Text style={styles.challengePillText}>{hasCoins ? 'Challenge' : 'No coins'}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.passPill} onPress={handlePass} activeOpacity={0.75}>
-                    <Text style={styles.passPillText}>Pass</Text>
-                  </TouchableOpacity>
-                </>
-              ) : (
-                <TouchableOpacity style={[styles.passPill, { flex: 1 }]} onPress={handlePass} activeOpacity={0.75}>
-                  <Text style={styles.passPillText}>All spots taken — Pass</Text>
-                </TouchableOpacity>
-              )}
+          <View style={styles.leftOverlay}>
+            <View style={styles.challengeStatusArea}>
+              <Text style={styles.challengeOverlayIcon}>{statusEmoji}</Text>
+              <Text style={styles.challengeOverlayText}>{statusMsg}</Text>
             </View>
+            {isPickingInterval && (
+              <Text style={styles.challengePickTitle}>Tap + to place your coin</Text>
+            )}
+            {!amActive && !alreadyDecided && !isPickingInterval && (
+              <View style={styles.challengeActionsArea}>
+                <ChallengeTimer seconds={10} onExpire={handlePass} barMode />
+                {canChallenge ? (
+                  <>
+                    <TouchableOpacity
+                      style={[styles.challengePillV, !hasCoins && { opacity: 0.35 }]}
+                      onPress={hasCoins ? handleChallenge : undefined}
+                      activeOpacity={hasCoins ? 0.75 : 1}
+                    >
+                      <Text style={styles.challengePillText}>{hasCoins ? 'Challenge' : 'No coins'}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.passPillV} onPress={handlePass} activeOpacity={0.75}>
+                      <Text style={styles.passPillText}>Pass</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <TouchableOpacity style={styles.passPillV} onPress={handlePass} activeOpacity={0.75}>
+                    <Text style={styles.passPillText}>All spots taken</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+            {!amActive && isPickingInterval && (
+              <TouchableOpacity style={styles.passPillV} onPress={handleCancelChallenge} activeOpacity={0.75}>
+                <Text style={styles.passPillText}>↩ Cancel</Text>
+              </TouchableOpacity>
+            )}
+            {amActive && (
+              <TouchableOpacity
+                style={[styles.revealNowBtn, !canRevealNow && { opacity: 0.35 }]}
+                onPress={canRevealNow ? handleReveal : undefined}
+                activeOpacity={canRevealNow ? 0.85 : 1}
+              >
+                <Text style={styles.revealNowBtnText}>
+                  {revealLocked ? 'Waiting…' : pendingChallengers ? 'Deciding…' : 'Reveal →'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
-        )}
-        {!amActive && isPickingInterval && (
-          <View style={styles.challengeActionStrip}>
-            <TouchableOpacity style={[styles.passPill, { flex: 1 }]} onPress={handleCancelChallenge} activeOpacity={0.75}>
-              <Text style={styles.passPillText}>↩ Cancel & get coin back</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-        {amActive && (
-          <View style={styles.challengeActionStrip}>
-            <TouchableOpacity
-              style={[styles.revealNowBtn, !canRevealNow && { opacity: 0.35 }]}
-              onPress={canRevealNow ? handleReveal : undefined}
-              activeOpacity={canRevealNow ? 0.85 : 1}
-            >
-              <Text style={styles.revealNowBtnText}>
-                {revealLocked ? 'Waiting…' : pendingChallengers ? 'Deciding…' : 'Reveal →'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        </View>
 
         <ScoreBar players={players} myId={myPlayerId} onShowTimeline={() => setShowMyTimeline(true)} />
       </SafeAreaView>
@@ -1680,19 +1695,18 @@ export default function GameScreen() {
       ? computeCorrectInterval(m.year, winnerTimeline)
       : currentTurn.placed_interval;
 
-    // Phase 'flip': show ACTIVE PLAYER's current timeline with the card flipping at placed_interval
-    // Phase 'result': show WINNER's current timeline (before handleNextTurn adds the new card)
-    // Do NOT filter by m.year — the winner may already have another card with that same year
-    const displayTimeline = revealPhase === 'flip'
-      ? timeline  // active player's timeline
-      : winnerTimeline;
-    const displayInterval = revealPhase === 'flip'
-      ? currentTurn.placed_interval
-      : revealInterval;
+    // During flip: active player's timeline + placed_interval
+    // During result before switch: still active player's timeline (so everyone sees the wrong placement)
+    // After showChallengerTimeline: winner's timeline at the correct interval
+    const showWinnerView = revealPhase === 'result' && (showChallengerTimeline || activeCorrect);
+    const displayTimeline = showWinnerView ? winnerTimeline : timeline;
+    const displayInterval = showWinnerView ? revealInterval : currentTurn.placed_interval;
 
     // Use resolveMovie so same-year slots (e.g. two 2024 films) show the correct movie.
     // When the display timeline is the winner's and the winner is me, myMoviePairs is used.
-    const revealIsMyTimeline = winnerId === myPlayerId || (!winnerPlayer && amActive);
+    const revealIsMyTimeline = showWinnerView
+      ? (winnerId === myPlayerId || (!winnerPlayer && amActive))
+      : amActive;
     const revealPlacedMovies: Movie[] = displayTimeline
       .map((_, i) => resolveMovie(displayTimeline, i, revealIsMyTimeline))
       .filter((mv): mv is Movie => mv !== undefined);
@@ -1707,7 +1721,7 @@ export default function GameScreen() {
     const revealMyTimelineModal = (
       <Modal visible={showMyTimeline} transparent animationType="slide" onRequestClose={() => setShowMyTimeline(false)}>
         <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowMyTimeline(false)}>
-          <TouchableOpacity activeOpacity={1} style={styles.myTimelineSheet}>
+          <View style={styles.myTimelineSheet} onStartShouldSetResponder={() => true}>
             <View style={styles.myTimelineHeader}>
               <Text style={styles.myTimelineTitle}>My Timeline</Text>
               <TouchableOpacity onPress={() => setShowMyTimeline(false)} style={styles.reportCloseBtn}>
@@ -1738,7 +1752,7 @@ export default function GameScreen() {
                 })}
               </ScrollView>
             )}
-          </TouchableOpacity>
+          </View>
         </TouchableOpacity>
       </Modal>
     );
@@ -1747,24 +1761,31 @@ export default function GameScreen() {
       <SafeAreaView style={styles.container}>
         {revealMyTimelineModal}
         {leaveModal}
-        <View style={styles.revealTimelineWrapper}>
-          <Timeline
-            timeline={displayTimeline}
-            currentCardMovie={m}
-            interactive={false}
-            selectedInterval={null}
-            onIntervalSelect={() => {}}
-            onConfirm={() => {}}
-            placedInterval={displayInterval}
-            placedLabel={amActive ? 'your pick' : 'their pick'}
-            placedMovies={revealPlacedMovies}
-            revealingMovie={m}
-          />
-        </View>
-
-        {/* Result strip — appears after the flip completes */}
-        {revealPhase === 'result' && (
-          <>
+        <View style={styles.gameArea}>
+          <Animated.View style={[styles.timelineArea, { opacity: timelineFade }]}>
+            <Timeline
+              timeline={displayTimeline}
+              currentCardMovie={m}
+              interactive={false}
+              selectedInterval={null}
+              onIntervalSelect={() => {}}
+              onConfirm={() => {}}
+              placedInterval={displayInterval}
+              placedLabel={amActive ? 'your pick' : 'their pick'}
+              placedMovies={revealPlacedMovies}
+              revealingMovie={m}
+              insertDelay={showChallengerTimeline ? 700 : undefined}
+              trashAfter={isTrash && revealPhase === 'result' ? 1000 : undefined}
+            />
+          </Animated.View>
+          <Animated.View style={[styles.leftOverlay, { opacity: timelineFade }]}>
+            {showChallengerTimeline && winnerPlayer && (
+              <Text style={styles.revealTimelineOwner}>
+                {winnerPlayer.display_name}'s timeline
+              </Text>
+            )}
+          </Animated.View>
+          {revealPhase === 'result' && (
             <View style={styles.revealStrip}>
               <View style={[styles.revealStripAccent, { backgroundColor: isTrash ? C.danger : C.gold }]} />
               <ResultIcon result={activeCorrect ? 'correct' : winningChallenger ? 'challenge' : 'trash'} size={36} />
@@ -1794,11 +1815,9 @@ export default function GameScreen() {
                 <Text style={styles.revealStripBtnText}>Next →</Text>
               </TouchableOpacity>
             </View>
-
-            {winnerId === myPlayerId && <ConfettiBurst />}
-          </>
-        )}
-
+          )}
+        </View>
+        {winnerId === myPlayerId && revealPhase === 'result' && <ConfettiBurst />}
         <ScoreBar players={players} myId={myPlayerId} onShowTimeline={() => setShowMyTimeline(true)} />
       </SafeAreaView>
     );
@@ -1958,47 +1977,95 @@ function ResultIcon({ result, size = 72 }: { result: ResultType; size?: number }
 }
 
 // ── Confetti burst (correct answer) ──────────────────────────────────────────
+// Two corner cannons (top-left + top-right) firing in a fan arc.
+// Particles follow a gravity curve: shoot outward + up, then fall down.
+// A quick golden screen flash lands on the beat.
 
-const CONFETTI_COLORS = ['#f5c518', '#ffffff', '#f0d060', '#ffe082', '#fff5cc', '#f5c518', '#ffffff', '#fad44b'];
-const CONFETTI_COUNT = 28;
+const CONFETTI_COLORS = [
+  '#f5c518', '#f5c518', '#f5c518', // gold — dominant
+  '#ffffff', '#ffffff',             // white
+  '#ffd700', '#ffe082', '#fff3a0', // warm golds
+  '#e63946',                        // accent red
+];
+const PER_CANNON = 22;
 
 function ConfettiBurst() {
+  const flashAnim = useRef(new Animated.Value(0)).current;
+
   const particles = useRef(
-    Array.from({ length: CONFETTI_COUNT }, (_, i) => {
-      const angle = (i / CONFETTI_COUNT) * Math.PI * 2;
-      const jitter = (Math.random() - 0.5) * 1.0;
-      const speed = 90 + Math.random() * 170;
+    Array.from({ length: PER_CANNON * 2 }, (_, i) => {
+      const fromRight = i >= PER_CANNON;
+      const frac = (i % PER_CANNON) / (PER_CANNON - 1);
+
+      // Left cannon fires rightward arc: -55° to +65° from horizontal
+      // Right cannon fires leftward arc: 115° to 235° from horizontal
+      const spreadRad = (120 / 180) * Math.PI;
+      const baseAngle = fromRight
+        ? (115 / 180) * Math.PI + frac * spreadRad
+        : (-55 / 180) * Math.PI + frac * spreadRad;
+      const angle = baseAngle + (Math.random() - 0.5) * 0.18;
+
+      const speed = 110 + Math.random() * 200;
+      const isStrip = Math.random() < 0.55;
+      const gravity = 260 + Math.random() * 140;
+
       return {
         anim: new Animated.Value(0),
-        dx: Math.cos(angle + jitter) * speed,
-        dy: Math.sin(angle + jitter) * speed - 60,
-        color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
-        size: 5 + Math.floor(Math.random() * 7),
-        spins: Math.random() * 6 - 3,
+        fromRight,
+        // x travels linearly; y is initial arc + gravity fall
+        dx: Math.cos(angle) * speed,
+        dyMid: Math.sin(angle) * speed,          // at t=0.45 (peak)
+        dyEnd: Math.sin(angle) * speed + gravity, // at t=1.0 (fallen)
+        color: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
+        w: isStrip ? 2.5 + Math.random() * 2 : 5 + Math.random() * 4,
+        h: isStrip ? 11 + Math.random() * 9  : 5 + Math.random() * 4,
+        spins: (Math.random() - 0.5) * 7,
+        delay: Math.floor(Math.random() * 90),
       };
     })
   ).current;
 
   useEffect(() => {
+    // Golden screen flash on the beat
+    Animated.sequence([
+      Animated.timing(flashAnim, { toValue: 0.15, duration: 100, useNativeDriver: true }),
+      Animated.timing(flashAnim, { toValue: 0,    duration: 380, useNativeDriver: true }),
+    ]).start();
+
+    // Stagger particles slightly so they feel organic
     Animated.stagger(
-      22,
+      10,
       particles.map(p =>
-        Animated.timing(p.anim, {
-          toValue: 1,
-          duration: 850 + Math.random() * 450,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        })
+        Animated.sequence([
+          Animated.delay(p.delay),
+          Animated.timing(p.anim, {
+            toValue: 1,
+            duration: 1050 + Math.random() * 500,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+        ])
       )
     ).start();
   }, []);
 
   return (
     <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+      {/* Screen flash */}
+      <Animated.View
+        style={[StyleSheet.absoluteFillObject, { backgroundColor: '#f5c518', opacity: flashAnim }]}
+      />
+
       {particles.map((p, i) => {
         const tx = p.anim.interpolate({ inputRange: [0, 1], outputRange: [0, p.dx] });
-        const ty = p.anim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, p.dy, p.dy + 80] });
-        const opacity = p.anim.interpolate({ inputRange: [0, 0.55, 1], outputRange: [1, 1, 0] });
+        const ty = p.anim.interpolate({
+          inputRange: [0, 0.45, 1],
+          outputRange: [0, p.dyMid, p.dyEnd],
+        });
+        const opacity = p.anim.interpolate({
+          inputRange: [0, 0.5, 0.88, 1],
+          outputRange: [1, 1, 0.6, 0],
+        });
         const rotate = p.anim.interpolate({
           inputRange: [0, 1],
           outputRange: ['0deg', `${p.spins * 360}deg`],
@@ -2008,11 +2075,11 @@ function ConfettiBurst() {
             key={i}
             style={{
               position: 'absolute',
-              top: '42%',
-              alignSelf: 'center',
-              width: p.size,
-              height: p.size,
-              borderRadius: p.size / 4,
+              top: '9%',
+              left: p.fromRight ? '82%' : '18%',
+              width: p.w,
+              height: p.h,
+              borderRadius: 1,
               backgroundColor: p.color,
               opacity,
               transform: [{ translateX: tx }, { translateY: ty }, { rotate }],
@@ -2473,26 +2540,32 @@ const styles = StyleSheet.create({
   phaseLabel: { color: C.textSub, fontSize: FS.base, fontWeight: '600', textAlign: 'center' },
   tapHint: { color: C.textMuted, fontSize: FS.sm, textAlign: 'center', marginTop: 4 },
 
-  placingRow: {
+  gameArea: {
     flex: 1,
-    flexDirection: 'row',
+    position: 'relative',
   },
-  placingCardPanel: {
+  timelineArea: {
+    flex: 1,
+    marginLeft: 120,
+    justifyContent: 'center',
+  },
+  leftOverlay: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
     width: 120,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
+    gap: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 12,
     borderRightWidth: StyleSheet.hairlineWidth,
     borderRightColor: C.borderSubtle,
-    paddingHorizontal: 8,
+    backgroundColor: C.bg,
   },
   placingLabel: {
     textAlign: 'center',
-  },
-  placingTimelinePanel: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingVertical: 8,
   },
   floatingCardWrapper: {
     justifyContent: 'center',
@@ -2522,15 +2595,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
 
-  challengeLeftPanel: {
-    width: 130,
+  challengeStatusArea: {
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderRightWidth: StyleSheet.hairlineWidth,
-    borderRightColor: C.borderSubtle,
-    paddingHorizontal: 8,
-    paddingVertical: 8,
+    gap: 6,
+  },
+  challengeActionsArea: {
+    width: '100%',
+    gap: 6,
   },
   challengeOverlayIcon: { fontSize: 24 },
   challengeOverlayText: {
@@ -2539,22 +2610,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
   },
-  challengeActionStrip: {
-    flexDirection: 'column',
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    gap: 6,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: C.borderSubtle,
-  },
-  challengeDecideBtns: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  challengePill: {
-    flex: 1,
+  challengePillV: {
+    width: '100%',
     borderRadius: R.btn,
-    paddingVertical: 9,
+    paddingVertical: 8,
     alignItems: 'center',
     backgroundColor: 'rgba(230,57,70,0.15)',
     borderWidth: 1.5,
@@ -2565,10 +2624,10 @@ const styles = StyleSheet.create({
     fontSize: FS.sm,
     fontWeight: '700',
   },
-  passPill: {
-    flex: 1,
+  passPillV: {
+    width: '100%',
     borderRadius: R.btn,
-    paddingVertical: 9,
+    paddingVertical: 8,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.18)',
@@ -2591,18 +2650,35 @@ const styles = StyleSheet.create({
   passBtnText: { color: C.textSub, fontSize: FS.sm, fontWeight: '600' },
   revealNowBtn: {
     width: '100%',
-    borderRadius: R.sm, paddingVertical: 8, alignItems: 'center',
-    borderWidth: 1.5, borderColor: C.gold, backgroundColor: 'rgba(245,197,24,0.12)',
+    borderRadius: R.btn,
+    paddingVertical: 12,
+    alignItems: 'center',
+    backgroundColor: C.gold,
+    shadowColor: C.gold,
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 5,
   },
-  revealNowBtnText: { color: C.gold, fontSize: FS.sm, fontWeight: '700' },
+  revealNowBtnText: { color: C.textOnGold, fontSize: FS.sm, fontWeight: '900' },
 
   // ── Revealing phase ──
-  revealTimelineWrapper: {
-    flex: 1,
-    justifyContent: 'center',
+  revealTimelineOwner: {
+    color: C.gold,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+    opacity: 0.85,
+    paddingBottom: 4,
   },
   revealResultPlayerHL: { color: C.gold, fontWeight: '900' },
   revealStrip: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,

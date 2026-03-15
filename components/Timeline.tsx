@@ -1,10 +1,12 @@
-import { useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
+import { useRef, useEffect, useState, forwardRef, useImperativeHandle } from 'react';
 import {
   ScrollView,
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
+  Animated,
+  Easing,
 } from 'react-native';
 import { Movie } from '@/lib/database.types';
 import { C, R, FS } from '@/constants/theme';
@@ -29,6 +31,10 @@ interface TimelineProps {
   blockedIntervals?: number[];
   revealingMovie?: Movie;
   challengerPlacements?: ChallengerCoin[];
+  /** When set, the revealingMovie card is held back for this many ms then springs in. */
+  insertDelay?: number;
+  /** When set, the revealingMovie card flies off the screen after this many ms (trash result). */
+  trashAfter?: number;
 }
 
 export interface TimelineHandle {
@@ -49,9 +55,64 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
   blockedIntervals,
   revealingMovie,
   challengerPlacements,
+  insertDelay,
+  trashAfter,
 }, ref) {
   const scrollRef = useRef<React.ElementRef<typeof ScrollView>>(null);
   const activeGapRef = useRef<View>(null);
+
+  // Card insertion animation — used when insertDelay is set
+  const [insertVisible, setInsertVisible] = useState(false);
+  const insertScale = useRef(new Animated.Value(0)).current;
+  const insertOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!insertDelay || !revealingMovie) { setInsertVisible(false); return; }
+    setInsertVisible(false);
+    insertScale.setValue(0);
+    insertOpacity.setValue(0);
+    const t = setTimeout(() => {
+      setInsertVisible(true);
+      Animated.parallel([
+        Animated.spring(insertScale, { toValue: 1, damping: 14, stiffness: 180, useNativeDriver: true }),
+        Animated.timing(insertOpacity, { toValue: 1, duration: 220, useNativeDriver: true }),
+      ]).start();
+    }, insertDelay);
+    return () => clearTimeout(t);
+  }, [!!insertDelay, revealingMovie?.id]);
+
+  // Trash-out animation — fires trashAfter ms after the result is shown
+  const [trashGone, setTrashGone] = useState(false);
+  const trashAnim = useRef(new Animated.Value(0)).current;
+  const collapseAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!trashAfter || !revealingMovie) {
+      setTrashGone(false);
+      trashAnim.setValue(0);
+      collapseAnim.setValue(0);
+      return;
+    }
+    setTrashGone(false);
+    trashAnim.setValue(0);
+    collapseAnim.setValue(0);
+    const t = setTimeout(() => {
+      // First fly the card away, then collapse the slot
+      Animated.timing(trashAnim, {
+        toValue: 1,
+        duration: 700,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }).start(() => {
+        Animated.timing(collapseAnim, {
+          toValue: 1,
+          duration: 350,
+          useNativeDriver: false,
+        }).start(() => setTrashGone(true));
+      });
+    }, trashAfter);
+    return () => clearTimeout(t);
+  }, [!!trashAfter, revealingMovie?.id]);
 
   useImperativeHandle(ref, () => ({
     measureGap: () => new Promise((resolve) => {
@@ -86,6 +147,47 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
     // ── Active player's placed card — visible in all modes ──
     if (placedInterval === index) {
       if (revealingMovie) {
+        if (insertDelay) {
+          // Challenger insertion: show dashed slot first, then spring the card in
+          if (!insertVisible) {
+            return (
+              <View key={`gap-${index}`} style={styles.insertGap}>
+                <View style={styles.cardPlaceholder} />
+              </View>
+            );
+          }
+          return (
+            <Animated.View
+              key={`gap-${index}`}
+              style={{ marginHorizontal: 24, opacity: insertOpacity, transform: [{ scale: insertScale }] }}
+            >
+              <CardFront movie={revealingMovie} width={80} height={100} />
+            </Animated.View>
+          );
+        }
+        if (trashAfter) {
+          // Trash: card flies up-right, then slot collapses
+          if (trashGone) {
+            return <View key={`gap-${index}`} style={styles.gapSpacer} />;
+          }
+          const tx = trashAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 220] });
+          const ty = trashAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -180] });
+          const rot = trashAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '50deg'] });
+          const op = trashAnim.interpolate({ inputRange: [0, 0.4, 1], outputRange: [1, 0.9, 0] });
+          const collapseWidth = collapseAnim.interpolate({ inputRange: [0, 1], outputRange: [80, 0] });
+          const collapseMargin = collapseAnim.interpolate({ inputRange: [0, 1], outputRange: [24, 0] });
+          return (
+            <Animated.View
+              key={`gap-${index}`}
+              style={{ width: collapseWidth, marginHorizontal: collapseMargin }}
+            >
+              <Animated.View style={{ opacity: op, transform: [{ translateX: tx }, { translateY: ty }, { rotate: rot }] }}>
+                <CardFront movie={revealingMovie} width={80} height={100} />
+              </Animated.View>
+            </Animated.View>
+          );
+        }
+        // Default (active player's flip phase): FlippingMovieCard with autoFlip
         return (
           <View key={`gap-${index}`} style={{ marginHorizontal: 24 }}>
             <FlippingMovieCard movie={revealingMovie} width={80} height={100} autoFlip />
@@ -320,6 +422,13 @@ const styles = StyleSheet.create({
   activeGap: {
     width: 80,
     height: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  insertGap: {
+    width: 80,
+    height: 100,
+    marginHorizontal: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },
