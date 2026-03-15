@@ -51,6 +51,7 @@ export default function LocalLobbyScreen() {
   const [localPlayerId, setLocalPlayerId] = useState<string | null>(null);
   const [localIsHost, setLocalIsHost] = useState(false);
   const [nameEntered, setNameEntered] = useState(false);
+  const [maxPlayers, setMaxPlayers] = useState(8);
 
   const nameInputRef = useRef<TextInput>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -137,6 +138,7 @@ export default function LocalLobbyScreen() {
           multiplayer_type: 'local',
           game_mode: selectedGameMode,
           collection_id: selectedCollectionId,
+          max_players: maxPlayers,
         })
         .select()
         .single() as { data: Game | null; error: any };
@@ -188,7 +190,7 @@ export default function LocalLobbyScreen() {
         .from('players')
         .select('*', { count: 'exact', head: true })
         .eq('game_id', foundGame.id) as { count: number | null };
-      if ((count ?? 0) >= 8) throw new Error('Game is full (8 players max)');
+      if ((count ?? 0) >= (foundGame.max_players ?? 8)) throw new Error(`Game is full (${foundGame.max_players ?? 8} players max)`);
 
       const { data: newPlayer, error: playerErr } = await db
         .from('players')
@@ -200,6 +202,7 @@ export default function LocalLobbyScreen() {
       setLocalGame(foundGame);
       setLocalPlayerId(newPlayer.id);
       setLocalIsHost(false);
+      setMaxPlayers(foundGame.max_players ?? 8);
       setNameEntered(true);
 
       setGame(foundGame);
@@ -214,6 +217,14 @@ export default function LocalLobbyScreen() {
       Alert.alert('Error', e?.message ?? 'Could not join game');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleMaxPlayersChange(delta: number) {
+    const next = Math.min(10, Math.max(2, maxPlayers + delta));
+    setMaxPlayers(next);
+    if (localGame) {
+      await db.from('games').update({ max_players: next }).eq('id', localGame.id);
     }
   }
 
@@ -276,6 +287,7 @@ export default function LocalLobbyScreen() {
           active_player_id: localPlayers[i].id,
           movie_id: movieId,
           status: 'complete',
+          winner_id: localPlayers[i].id,
         });
         if (phantomErr) {
           console.warn('[LOBBY] phantom turn insert failed:', phantomErr.message, phantomErr.code);
@@ -309,7 +321,7 @@ export default function LocalLobbyScreen() {
         </TouchableOpacity>
         <View style={styles.choiceCenter}>
           <Text style={styles.title}>Go Digital</Text>
-          <Text style={styles.subtitle}>Up to 8 players — each on their own phone</Text>
+          <Text style={styles.subtitle}>Up to 10 players — each on their own phone</Text>
           <View style={styles.choiceCards}>
             <TouchableOpacity
               style={styles.choiceCard}
@@ -352,12 +364,37 @@ export default function LocalLobbyScreen() {
         </View>
 
         <View style={styles.playerCountRow}>
-          <Text style={styles.playerCountText}>{localPlayers.length} / 8 players</Text>
+          {localIsHost ? (
+            <View style={styles.maxStepperWrap}>
+              <Text style={styles.maxStepperLabel}>Max players</Text>
+              <View style={styles.maxPlayersStepper}>
+                <TouchableOpacity
+                  onPress={() => handleMaxPlayersChange(-1)}
+                  style={styles.stepperBtn}
+                  disabled={maxPlayers <= 2}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Text style={[styles.stepperBtnText, maxPlayers <= 2 && styles.stepperBtnDisabled]}>−</Text>
+                </TouchableOpacity>
+                <Text style={styles.stepperCount}>{maxPlayers}</Text>
+                <TouchableOpacity
+                  onPress={() => handleMaxPlayersChange(1)}
+                  style={styles.stepperBtn}
+                  disabled={maxPlayers >= 10}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Text style={[styles.stepperBtnText, maxPlayers >= 10 && styles.stepperBtnDisabled]}>+</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.playerCountText}>{localPlayers.length} joined</Text>
+            </View>
+          ) : (
+            <Text style={styles.playerCountText}>{localPlayers.length} / {maxPlayers} players</Text>
+          )}
         </View>
 
         <ScrollView style={styles.playerList} contentContainerStyle={styles.playerListContent}>
           {localPlayers.map((p) => {
-            const sortedYears = [...(p.timeline ?? [])].sort((a, b) => a - b);
             return (
               <View key={p.id} style={styles.playerChip}>
                 <View style={styles.playerChipTop}>
@@ -367,20 +404,6 @@ export default function LocalLobbyScreen() {
                   <Text style={styles.playerName}>{p.display_name}</Text>
                   {p.id === localPlayerId && <Text style={styles.youBadge}>you</Text>}
                 </View>
-                {sortedYears.length > 0 && (
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    style={styles.miniTimeline}
-                    contentContainerStyle={styles.miniTimelineContent}
-                  >
-                    {sortedYears.map((year, i) => (
-                      <View key={i} style={styles.miniCard}>
-                        <Text style={styles.miniCardYear}>{year}</Text>
-                      </View>
-                    ))}
-                  </ScrollView>
-                )}
               </View>
             );
           })}
@@ -517,6 +540,19 @@ const styles = StyleSheet.create({
   codeHint: { color: C.textMuted, fontSize: FS.sm },
   playerCountRow: { alignItems: 'center', paddingVertical: 8 },
   playerCountText: { color: C.textSub, fontSize: FS.sm },
+  maxStepperWrap: { alignItems: 'center', gap: 4 },
+  maxStepperLabel: {
+    color: C.textMuted, fontSize: FS.xs, fontWeight: '600',
+    letterSpacing: 0.8, textTransform: 'uppercase',
+  },
+  maxPlayersStepper: { flexDirection: 'row', alignItems: 'center', gap: 0 },
+  stepperBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  stepperBtnText: { color: C.gold, fontSize: 26, fontWeight: '300', lineHeight: 30 },
+  stepperBtnDisabled: { color: 'rgba(245,197,24,0.2)' },
+  stepperCount: {
+    color: C.textPrimary, fontSize: FS['2xl'], fontWeight: '800',
+    minWidth: 40, textAlign: 'center', fontVariant: ['tabular-nums'],
+  },
   playerList: { flex: 1, paddingHorizontal: 24 },
   playerListContent: { gap: 10, paddingBottom: 16 },
   playerChip: {
@@ -525,22 +561,6 @@ const styles = StyleSheet.create({
   },
   playerChipTop: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
-  },
-  miniTimeline: { flexGrow: 0 },
-  miniTimelineContent: { gap: 4, paddingTop: 2 },
-  miniCard: {
-    backgroundColor: 'rgba(245,197,24,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(245,197,24,0.3)',
-    borderRadius: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  miniCardYear: {
-    color: 'rgba(245,197,24,0.9)',
-    fontSize: 12,
-    fontWeight: '800',
-    fontVariant: ['tabular-nums'],
   },
   playerAvatar: {
     width: 36, height: 36, borderRadius: R.full,
