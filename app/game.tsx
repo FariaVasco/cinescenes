@@ -1477,13 +1477,17 @@ export default function GameScreen() {
           </TouchableOpacity>
         )}
 
-        {/* Report modal */}
-        <Modal visible={showReportDialog} transparent animationType="fade" onRequestClose={() => setShowReportDialog(false)}>
-          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowReportDialog(false)}>
+        {/* Report overlay — absolute layer instead of Modal to avoid WebView/UIKit crash on iOS */}
+        {showReportDialog && (
+          <TouchableOpacity
+            style={[StyleSheet.absoluteFill, styles.modalBackdrop]}
+            activeOpacity={1}
+            onPress={() => { setShowReportDialog(false); trailerRef.current?.resume(); }}
+          >
             <View style={styles.reportSheet} onStartShouldSetResponder={() => true}>
               <View style={styles.reportHeader}>
                 <Text style={styles.reportTitle}>What's wrong?</Text>
-                <TouchableOpacity onPress={() => setShowReportDialog(false)} style={styles.reportCloseBtn}>
+                <TouchableOpacity onPress={() => { setShowReportDialog(false); trailerRef.current?.resume(); }} style={styles.reportCloseBtn}>
                   <Text style={styles.reportCloseText}>✕</Text>
                 </TouchableOpacity>
               </View>
@@ -1496,7 +1500,7 @@ export default function GameScreen() {
               </View>
             </View>
           </TouchableOpacity>
-        </Modal>
+        )}
 
         <Snackbar
           visible={snackMessage.length > 0}
