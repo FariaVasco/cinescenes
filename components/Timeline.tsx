@@ -106,7 +106,8 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
       }).start(() => {
         Animated.timing(collapseAnim, {
           toValue: 1,
-          duration: 350,
+          duration: 600,
+          easing: Easing.inOut(Easing.quad),
           useNativeDriver: false,
         }).start(() => setTrashGone(true));
       });
@@ -179,7 +180,7 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
           return (
             <Animated.View
               key={`gap-${index}`}
-              style={{ width: collapseWidth, marginHorizontal: collapseMargin }}
+              style={{ width: collapseWidth, marginHorizontal: collapseMargin, overflow: 'hidden' }}
             >
               <Animated.View style={{ opacity: op, transform: [{ translateX: tx }, { translateY: ty }, { rotate: rot }] }}>
                 <CardFront movie={revealingMovie} width={80} height={100} />
