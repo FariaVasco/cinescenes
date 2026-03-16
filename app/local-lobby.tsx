@@ -262,7 +262,7 @@ export default function LocalLobbyScreen() {
         usedIds.add(startMovie.id);
         await db
           .from('players')
-          .update({ timeline: [startMovie.year], coins: 2 })
+          .update({ timeline: [startMovie.year], coins: 5 })
           .eq('id', localPlayers[i].id);
       }
 

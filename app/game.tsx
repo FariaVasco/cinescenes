@@ -408,6 +408,13 @@ export default function GameScreen() {
         if (mine) setMyChallenge(mine);
       }
 
+      // Always sync fresh player data (catches coin changes during challenging phase
+      // which don't cause a turn status change and would otherwise be invisible until Next).
+      if (freshPlayers && !turnChanged) {
+        setLocalPlayers(freshPlayers as Player[]);
+        setPlayers(freshPlayers as Player[]);
+      }
+
 
       // Auto-reveal: active player's device triggers once the challenge window settles
       if (
@@ -1111,8 +1118,9 @@ export default function GameScreen() {
 
   // ── DRAWING ──
   if (currentTurn.status === 'drawing') {
-    const drawingTimeline = myTimeline;
-    const drawingPlacedMovies = myPlacedMovies;
+    const drawingTimeline = amActive ? myTimeline : timeline;
+    const drawingPlacedMovies = amActive ? myPlacedMovies : placedMovies;
+    const drawingTimelineOwner = amActive ? null : activePlayer?.display_name;
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.phaseCenter}>
@@ -1135,18 +1143,23 @@ export default function GameScreen() {
           )}
         </View>
         {drawingTimeline.length > 0 && movie && (
-          <Timeline
-            timeline={drawingTimeline}
-            currentCardMovie={movie}
-            interactive={false}
-            selectedInterval={null}
-            onIntervalSelect={() => {}}
-            onConfirm={() => {}}
-            placedMovies={drawingPlacedMovies}
-            hideFloatingCard
-          />
+          <>
+            {drawingTimelineOwner && (
+              <Text style={styles.timelineOwnerLabel}>{drawingTimelineOwner}'s timeline</Text>
+            )}
+            <Timeline
+              timeline={drawingTimeline}
+              currentCardMovie={movie}
+              interactive={false}
+              selectedInterval={null}
+              onIntervalSelect={() => {}}
+              onConfirm={() => {}}
+              placedMovies={drawingPlacedMovies}
+              hideFloatingCard
+            />
+          </>
         )}
-        <ScoreBar players={players} myId={myPlayerId} onShowTimeline={() => setShowMyTimeline(true)} />
+        <ScoreBar players={players} myId={myPlayerId} onShowTimeline={() => setShowMyTimeline(true)} myTimelineHint={!amActive} />
         {myTimelineModal}
         {leaveModal}
       </SafeAreaView>
@@ -1820,7 +1833,7 @@ export default function GameScreen() {
   return <LoadingScreen />;
 }
 
-function ScoreBar({ players, myId, onShowTimeline }: { players: Player[]; myId: string | null; onShowTimeline?: () => void }) {
+function ScoreBar({ players, myId, onShowTimeline, myTimelineHint }: { players: Player[]; myId: string | null; onShowTimeline?: () => void; myTimelineHint?: boolean }) {
   return (
     <View style={styles.scoreBarRow}>
       <ScrollView
@@ -1839,6 +1852,7 @@ function ScoreBar({ players, myId, onShowTimeline }: { players: Player[]; myId: 
       </ScrollView>
       {onShowTimeline && (
         <TouchableOpacity style={styles.timelineBtn} onPress={onShowTimeline}>
+          {myTimelineHint && <Text style={styles.myTimelineHintLabel}>My timeline</Text>}
           <View style={styles.timelineBtnIcon}>
             <View style={styles.timelineMiniCard} />
             <View style={styles.timelineMiniLine} />
@@ -2524,6 +2538,7 @@ const styles = StyleSheet.create({
   phaseCenter: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 24, paddingHorizontal: 40 },
   bigTurnText: { color: C.textPrimary, fontSize: FS['2xl'], fontWeight: '900', textAlign: 'center' },
   waitingText: { color: C.textSub, fontSize: FS.lg, textAlign: 'center' },
+  timelineOwnerLabel: { color: C.textSub, fontSize: FS.sm, textAlign: 'center', marginBottom: 4 },
   avatarLarge: {
     width: 72, height: 72, borderRadius: R.full,
     backgroundColor: C.gold, alignItems: 'center', justifyContent: 'center',
@@ -2796,6 +2811,7 @@ const styles = StyleSheet.create({
   timelineBtnIcon: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   timelineMiniCard: { width: 7, height: 10, borderRadius: 1.5, backgroundColor: 'rgba(245,197,24,0.75)' },
   timelineMiniLine: { width: 4, height: 1.5, backgroundColor: 'rgba(245,197,24,0.35)' },
+  myTimelineHintLabel: { color: C.textSub, fontSize: 9, textAlign: 'center', marginBottom: 3 },
 
   // ── Leave dialog ──
   leaveSheet: {

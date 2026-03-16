@@ -56,22 +56,22 @@ export default function PlayScreen() {
         <View style={styles.cards}>
           <TouchableOpacity
             style={[styles.card, styles.cardPrimary]}
-            onPress={() => router.push('/scanner')}
+            onPress={() => router.push('/mode-select')}
             activeOpacity={0.8}
           >
-            <MaterialCommunityIcons name="cards-playing-outline" size={36} color="#0a0a0a" />
-            <Text style={styles.cardTitle}>Use Your Deck</Text>
-            <Text style={styles.cardSub}>Scan the QR code on your physical cards · rotates to landscape</Text>
+            <MaterialCommunityIcons name="account-group" size={36} color="#0a0a0a" />
+            <Text style={styles.cardTitle}>Go Digital</Text>
+            <Text style={styles.cardSub}>Up to 8 players, no physical cards needed</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.card, styles.cardSecondary]}
-            onPress={() => router.push('/mode-select')}
+            onPress={() => router.push('/scanner')}
             activeOpacity={0.8}
           >
-            <MaterialCommunityIcons name="account-group" size={36} color="#f5c518" />
-            <Text style={[styles.cardTitle, styles.cardTitleSecondary]}>Go Digital</Text>
-            <Text style={styles.cardSub}>Up to 8 players, no physical cards needed</Text>
+            <MaterialCommunityIcons name="cards-playing-outline" size={36} color="#f5c518" />
+            <Text style={[styles.cardTitle, styles.cardTitleSecondary]}>Use Your Deck</Text>
+            <Text style={styles.cardSub}>Scan the QR code on your physical cards · rotates to landscape</Text>
           </TouchableOpacity>
         </View>
       </View>

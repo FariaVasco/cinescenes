@@ -207,7 +207,7 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
     const coin = challengerPlacements?.find(c => c.interval === index);
     if (coin) {
       return (
-        <View key={`gap-${index}`} style={styles.coinWrap}>
+        <View key={`gap-${index}`} style={styles.coinWrap} onStartShouldSetResponder={() => true}>
           <Text style={styles.coinLabel}>{coin.label}</Text>
           <View style={styles.coinCircle}>
             <Text style={styles.coinInitials}>{coin.label.slice(0, 2).toUpperCase()}</Text>
