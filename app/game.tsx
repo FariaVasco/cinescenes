@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { SpeechModule, speechAvailable, useSpeechRecognitionEvent } from '@/lib/speech-recognition';
 import { C, R, FS } from '@/constants/theme';
+import { parseTranscript, fuzzyMatch, computeCorrectInterval, computeValidIntervals } from '@/lib/game-logic';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Snackbar } from 'react-native-paper';
 import { useRouter } from 'expo-router';
@@ -45,50 +46,6 @@ const db = supabase as unknown as { from: (t: string) => any };
 const POLL_MS = 2000;
 const WIN_CARDS = 10;
 
-// Parse "Movie Title by Director Name" from a voice transcript — no network needed.
-function parseTranscript(transcript: string): { movie: string; director: string } | null {
-  const match = transcript.match(/^(.+?)\s+(?:directed by|by)\s+(.+)$/i);
-  if (match) return { movie: match[1].trim(), director: match[2].trim() };
-  return null;
-}
-
-// Normalize for fuzzy comparison: lowercase, strip leading article, strip punctuation.
-function normalize(s: string): string {
-  return s
-    .toLowerCase()
-    .replace(/^(the|a|an)\s+/i, '')
-    .replace(/[^\w\s]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function levenshtein(a: string, b: string): number {
-  const m = a.length, n = b.length;
-  const dp: number[][] = Array.from({ length: m + 1 }, (_, i) =>
-    Array.from({ length: n + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0))
-  );
-  for (let i = 1; i <= m; i++)
-    for (let j = 1; j <= n; j++)
-      dp[i][j] = a[i - 1] === b[j - 1]
-        ? dp[i - 1][j - 1]
-        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
-  return dp[m][n];
-}
-
-// Fuzzy match: handles articles, small typos (≤2), and last-name-only for directors.
-function fuzzyMatch(input: string, target: string): boolean {
-  if (!input.trim()) return false;
-  const a = normalize(input), b = normalize(target);
-  if (a === b) return true;
-  if (levenshtein(a, b) <= 2) return true;
-  // "Kubrick" matches "Stanley Kubrick" — input equals the trailing words of target
-  const bWords = b.split(' '), aWords = a.split(' ');
-  if (bWords.length > aWords.length) {
-    const suffix = bWords.slice(bWords.length - aWords.length).join(' ');
-    if (suffix === a || levenshtein(suffix, a) <= 1) return true;
-  }
-  return false;
-}
 
 export default function GameScreen() {
   const router = useRouter();
@@ -558,27 +515,6 @@ export default function GameScreen() {
   function isActivePlayer() { return myPlayerId === currentTurn?.active_player_id; }
   function getMovie() { return activeMovies.find((m) => m.id === currentTurn?.movie_id) ?? null; }
   function getActivePlayerTimeline(): number[] { return getActivePlayer()?.timeline ?? []; }
-
-  // Returns the single correct interval for a year in a timeline (no duplicate).
-  function computeCorrectInterval(year: number, timeline: number[]): number {
-    const sorted = [...timeline].sort((a, b) => a - b);
-    let idx = 0;
-    while (idx < sorted.length && sorted[idx] < year) idx++;
-    return idx;
-  }
-
-  // When the placed year already exists in the timeline, ALL intervals spanning the run of
-  // same-year cards are valid (before the first, between any two, or after the last duplicate).
-  function computeValidIntervals(year: number, timeline: number[]): number[] {
-    const sorted = [...timeline].sort((a, b) => a - b);
-    const firstDupIdx = sorted.indexOf(year);
-    if (firstDupIdx !== -1) {
-      const lastDupIdx = sorted.lastIndexOf(year);
-      // e.g. [2024, 2024, 2025] + new 2024 → firstDup=0, lastDup=1 → [0, 1, 2]
-      return Array.from({ length: lastDupIdx - firstDupIdx + 2 }, (_, k) => firstDupIdx + k);
-    }
-    return [computeCorrectInterval(year, timeline)];
-  }
 
   // ── Actions (with optimistic updates so UI responds instantly) ──
 
