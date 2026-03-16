@@ -158,6 +158,7 @@ export interface Database {
           challenger_id: string;
           interval_index: number;
           resolved_at: string | null;
+          created_at: string;
         };
         Insert: {
           id?: string;
@@ -165,6 +166,7 @@ export interface Database {
           challenger_id: string;
           interval_index: number;
           resolved_at?: string | null;
+          created_at?: string;
         };
         Update: Partial<Database['public']['Tables']['challenges']['Insert']>;
       };

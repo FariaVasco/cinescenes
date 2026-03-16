@@ -6,7 +6,6 @@ import {
   StyleSheet,
   ActivityIndicator,
   ScrollView,
-  Modal,
   Animated,
   Easing,
   useWindowDimensions,
@@ -142,6 +141,7 @@ export default function GameScreen() {
   const challengeWindowStart = useRef<number | null>(null);
   const revealTriggered = useRef(false);
   const nextTurnInProgress = useRef(false);
+  const challengeDecisionMade = useRef(false);
   const [revealPhase, setRevealPhase] = useState<'flip' | 'result'>('flip');
   const [showChallengerTimeline, setShowChallengerTimeline] = useState(false);
   const [movieGuess, setMovieGuess] = useState('');
@@ -224,7 +224,10 @@ export default function GameScreen() {
     const validIntervals = computeValidIntervals(m.year, getActivePlayerTimeline());
     const activeCorrect = ct.placed_interval != null && validIntervals.includes(ct.placed_interval);
     if (activeCorrect) return; // active player won — no timeline switch needed
-    const wc = challenges.find(c => c.interval_index !== -1 && validIntervals.includes(c.interval_index));
+    const wc = [...challenges]
+      .filter(c => c.interval_index >= 0)
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+      .find(c => validIntervals.includes(c.interval_index));
     if (!wc) return; // trashed — no switch needed
     const t = setTimeout(() => {
       Animated.sequence([
@@ -424,6 +427,7 @@ export default function GameScreen() {
           challengeWindowStart.current = null;
           revealTriggered.current = false;
           nextTurnInProgress.current = false;
+          challengeDecisionMade.current = false;
           setRevealPhase('flip');
           setMovieGuess('');
           setDirectorGuess('');
@@ -598,6 +602,8 @@ export default function GameScreen() {
 
   async function handleChallenge() {
     if (!currentTurn || myChallenge) return;
+    if (challengeDecisionMade.current) return;
+    challengeDecisionMade.current = true;
     setHasPassed(false);
     // Challenging always costs 1 coin — optimistic update first, then persist
     const challenger = players.find(p => p.id === myPlayerId);
@@ -616,6 +622,8 @@ export default function GameScreen() {
   }
 
   async function handlePass() {
+    if (challengeDecisionMade.current) return;
+    challengeDecisionMade.current = true;
     setHasPassed(true);
     if (!currentTurn) return;
     const { data: inserted } = await db
@@ -632,7 +640,7 @@ export default function GameScreen() {
     setChallengeConfirmed(true);
   }
 
-  async function handleCancelChallenge() {
+  async function handleWithdrawChallenge() {
     if (!myChallenge) return;
     // Refund the coin that was deducted when Challenge was tapped
     const me = players.find(p => p.id === myPlayerId);
@@ -643,16 +651,14 @@ export default function GameScreen() {
       setLocalPlayers(newPlayers);
       setPlayers(newPlayers);
     }
-    // Remove the challenge record so the pick count stays accurate
-    const cancelledId = myChallenge.id;
-    await db.from('challenges').delete().eq('id', cancelledId);
-    const remaining = challenges.filter(c => c.id !== cancelledId);
-    setLocalChallenges(remaining);
-    setChallenges(remaining);
-    setMyChallenge(null);
+    // Set interval_index: -3 (withdrawn) — keeps the row so ordering is preserved
+    await db.from('challenges').update({ interval_index: -3 }).eq('id', myChallenge.id);
+    const updated = { ...myChallenge, interval_index: -3 };
+    setMyChallenge(updated);
+    const newChallenges = challenges.map(c => c.id === myChallenge.id ? updated : c);
+    setLocalChallenges(newChallenges);
+    setChallenges(newChallenges);
     setChallengeInterval(null);
-    setChallengeConfirmed(false);
-    setHasPassed(false);
   }
 
   async function handleAnimatedConfirm() {
@@ -827,9 +833,12 @@ export default function GameScreen() {
         ct.placed_interval !== null &&
         ct.placed_interval !== undefined &&
         validIntervals.includes(ct.placed_interval);
+      const activeChallengersSorted = [...challenges]
+        .filter(c => c.interval_index >= 0)
+        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
       const winningChallenger = activeCorrect
         ? null
-        : challenges.find((c) => c.interval_index !== -1 && validIntervals.includes(c.interval_index));
+        : activeChallengersSorted.find(c => validIntervals.includes(c.interval_index));
 
       let winnerId: string | null = null;
       if (activeCorrect) winnerId = ct.active_player_id;
@@ -856,6 +865,22 @@ export default function GameScreen() {
       // Both picked a "correct" spot for the same-year card — challenger didn't lose, so coin comes back.
       // Each device handles its own player only, so no race condition.
       if (myPlayerId !== ct.active_player_id && activeCorrect) {
+        const myC = challenges.find(c => c.challenger_id === myPlayerId);
+        if (myC && myC.interval_index >= 0 && validIntervals.includes(myC.interval_index)) {
+          const me = latestPlayers.find(p => p.id === myPlayerId);
+          if (me) {
+            const refunded = me.coins + 1;
+            await db.from('players').update({ coins: refunded }).eq('id', myPlayerId);
+            const newPlayers = latestPlayers.map(p => p.id === myPlayerId ? { ...p, coins: refunded } : p);
+            setLocalPlayers(newPlayers);
+            setPlayers(newPlayers);
+          }
+        }
+      }
+
+      // Same-year edge case: a challenger won AND I also picked a valid interval.
+      // The earlier challenger takes the card; the later challenger gets their coin back.
+      if (winnerId && winnerId !== myPlayerId && winnerId !== ct.active_player_id) {
         const myC = challenges.find(c => c.challenger_id === myPlayerId);
         if (myC && myC.interval_index >= 0 && validIntervals.includes(myC.interval_index)) {
           const me = latestPlayers.find(p => p.id === myPlayerId);
@@ -1099,58 +1124,54 @@ export default function GameScreen() {
     router.replace('/');
   }
 
-  // ── Leave dialog — shown by back button, overlaid on every game screen ──
-  const leaveModal = (
-    <Modal visible={showLeaveDialog} transparent animationType="fade" onRequestClose={() => setShowLeaveDialog(false)}>
-      <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowLeaveDialog(false)}>
-        <View style={styles.leaveSheet} onStartShouldSetResponder={() => true}>
-          <Text style={styles.leaveTitle}>Leave game?</Text>
-          <Text style={styles.leaveBody}>
-            You'll be removed from the game. If it's your turn, the next player will go automatically.
-          </Text>
-          <View style={styles.leaveButtons}>
-            <TouchableOpacity style={styles.leaveExitBtn} onPress={handleLeaveConfirmed}>
-              <Text style={styles.leaveExitText}>Leave</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.leaveStayBtn} onPress={() => setShowLeaveDialog(false)}>
-              <Text style={styles.leaveStayText}>Stay</Text>
-            </TouchableOpacity>
-          </View>
+  // ── Leave dialog — absolute overlay instead of Modal to preserve landscape lock on iOS ──
+  const leaveModal = showLeaveDialog ? (
+    <TouchableOpacity style={[StyleSheet.absoluteFill, styles.modalBackdrop]} activeOpacity={1} onPress={() => setShowLeaveDialog(false)}>
+      <View style={styles.leaveSheet} onStartShouldSetResponder={() => true}>
+        <Text style={styles.leaveTitle}>Leave game?</Text>
+        <Text style={styles.leaveBody}>
+          You'll be removed from the game. If it's your turn, the next player will go automatically.
+        </Text>
+        <View style={styles.leaveButtons}>
+          <TouchableOpacity style={styles.leaveExitBtn} onPress={handleLeaveConfirmed}>
+            <Text style={styles.leaveExitText}>Leave</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.leaveStayBtn} onPress={() => setShowLeaveDialog(false)}>
+            <Text style={styles.leaveStayText}>Stay</Text>
+          </TouchableOpacity>
         </View>
-      </TouchableOpacity>
-    </Modal>
-  );
+      </View>
+    </TouchableOpacity>
+  ) : null;
 
-  // ── "My Timeline" modal — overlaid on every game screen ──
-  const myTimelineModal = (
-    <Modal visible={showMyTimeline} transparent animationType="slide" onRequestClose={() => setShowMyTimeline(false)}>
-      <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowMyTimeline(false)}>
-        <View style={styles.myTimelineSheet} onStartShouldSetResponder={() => true}>
-          <View style={styles.myTimelineHeader}>
-            <Text style={styles.myTimelineTitle}>My Timeline</Text>
-            <TouchableOpacity onPress={() => setShowMyTimeline(false)} style={styles.reportCloseBtn}>
-              <Text style={styles.reportCloseText}>✕</Text>
-            </TouchableOpacity>
-          </View>
-          {myTimeline.length === 0 ? (
-            <Text style={styles.myTimelineEmpty}>No cards yet</Text>
-          ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.myTimelineScroll}>
-              {myTimeline.map((year, i) => {
-                const pairsForYear = myMoviePairs.filter(p => p.year === year);
-                const countBefore = myTimeline.slice(0, i).filter(y => y === year).length;
-                const pair = pairsForYear[countBefore];
-                const m = pair ? activeMovies.find(mv => mv.id === pair.id) : activeMovies.find(mv => mv.year === year);
-                return m
-                  ? <CardFront key={i} movie={m} width={90} height={126} />
-                  : <View key={i} style={styles.myTimelinePlaceholder}><Text style={styles.myTimelinePlaceholderYear}>{year}</Text></View>;
-              })}
-            </ScrollView>
-          )}
+  // ── "My Timeline" overlay — absolute instead of Modal to preserve landscape lock on iOS ──
+  const myTimelineModal = showMyTimeline ? (
+    <TouchableOpacity style={[StyleSheet.absoluteFill, styles.modalBackdrop]} activeOpacity={1} onPress={() => setShowMyTimeline(false)}>
+      <View style={styles.myTimelineSheet} onStartShouldSetResponder={() => true}>
+        <View style={styles.myTimelineHeader}>
+          <Text style={styles.myTimelineTitle}>My Timeline</Text>
+          <TouchableOpacity onPress={() => setShowMyTimeline(false)} style={styles.reportCloseBtn}>
+            <Text style={styles.reportCloseText}>✕</Text>
+          </TouchableOpacity>
         </View>
-      </TouchableOpacity>
-    </Modal>
-  );
+        {myTimeline.length === 0 ? (
+          <Text style={styles.myTimelineEmpty}>No cards yet</Text>
+        ) : (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.myTimelineScroll}>
+            {myTimeline.map((year, i) => {
+              const pairsForYear = myMoviePairs.filter(p => p.year === year);
+              const countBefore = myTimeline.slice(0, i).filter(y => y === year).length;
+              const pair = pairsForYear[countBefore];
+              const m = pair ? activeMovies.find(mv => mv.id === pair.id) : activeMovies.find(mv => mv.year === year);
+              return m
+                ? <CardFront key={i} movie={m} width={90} height={126} />
+                : <View key={i} style={styles.myTimelinePlaceholder}><Text style={styles.myTimelinePlaceholderYear}>{year}</Text></View>;
+            })}
+          </ScrollView>
+        )}
+      </View>
+    </TouchableOpacity>
+  ) : null;
 
   // ── DRAWING ──
   if (currentTurn.status === 'drawing') {
@@ -1158,8 +1179,6 @@ export default function GameScreen() {
     const drawingPlacedMovies = myPlacedMovies;
     return (
       <SafeAreaView style={styles.container}>
-        {myTimelineModal}
-        {leaveModal}
         <View style={styles.phaseCenter}>
           {amActive ? (
             <>
@@ -1192,6 +1211,8 @@ export default function GameScreen() {
           />
         )}
         <ScoreBar players={players} myId={myPlayerId} onShowTimeline={() => setShowMyTimeline(true)} />
+        {myTimelineModal}
+        {leaveModal}
       </SafeAreaView>
     );
   }
@@ -1204,8 +1225,6 @@ export default function GameScreen() {
     if (!amActive && currentTurn.placed_interval === -1) {
       return (
         <SafeAreaView style={styles.container}>
-          {myTimelineModal}
-          {leaveModal}
           <View style={styles.gameArea}>
             <View style={styles.timelineArea}>
               <Timeline
@@ -1225,6 +1244,8 @@ export default function GameScreen() {
             </View>
           </View>
           <ScoreBar players={players} myId={myPlayerId} onShowTimeline={() => setShowMyTimeline(true)} />
+          {myTimelineModal}
+          {leaveModal}
         </SafeAreaView>
       );
     }
@@ -1233,8 +1254,6 @@ export default function GameScreen() {
     if (readyToPlace) {
       return (
         <SafeAreaView style={styles.container}>
-          {myTimelineModal}
-          {leaveModal}
           <View style={styles.gameArea}>
             <View style={styles.timelineArea}>
               <Timeline
@@ -1287,6 +1306,8 @@ export default function GameScreen() {
               </Animated.View>
             </View>
           )}
+          {myTimelineModal}
+          {leaveModal}
         </SafeAreaView>
       );
     }
@@ -1296,7 +1317,6 @@ export default function GameScreen() {
       if (!amActive) {
         return (
           <View style={styles.endedOverlay}>
-            {leaveModal}
             <SafeAreaView style={styles.endedInner} edges={['top', 'bottom']}>
               <View style={styles.endedCenter}>
                 <Text style={styles.endedTitle}>🎬</Text>
@@ -1305,13 +1325,13 @@ export default function GameScreen() {
                 </Text>
               </View>
             </SafeAreaView>
+            {leaveModal}
           </View>
         );
       }
 
       return (
         <SafeAreaView style={styles.guessScreen} edges={['top', 'bottom', 'left', 'right']}>
-          {leaveModal}
           <KeyboardAvoidingView
             style={{ flex: 1 }}
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -1401,6 +1421,7 @@ export default function GameScreen() {
               </TouchableOpacity>
             </View>
           </KeyboardAvoidingView>
+          {leaveModal}
         </SafeAreaView>
       );
     }
@@ -1408,7 +1429,6 @@ export default function GameScreen() {
     // ── Trailer playing ──
     return (
       <View style={styles.trailerContainer}>
-        {leaveModal}
         <TrailerPlayer
           key={`${currentTurn.id}-${trailerKey}`}
           ref={trailerRef}
@@ -1511,6 +1531,7 @@ export default function GameScreen() {
         >
           {snackMessage}
         </Snackbar>
+        {leaveModal}
       </View>
     );
   }
@@ -1519,7 +1540,24 @@ export default function GameScreen() {
   if (currentTurn.status === 'challenging') {
     if (!movie) return <LoadingScreen />;
 
+    const observers = players.filter(p => p.id !== currentTurn.active_player_id);
+    const allDecided = observers.length > 0 && challenges.length >= observers.length;
+
+    // Challengers (non-passes, non-withdrawn) sorted by challenge creation time
+    const seqChallengers = [...challenges]
+      .filter(c => c.interval_index !== -2)
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+    const currentPickerChallenge = seqChallengers.find(c => c.interval_index === -1);
+    const currentPicker = currentPickerChallenge
+      ? players.find(p => p.id === currentPickerChallenge.challenger_id) : null;
+
+    const amFirstChallenger = seqChallengers[0]?.challenger_id === myPlayerId;
+    const isMyTurnToPick = currentPickerChallenge?.challenger_id === myPlayerId;
+    const inSeqPhase = allDecided && seqChallengers.length > 0;
+
     const alreadyDecided = hasPassed || myChallenge !== null;
+
     const takenSet = new Set<number>();
     if (currentTurn.placed_interval !== null && currentTurn.placed_interval !== undefined) {
       takenSet.add(currentTurn.placed_interval);
@@ -1532,10 +1570,14 @@ export default function GameScreen() {
     const myPlayerObj = players.find(p => p.id === myPlayerId);
     const hasCoins = (myPlayerObj?.coins ?? 0) > 0;
 
-    // Challenger has clicked Challenge and is now picking their spot on the shared board
-    const isPickingInterval = !amActive && myChallenge !== null
-      && myChallenge.interval_index === -1
-      && !challengeConfirmed;
+    // Picking: only when it's my turn in the sequential phase and I haven't confirmed yet
+    const isPickingInterval = !amActive && isMyTurnToPick && !challengeConfirmed;
+
+    // Blocked intervals: already-picked slots + active player's placement
+    const pickedIntervals = seqChallengers
+      .filter(c => c.interval_index >= 0)
+      .map(c => c.interval_index);
+    const blockedIntervals = [...pickedIntervals, currentTurn.placed_interval].filter((x): x is number => x != null);
 
     // Confirmed challenger placements — rendered as coins on the shared timeline
     const challengerPlacements = challenges
@@ -1546,21 +1588,18 @@ export default function GameScreen() {
       }));
 
     // Left-panel status
-    const pickingNow = challenges.filter(c => c.interval_index === -1);
-    const confirmedC = challenges.filter(c => c.interval_index >= 0);
     let statusMsg: string;
     let statusEmoji: string;
     if (isPickingInterval) {
       statusMsg = 'Tap a gap to\nplace your coin';
       statusEmoji = '🪙';
-    } else if (pickingNow.length > 0) {
-      const names = pickingNow.map(c => getPlayer(c.challenger_id)?.display_name ?? '?').join(', ');
-      statusMsg = `${names} is picking…`;
-      statusEmoji = '🤔';
-    } else if (confirmedC.length > 0) {
-      const names = confirmedC.map(c => getPlayer(c.challenger_id)?.display_name ?? '?').join(', ');
-      statusMsg = `${names} challenged!`;
-      statusEmoji = '🎯';
+    } else if (inSeqPhase && currentPicker) {
+      statusMsg = isMyTurnToPick ? 'Tap a gap to\nplace your coin' : `Waiting for\n${currentPicker.display_name}…`;
+      statusEmoji = isMyTurnToPick ? '🪙' : '🤔';
+    } else if (inSeqPhase && !pendingChallengers) {
+      const names = seqChallengers.filter(c => c.interval_index >= 0).map(c => getPlayer(c.challenger_id)?.display_name ?? '?').join(', ');
+      statusMsg = names ? `${names} challenged!` : 'Waiting for\neveryone…';
+      statusEmoji = names ? '🎯' : '⏳';
     } else {
       statusMsg = 'Waiting for\neveryone…';
       statusEmoji = '⏳';
@@ -1568,9 +1607,6 @@ export default function GameScreen() {
 
     return (
       <SafeAreaView style={styles.container}>
-        {myTimelineModal}
-        {leaveModal}
-
         <View style={styles.gameArea}>
           <View style={styles.timelineArea}>
             <Timeline
@@ -1584,6 +1620,7 @@ export default function GameScreen() {
               placedLabel={amActive ? 'your pick' : 'their pick'}
               placedMovies={placedMovies}
               challengerPlacements={challengerPlacements}
+              blockedIntervals={isPickingInterval ? blockedIntervals : undefined}
               hideFloatingCard
             />
           </View>
@@ -1595,7 +1632,8 @@ export default function GameScreen() {
             {isPickingInterval && (
               <Text style={styles.challengePickTitle}>Tap + to place your coin</Text>
             )}
-            {!amActive && !alreadyDecided && !isPickingInterval && (
+            {/* Decision phase — not yet decided */}
+            {!amActive && !alreadyDecided && !inSeqPhase && (
               <View style={styles.challengeActionsArea}>
                 <ChallengeTimer seconds={10} onExpire={handlePass} barMode />
                 {canChallenge ? (
@@ -1618,10 +1656,23 @@ export default function GameScreen() {
                 )}
               </View>
             )}
-            {!amActive && isPickingInterval && (
-              <TouchableOpacity style={styles.passPillV} onPress={handleCancelChallenge} activeOpacity={0.75}>
-                <Text style={styles.passPillText}>↩ Cancel</Text>
+            {/* Decision phase — challenged, waiting for others */}
+            {!amActive && !inSeqPhase && myChallenge?.interval_index === -1 && (
+              <Text style={styles.challengeOverlayText}>You challenged!{'\n'}Waiting for others…</Text>
+            )}
+            {/* Sequential phase — withdraw button (2nd+ challengers only) */}
+            {isPickingInterval && !amFirstChallenger && (
+              <TouchableOpacity style={styles.passPillV} onPress={handleWithdrawChallenge} activeOpacity={0.75}>
+                <Text style={styles.passPillText}>↩ Withdraw</Text>
               </TouchableOpacity>
+            )}
+            {/* Sequential phase — already picked */}
+            {!amActive && inSeqPhase && myChallenge !== null && myChallenge.interval_index >= 0 && !isPickingInterval && (
+              <Text style={styles.challengeOverlayText}>Coin placed.{'\n'}Waiting for others…</Text>
+            )}
+            {/* Sequential phase — withdrawn */}
+            {!amActive && myChallenge?.interval_index === -3 && (
+              <Text style={styles.challengeOverlayText}>You withdrew.</Text>
             )}
             {amActive && (
               <TouchableOpacity
@@ -1638,6 +1689,8 @@ export default function GameScreen() {
         </View>
 
         <ScoreBar players={players} myId={myPlayerId} onShowTimeline={() => setShowMyTimeline(true)} />
+        {myTimelineModal}
+        {leaveModal}
       </SafeAreaView>
     );
   }
@@ -1652,13 +1705,16 @@ export default function GameScreen() {
       currentTurn.placed_interval !== null &&
       currentTurn.placed_interval !== undefined &&
       validIntervals.includes(currentTurn.placed_interval);
+    const revealChallengersSorted = [...challenges]
+      .filter(c => c.interval_index >= 0)
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
     const winningChallenger = activeCorrect
       ? null
-      : challenges.find((c) => c.interval_index !== -1 && validIntervals.includes(c.interval_index));
+      : revealChallengersSorted.find(c => validIntervals.includes(c.interval_index));
     const coinBackChallengers = (validIntervals.length === 2 && activeCorrect)
       ? challenges.filter(
           (c) =>
-            c.interval_index !== -1 &&
+            c.interval_index >= 0 &&
             validIntervals.includes(c.interval_index) &&
             c.interval_index !== currentTurn.placed_interval
         )
@@ -1722,49 +1778,45 @@ export default function GameScreen() {
     const revealMyPlacedMovies: Movie[] = revealMyTimeline
       .map(year => activeMovies.find(mv => mv.year === year))
       .filter((mv): mv is Movie => mv !== undefined);
-    const revealMyTimelineModal = (
-      <Modal visible={showMyTimeline} transparent animationType="slide" onRequestClose={() => setShowMyTimeline(false)}>
-        <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowMyTimeline(false)}>
-          <View style={styles.myTimelineSheet} onStartShouldSetResponder={() => true}>
-            <View style={styles.myTimelineHeader}>
-              <Text style={styles.myTimelineTitle}>My Timeline</Text>
-              <TouchableOpacity onPress={() => setShowMyTimeline(false)} style={styles.reportCloseBtn}>
-                <Text style={styles.reportCloseText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-            {revealMyTimeline.length === 0 ? (
-              <Text style={styles.myTimelineEmpty}>No cards yet</Text>
-            ) : (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.myTimelineScroll}>
-                {revealMyTimeline.map((year, i) => {
-                  // The newly-won card is the last occurrence of m.year in revealMyTimeline
-                  // (myMoviePairs isn't updated until handleNextTurn runs)
-                  const isNewSlot = winnerId === myPlayerId && year === m.year &&
-                    i === revealMyTimeline.lastIndexOf(m.year);
-                  let mid: string | undefined;
-                  if (isNewSlot) {
-                    mid = m.id;
-                  } else {
-                    const pairsForYear = myMoviePairs.filter(p => p.year === year);
-                    const countBefore = revealMyTimeline.slice(0, i).filter(y => y === year).length;
-                    mid = pairsForYear[countBefore]?.id;
-                  }
-                  const mv = mid ? activeMovies.find(mv => mv.id === mid) : activeMovies.find(mv => mv.year === year);
-                  return mv
-                    ? <CardFront key={i} movie={mv} width={90} height={126} />
-                    : <View key={i} style={styles.myTimelinePlaceholder}><Text style={styles.myTimelinePlaceholderYear}>{year}</Text></View>;
-                })}
-              </ScrollView>
-            )}
+    const revealMyTimelineModal = showMyTimeline ? (
+      <TouchableOpacity style={[StyleSheet.absoluteFill, styles.modalBackdrop]} activeOpacity={1} onPress={() => setShowMyTimeline(false)}>
+        <View style={styles.myTimelineSheet} onStartShouldSetResponder={() => true}>
+          <View style={styles.myTimelineHeader}>
+            <Text style={styles.myTimelineTitle}>My Timeline</Text>
+            <TouchableOpacity onPress={() => setShowMyTimeline(false)} style={styles.reportCloseBtn}>
+              <Text style={styles.reportCloseText}>✕</Text>
+            </TouchableOpacity>
           </View>
-        </TouchableOpacity>
-      </Modal>
-    );
+          {revealMyTimeline.length === 0 ? (
+            <Text style={styles.myTimelineEmpty}>No cards yet</Text>
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.myTimelineScroll}>
+              {revealMyTimeline.map((year, i) => {
+                // The newly-won card is the last occurrence of m.year in revealMyTimeline
+                // (myMoviePairs isn't updated until handleNextTurn runs)
+                const isNewSlot = winnerId === myPlayerId && year === m.year &&
+                  i === revealMyTimeline.lastIndexOf(m.year);
+                let mid: string | undefined;
+                if (isNewSlot) {
+                  mid = m.id;
+                } else {
+                  const pairsForYear = myMoviePairs.filter(p => p.year === year);
+                  const countBefore = revealMyTimeline.slice(0, i).filter(y => y === year).length;
+                  mid = pairsForYear[countBefore]?.id;
+                }
+                const mv = mid ? activeMovies.find(mv => mv.id === mid) : activeMovies.find(mv => mv.year === year);
+                return mv
+                  ? <CardFront key={i} movie={mv} width={90} height={126} />
+                  : <View key={i} style={styles.myTimelinePlaceholder}><Text style={styles.myTimelinePlaceholderYear}>{year}</Text></View>;
+              })}
+            </ScrollView>
+          )}
+        </View>
+      </TouchableOpacity>
+    ) : null;
 
     return (
       <SafeAreaView style={styles.container}>
-        {revealMyTimelineModal}
-        {leaveModal}
         <View style={styles.gameArea}>
           <Animated.View style={[styles.timelineArea, { opacity: timelineFade }]}>
             <Timeline
@@ -1823,6 +1875,8 @@ export default function GameScreen() {
         </View>
         {winnerId === myPlayerId && revealPhase === 'result' && <ConfettiBurst />}
         <ScoreBar players={players} myId={myPlayerId} onShowTimeline={() => setShowMyTimeline(true)} />
+        {revealMyTimelineModal}
+        {leaveModal}
       </SafeAreaView>
     );
   }
