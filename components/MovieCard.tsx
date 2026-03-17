@@ -65,7 +65,7 @@ export function CardFront({ movie, width, height }: CardFrontProps) {
             {movie.director}
           </Text>
         ) : null}
-        <Text style={[s.frontYear, { fontSize: Math.max(18, width * 0.28) }]}>
+        <Text style={[s.frontYear, { fontSize: Math.max(12, width * 0.28) }]}>
           {movie.year}
         </Text>
         <Text
