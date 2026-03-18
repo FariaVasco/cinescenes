@@ -318,7 +318,7 @@ export default function GameScreen() {
 
   // Removes a disconnected player and advances to the next turn.
   // Safe to call from multiple devices — cross-device guard prevents double-processing.
-  async function advanceForStalePlayer(stalePlayerId: string, allPlayers: Player[]) {
+  const advanceForStalePlayer = async (stalePlayerId: string, allPlayers: Player[]) => {
     const g = game;
     const ct = currentTurnRef.current;
     if (!g || !ct) return;
