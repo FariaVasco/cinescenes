@@ -1,6 +1,5 @@
 # Cinescenes — Design Brief
-
-> Paste this into any AI design session (Figma, v0, etc.) to establish full context.
+> Complete handoff document for the Figma redesign. Covers brand, design system, all screens, all components, and redesign direction.
 
 ---
 
@@ -8,51 +7,51 @@
 
 Cinescenes is a **party card game about movies**. Players watch a mystery trailer — no title, no year shown — and must place the movie in its correct chronological position on their personal timeline. The player who builds the longest accurate timeline wins.
 
-It exists in two forms:
-- **Physical edition**: beautifully printed cards with a QR code on the back. Scan the code → watch the trailer on your phone.
-- **Digital edition**: fully app-based, up to 8 players on the same Wi-Fi.
+Two editions:
+- **Physical**: printed cards with a QR code on the back → scan → watch trailer on phone
+- **Digital**: fully app-based, up to 8 players on the same Wi-Fi
 
-The core tension of the game: *you know you've seen this film... but was it 1987 or 1994?* That gap between recognition and precision is where the game lives.
+The core tension: *you know you've seen this film… but was it 1987 or 1994?*
 
 ---
 
-## 2. Emotional Experience — What Players Should Feel
+## 2. Emotional Experience
 
 | Moment | Feeling |
 |--------|---------|
-| Opening the app | Anticipation. Like settling into a dark cinema seat. |
-| The trailer starts | Suspense. Focus. The screen becomes everything. |
-| "I know it!" | Rush of recognition. Adrenaline. |
-| Placing the card | Strategic tension. Second-guessing. |
-| The challenge window | Social electricity. Reading the room. |
-| The card flips | Revelation. Drama. The audience leans in. |
-| Correct placement | Triumph. Prestige. |
-| Wrong placement | Theatrical groan. Laughter. |
-| Winning | The credits roll on your victory. |
+| Opening the app | Anticipation — settling into a dark cinema seat |
+| The trailer starts | Suspense. The screen becomes everything |
+| "I know it!" | Rush of recognition. Adrenaline |
+| Placing the card | Strategic tension. Second-guessing |
+| The challenge window | Social electricity. Reading the room |
+| The card flips | Revelation. The audience leans in |
+| Correct placement | Triumph. Prestige |
+| Wrong placement | Theatrical groan. Laughter |
+| Winning | The credits roll on your victory |
 
 ---
 
 ## 3. Brand Identity
 
-### The Concept in One Sentence
+### One sentence
 > *Cinescenes is a love letter to cinema, disguised as a party game.*
 
 ### Personality
 - **Cinematic** — serious about film, not about itself
 - **Prestigious** — the feel of a film festival, not a quiz app
 - **Tactile** — digital UI that feels like handling real cards
-- **Social** — built for a room full of people, not a solo player
+- **Social** — built for a room full of people
 
-### Visual References
-- The Criterion Collection (editorial, typographic restraint)
-- BAFTA / Academy Awards ceremony (gold, dark, formal but exciting)
-- Film noir (deep shadow, high contrast, dramatic light)
-- A vintage movie palace at night (velvet darkness, gold ornament)
+### Visual references
+- The Criterion Collection — editorial, typographic restraint
+- BAFTA / Academy Awards — gold, dark, formal but exciting
+- Film noir — deep shadow, high contrast, dramatic light
+- A vintage movie palace at night — velvet darkness, gold ornament
 
-### What It Is NOT
+### What it is NOT
 - Bright, casual, cartoonish
 - Generic mobile game UI
-- Neon/cyberpunk
+- Neon / cyberpunk
 - Playful rounded bubbly shapes
 
 ---
@@ -60,63 +59,87 @@ The core tension of the game: *you know you've seen this film... but was it 1987
 ## 4. Design Pillars
 
 ### 1. DARK AS THE CINEMA
-The primary background (`#100a20`) is the darkness of a cinema before the film starts — deep purple-navy, almost black. Nothing competes with the screen. All content is lit by it.
+The primary background (`#100a20`) is the darkness of a cinema before the film starts — deep purple-navy, almost black. All content is lit by the screen.
 
 ### 2. GOLD IS EARNED
-Gold (`#f5c518`) is used exclusively for things that matter: the brand, primary actions, the active player indicator, earned rewards. It is never decorative. It signals importance and prestige — the colour of trophies, of IMDb stars, of house lights.
+Gold (`#f5c518`) is used exclusively for things that matter: the brand, primary actions, earned rewards, the active player. Never decorative. The colour of trophies, IMDb stars, house lights.
 
 ### 3. CARDS ARE REAL OBJECTS
-The movie cards are the soul of the game. They should feel like premium playing cards — weighted, physical. Dark backgrounds, large typography, precise proportions. When a card flips, it should feel like a revelation.
+The movie cards are the soul of the game. They should feel like premium playing cards — weighted, physical. Dark backgrounds, large typography, precise proportions.
 
 ### 4. MOTION IS NARRATIVE
-Every animation tells a small story. The wheel spin is a drawing of fate. The card flip is the moment of truth. The confetti is an audience reaction. Animations are never decorative — they are beats in the game's drama.
+Every animation tells a small story. The wheel spin is a drawing of fate. The card flip is the moment of truth. Animations are never decorative — they are beats in the game's drama.
 
 ---
 
 ## 5. Color System
 
 ```
-── Backgrounds ──────────────────────────────────────
-bg           #100a20    Primary screen / cinema darkness
-surface      #1e1630    Cards, panels, inputs — surfaces that catch light
-surfaceHigh  #2a1f4a    Modals, elevated panels — spotlight effect
+── Backgrounds ──────────────────────────────────────────────────────
+bg           #100a20    Primary screen — cinema darkness
+surface      #1e1630    Cards, panels, inputs, chips
+surfaceHigh  #2a1f4a    Modals, elevated panels, bottom sheets
 
-── Brand ────────────────────────────────────────────
+── Brand ────────────────────────────────────────────────────────────
 gold         #f5c518    Primary accent — prestige, action, reward
-goldFaint    rgba(245,197,24, 0.12)   Subtle gold wash (active states, glows)
+goldFaint    rgba(245,197,24, 0.12)   Subtle gold wash (active states)
 goldGlow     rgba(245,197,24, 0.25)   Gold halos on buttons and rings
 
-── Semantic ─────────────────────────────────────────
+── Semantic ─────────────────────────────────────────────────────────
 danger       #e63946    Challenge, errors, destructive actions
 
-── Text ─────────────────────────────────────────────
+── Text ─────────────────────────────────────────────────────────────
 textPrimary  #ffffff    Headlines, primary content
 textSub      #a0a0b0    Secondary / supporting text
-textMuted    #66667a    Captions, disabled, hints
+textMuted    #66667a    Hints, captions, disabled
 textOnGold   #0a0a0a    Text rendered on gold backgrounds
 
-── Borders ──────────────────────────────────────────
+── Borders ──────────────────────────────────────────────────────────
 border       rgba(255,255,255, 0.10)   Standard hairline dividers
 borderSubtle rgba(255,255,255, 0.06)   Barely-there separators
+
+── Status Badges ────────────────────────────────────────────────────
+free         rgba(34,197,94, 0.15)    bg  /  #4ade80  text
+premium      goldFaint               bg  /  gold     text + border
+comingSoon   rgba(255,255,255,0.06)   bg  /  textMuted text
 ```
+
+### Decade Card Colors
+Cards have unique backgrounds by decade — dark cinematic hues that evoke each era:
+
+| Decade | Hex | Era |
+|--------|-----|-----|
+| 1920s | `#3D2B1F` | Warm sepia — silent era |
+| 1930s | `#1B3252` | Deep navy — noir / art deco |
+| 1940s | `#4A1522` | Dark burgundy — wartime |
+| 1950s | `#0C5E3E` | Deep teal — Technicolor |
+| 1960s | `#7A1E00` | Vermillion — New Wave |
+| 1970s | `#7A3C00` | Burnt sienna — New Hollywood |
+| 1980s | `#380066` | Deep violet — neon / blockbuster |
+| 1990s | `#003E5C` | Ocean blue — indie / Sundance |
+| 2000s | `#1B3D1B` | Forest green — CGI / digital |
+| 2010s | `#1B1B3D` | Midnight indigo — streaming |
+| 2020s | `#2D0A3D` | Deep plum — modern |
+
+Colors are linearly interpolated between adjacent decades for each individual year.
 
 ---
 
-## 6. Typography Hierarchy
+## 6. Typography
 
-All type uses the system font (SF Pro on iOS, Roboto on Android). No custom typeface — the system font at heavy weights with controlled letter-spacing achieves the premium feel.
+System font (SF Pro on iOS, Roboto on Android). No custom typeface — heavy weights + controlled letter-spacing achieve the premium feel.
 
-| Style Name | Size | Weight | Letter Spacing | Case | Color | Usage |
-|------------|------|--------|----------------|------|-------|-------|
-| `hero` | 40 | 900 | — | — | textPrimary | Screen centrepiece numbers (year on card) |
-| `display` | 28 | 900 | 0.3 | — | textPrimary | Major screen titles |
+| Style | Size | Weight | Letter Spacing | Case | Default Color | Usage |
+|-------|------|--------|----------------|------|---------------|-------|
+| `hero` | 40 | 900 | — | — | textPrimary | Year on CardFront |
+| `display` | 28 | 900 | 0.3 | — | textPrimary | Major screen titles, paywall headline |
 | `title` | 22 | 900 | 0.3 | — | textPrimary | Section headers |
 | `subtitle` | 18 | 700 | 0.3 | — | textPrimary | Sub-headers |
 | `body` | 16 | 500 | — | — | textSub | Body copy |
 | `label` | 14 | 600 | 0.3 | — | textPrimary | Button labels, form labels |
-| `overline` | 11 | 700 | 2.0–2.5 | UPPERCASE | gold | Section labels, category tags |
+| `overline` | 11 | 700 | 2.0 | UPPERCASE | gold | Section labels, screen category tags |
 | `caption` | 12 | 500 | 0.3 | — | textMuted | Metadata, hints, timestamps |
-| `micro` | 9 | 700 | 1.5 | UPPERCASE | textMuted | Watermarks on cards |
+| `micro` | 9 | 700 | 1.5 | UPPERCASE | textMuted | Watermarks, badge labels |
 | `wordmark` | varies | 900 | 6 | UPPERCASE | gold | CINESCENES logotype only |
 
 ---
@@ -137,281 +160,353 @@ full = 999  Circles, pills
 ## 8. Spacing Scale
 
 ```
-xs = 4    Tight internal spacing (icon ↔ label)
-sm = 8    Default internal gap
-md = 16   Standard section gap
-lg = 24   Large section separation
-xl = 32   Screen-level padding
+xs =  4    Tight internal spacing (icon ↔ label)
+sm =  8    Default internal gap
+md = 16    Standard section gap
+lg = 24    Large section separation
+xl = 32    Screen-level horizontal padding
 ```
 
 ---
 
 ## 9. Icon System
 
-### Philosophy
-Every icon in Cinescenes should feel like it belongs in a film credit sequence or a cinema programme. No generic mobile UI icons. No emoji. The vocabulary comes from cinema itself.
-
-### Style Specification
+### Style spec
 - **Type**: Stroke / outline icons (not filled)
 - **Stroke weight**: 1.5px at 24dp canvas
-- **Corners**: Rounded cap + rounded join (line-cap: round, line-join: round)
-- **Size grid**: 16dp (inline), 20dp (UI standard), 24dp (prominent), 32dp (illustrated), 96dp (rules screen hero)
-- **Color default**: `textSub` (#a0a0b0) — icons are supporting, not competing
+- **Corners**: Rounded cap + rounded join
+- **Size grid**: 16dp (inline), 20dp (UI standard), 24dp (prominent), 32dp (illustrated), 96dp (rules hero)
+- **Color default**: `textSub` (#a0a0b0)
 - **Color active / brand**: `gold` (#f5c518)
 - **Color destructive**: `danger` (#e63946)
 
-### Cinema Icon Vocabulary (preferred motifs)
+### Cinema vocabulary (preferred before generic equivalents)
 
-These motifs should be used before reaching for generic equivalents:
+| Concept | Cinema Motif |
+|---------|-------------|
+| The game / draw | Clapperboard |
+| A movie | Film reel |
+| Watching | Projector beam |
+| Time / year | Film strip with tick marks |
+| Recognition | Spotlight circle |
+| Victory | Director's chair |
+| Challenge | Film reel torn in two |
+| Wrong / elimination | Film canister with X |
+| Coin / currency | Round token with star |
+| Voice input | Directional boom mic |
+| Report | Flag planted in film strip |
+| Cast to TV | Projector throwing beam |
+| Timeline | Horizontal film strip |
+| Next / advance | Clapperboard clap arrow |
 
-| Concept | Cinema Motif | Generic Fallback |
-|---------|-------------|-----------------|
-| The game / draw | Clapperboard | Playing card |
-| A movie / film | Film reel | Film strip |
-| Watching | Projector beam | Eye |
-| Time / year | Film strip with tick marks | Calendar |
-| Recognition | Spotlight circle | Lightbulb |
-| Victory | Director's chair | Trophy |
-| Challenge | Film reel torn in two | Exclamation |
-| Elimination / wrong | Film canister with X | Trash |
-| Coin / currency | Round token with star | Generic coin |
-| Voice input | Directional boom mic | Microphone |
-| Report | Flag planted in film strip | Flag |
-| Cast to TV | Projector throwing beam | Cast icon |
-| Timeline | Horizontal film strip | Timeline bar |
-| Next / advance | Clapperboard clap arrow | Chevron right |
+### Full icon inventory
 
----
+**UI Icons (functional — must be crisp at 20dp)**
 
-## 10. Full Icon Inventory
+| ID | Current (code) | Replacement | Context |
+|----|---------------|-------------|---------|
+| `ic_coin` | 🪙 emoji | Round token with star or "C" cutout, gold | ScoreBar, rules screen |
+| `ic_mic` | 🎤 emoji | Directional boom mic, cinema style | Voice button — active |
+| `ic_mic_off` | — | Same mic with diagonal slash | Voice button — idle |
+| `ic_flag` | ⚑ text | Flag on a stick, thin stroke | Report trailer |
+| `ic_timeline` | nested views | Horizontal film strip, 3 frames | ScoreBar view-timeline |
+| `ic_back` | ← text | Thin chevron left | All back navigation |
+| `ic_close` | ✕ text | Thin X | Modal dismiss |
+| `ic_confirm` | ✓ text | Thin checkmark | Timeline slot confirm |
+| `ic_replay` | ↺ text | Circular arrow (clockwise) | Replay trailer |
+| `ic_cast` | MaterialCommunityIcons | Projector throwing beam right | Cast / TV mode |
+| `ic_chevron_right` | → text | Thin chevron right | Navigation CTAs |
 
-Every emoji or icon currently used in the app, with its replacement:
-
-### UI Icons (functional — must be crisp at 20dp)
-
-| ID | Current | Replacement | Context |
-|----|---------|-------------|---------|
-| `ic_coin` | 🪙 | Round token icon — circle with a star or "C" cutout, gold | ScoreBar player chips, rules screen, voice reward hint |
-| `ic_mic` | 🎤 | Directional boom mic (cinema style, not karaoke mic) | Voice input button — active state |
-| `ic_mic_off` | — | Same mic with diagonal slash | Voice button — idle/disabled |
-| `ic_flag` | ⚑ | Flag on a stick — thin stroke | Report trailer button |
-| `ic_timeline` | Three lines + connectors | Horizontal film strip with 3 frames | ScoreBar "view timeline" button |
-| `ic_back` | ← (text) | Thin chevron left | All back navigation |
-| `ic_close` | ✕ (text) | Thin X | Modal dismiss |
-| `ic_confirm` | ✓ (text) | Thin checkmark | Timeline slot confirm button |
-| `ic_replay` | ↺ (text) | Circular arrow (clockwise) | Replay trailer button |
-| `ic_cast` | MaterialCommunityIcons "cast" | Projector throwing beam right | Cast/TV mode button |
-| `ic_chevron_right` | → (text) | Thin chevron right | Navigation CTAs |
-
-### Result / State Icons (illustrated — 24–32dp, gold or semantic color)
+**Result / State Icons (illustrated — 24–32dp)**
 
 | ID | Current | Replacement | Context |
 |----|---------|-------------|---------|
 | `ic_result_correct` | 🎉 | Star burst or clapperboard with checkmark | Active player placed correctly |
-| `ic_result_challenge` | 🎯 | Spotlight circle hitting a target | Challenger placed correctly |
-| `ic_result_trash` | 🗑️ | Film canister with X mark | Nobody got it right |
-| `ic_trophy` | 🏆 | Director's chair or award silhouette | Win screen, race to win |
+| `ic_result_challenge` | 🎯 | Spotlight hitting a target | Challenger placed correctly |
+| `ic_result_trash` | 🗑️ | Film canister with X | Nobody got it right |
+| `ic_trophy` | 🏆 | Director's chair or award silhouette | Win screen |
 
-### Rules Screen Illustrations (hero size — 80–96dp, outline style, gold)
+**Rules Screen Illustrations (hero — 80–96dp, outline, gold)**
 
-| ID | Current | Replacement | Step |
-|----|---------|-------------|------|
-| `ill_draw` | 🎬 | Clapperboard (full, detailed) | Draw a Card |
-| `ill_watch` | 👀 | Film projector with beam | Watch the Clip |
-| `ill_know_it` | ⚡ | Clapperboard mid-clap (action) | Know It? Say It |
-| `ill_coin` | 🪙 | Coin / token (large, detailed) | Earn Coins |
-| `ill_starting` | 🎴 | Single card with film strip corner | Starting Card |
-| `ill_place` | 📅 | Horizontal film strip (timeline) | Place It Right |
-| `ill_challenge` | ⚔️ | Two film reels facing each other | Challenge! |
-| `ill_reveal` | 🃏 | Card mid-flip (half back, half front) | The Reveal |
-| `ill_keep` | 🎯 | Checkmark inside a film reel | Keep or Lose |
-| `ill_win` | 🏆 | Director's chair with spotlight | Race to Win |
+| ID | Step |
+|----|------|
+| `ill_draw` | Draw a Card — clapperboard |
+| `ill_watch` | Watch the Clip — projector with beam |
+| `ill_know_it` | Know It? Say It — clapperboard mid-clap |
+| `ill_coin` | Earn Coins — coin / token |
+| `ill_starting` | Starting Card — single card with film strip corner |
+| `ill_place` | Place It Right — horizontal film strip (timeline) |
+| `ill_challenge` | Challenge! — two film reels facing each other |
+| `ill_reveal` | The Reveal — card mid-flip |
+| `ill_keep` | Keep or Lose — checkmark inside film reel |
+| `ill_win` | Race to Win — director's chair with spotlight |
 
-### Decorative / Background Elements (replace emoji scatter on landing screen)
+**Decorative Background Elements (all screens)**
 
-| ID | Current | Replacement |
-|----|---------|-------------|
-| `deco_clapperboard` | 🎬 | Clapperboard silhouette, 8–12% opacity |
-| `deco_film_reel` | 🍿 | Film reel circle silhouette |
-| `deco_star` | ⭐🌟 | Five-point cinema star (Hollywood Walk of Fame style) |
-| `deco_masks` | 🎭 | Director's chair silhouette |
-| `deco_projector` | 🎥 | Vintage projector silhouette |
-| `deco_strip` | — | Short film strip segment (3 frames) |
-
-These should be **custom SVG silhouettes**, placed and rotated as the current emoji are, rendered at `rgba(255,255,255, 0.07–0.10)`.
+Custom SVG silhouettes placed absolutely, rotated randomly, at 5–8% opacity, `pointerEvents="none"`:
+- `deco_clapperboard` — clapperboard silhouette
+- `deco_film_reel` — film reel circle
+- `deco_star` — five-point cinema star
+- `deco_projector` — vintage projector silhouette
+- `deco_strip` — short film strip segment (3 frames)
 
 ---
 
-## 11. Movie Card Design
+## 10. Components
 
-The cards are the centrepiece of the game. Both faces must feel like premium playing cards from a collector's edition.
+### CinemaButton
+The universal button. 3 variants × 3 sizes. Spring-scale press animation (0.97 scale).
 
-### CardBack (face-down)
-- Background: `#0d0820` (darker than bg for depth)
-- Outer frame: gold `rgba(245,197,24, 0.50)` border, inset ~9% of card width, proportional radius
-- Inner hairline frame: gold `rgba(245,197,24, 0.22)`, inset 4px further
-- Centre emblem: `✦ CINE — SCENES ✦` in stacked arrangement, gold at 88% opacity, weight 800
-- The emblem is purely typographic — no logo mark on the card back (the logo lives on the landing screen)
-- `outlined` variant adds a dashed gold border (used in timeline gap placeholder)
+| Variant | Background | Text color | Border |
+|---------|-----------|------------|--------|
+| `primary` | gold #f5c518 | textOnGold #0a0a0a | none |
+| `ghost` | transparent | textPrimary white | border rgba white 0.10 |
+| `danger` | danger #e63946 | white | none |
 
-### CardFront (face-up)
-- Background: one of 12 dark cinema hues (deterministic from movie ID hash)
-  ```
-  #6d3014  #4c1247  #0d3b6e  #1a4731  #5c1a1a
-  #2d1854  #4a3000  #1a3d2b  #3d1a00  #0a3d62  #2c1654  #1a2e1a
-  ```
-- Layout top→bottom: director (italic, small) · year (huge, bold — the hero) · title (italic, medium)
-- All text white; year at full opacity, director at 75%, title at 90%
-- Radial glow overlay: `radial-gradient(ellipse, rgba(255,255,255,0.12) 0%, transparent 68%)`
-- Corner icons: 4 small film-strip or aperture icons in the corners (like physical card design)
-  - Size: ~7.5% of card width
-  - Color: `rgba(255,255,255, 0.15)`
-  - Currently missing from the React Native CardFront — should be added
+| Size | Padding H×V | Font size |
+|------|------------|-----------|
+| `sm` | 16 × 8 | base 14 |
+| `md` | 24 × 12 | base 14 |
+| `lg` | 32 × 16 | base 14 |
 
-### Card Proportions
-- Physical cards: 63mm × 63mm square
-- App cards: 80dp wide × 100dp tall (4:5 ratio, portrait) for timeline
-- Intro wheel cards: same 72dp × 100dp
+Disabled state: opacity 0.4.
 
 ---
 
-## 12. Screen Inventory
+### CardBack
+The face-down card. Used everywhere a movie is hidden.
+- Background: `#0d0820` (darker than bg — depth)
+- Outer gold frame: `rgba(245,197,24,0.50)`, inset ~9% of card width
+- Inner hairline frame: `rgba(245,197,24,0.22)`, inset 4px further
+- Centre emblem: `✦ CINE — SCENES ✦` stacked, gold at 88% opacity, weight 800, purely typographic
+- `outlined` variant: dashed gold border (used as timeline gap placeholder)
 
-| Screen | Route | Orientation | Purpose |
-|--------|-------|-------------|---------|
-| Landing | `/` | Portrait | Entry. Logo + "Let's Play" + "Rules" |
-| Play | `/play` | Portrait | Mode choice: physical deck vs. digital |
-| Rules | `/rules` | Portrait | 10-slide swipeable tutorial |
-| Local Lobby | `/local-lobby` | Portrait | Create/join room; host starts game |
-| Scanner | `/scanner` | Landscape | Camera QR scan for physical cards |
-| Trailer | `/trailer` | Landscape | Physical card mode: watch trailer |
-| Game | `/game` | Landscape (+ Portrait for guess) | Full game loop |
+### CardFront
+The revealed card. The moment of truth.
+- Background: decade-interpolated color (see section 5)
+- Layout: director (italic, small, 75% opacity) → year (huge hero, full opacity) → title (italic, 90% opacity)
+- Radial glow overlay: `rgba(255,255,255,0.07)`
+- Card proportions: 80dp × 100dp (timeline), 72dp × 100dp (intro wheel), 52dp × 70dp (drawing phase mini)
 
-### Game Screen Sub-states
-The game screen renders different UI based on turn status and player role:
-
-| State | Who sees it | What happens |
-|-------|-------------|--------------|
-| `drawing` — all players | Full screen: whose turn / player timelines | Active player taps "Let's Guess" |
-| `placing` — trailer playing | Active: trailer + report + "I know it!" button | Observers: waiting screen |
-| `placing` — guess screen | Active player only (Portrait) | Name/director input + voice option |
-| `placing` — timeline | Active: interactive timeline + floating card back | Observers: non-interactive timeline |
-| `challenging` | All non-active: 5s countdown ring + challenge button | Active: locked "Reveal" button |
-| `revealing` — flip phase | All: timeline with FlippingMovieCard at placed position | 1.2s card flip animation |
-| `revealing` — result phase | All: winner's timeline + result strip + next button | Confetti or TrashCard animation |
+### FlippingMovieCard
+Animated card flip. CardBack → CardFront with 3D rotateY.
+- Phase 1: back rotates 0→90° (hides back)
+- Phase 2: front rotates -90→0° (reveals front)
+- Duration: 600ms linear, useNativeDriver
 
 ---
 
-## 13. Key Components
+### Timeline
+Horizontal scrollable row of cards with gap slots.
+
+| Gap type | Visual |
+|----------|--------|
+| Spacer (non-interactive) | 20dp invisible |
+| Open gap (interactive) | 32dp × 100dp · circular + button, gold border |
+| Selected gap | 80dp × 100dp dashed card outline, checkmark inside |
+| Blocked gap (challenging) | 28dp × 100dp · ✕ in danger color |
+| My placed pick (pre-reveal) | `CardBack outlined` with "your pick" overline label |
+| Observer placed pick | `CardBack outlined` with player name overline label |
+| Reveal — flip | `FlippingMovieCard` with autoFlip |
+| Reveal — challenger insert | Spring scale-in animation from 0→1 |
+| Reveal — trash | Card flies up-right (700ms) → slot collapses (600ms) |
+| Challenger coin | 36dp circle, gold border, player initials |
+
+---
+
+### ScoreBar
+Fixed bottom bar on all game screens.
+- Background: surfaceHigh `#2a1f4a`, top hairline border
+- Horizontal scroll of player chips
+- Each chip: `{name} · {card count} · {coin count}`, gold text for counts
+- Active player chip: gold border
+- Right side: timeline button (film strip icon)
+
+---
+
+### ChallengeTimer
+SVG animated countdown ring.
+- Duration: 5 seconds
+- Ring color progression: `#e63946` (red) → `#f5a623` (amber) → `#555` (grey)
+- Stroke: 5px, round cap, starts at top (rotated -90°)
+- Background ring: `#2a2a3a`
+- Challenge / Pass buttons rendered inside the ring area
+
+---
 
 ### CinescenesLogo
-SVG clapperboard (52×56 viewBox) + "CINESCENES" wordmark.
+SVG clapperboard + CINESCENES wordmark.
 - Top bar: gold `#f5c518`, black diagonal stripes, hinge pins
 - Board body: dark `#0a0a14`, gold border, gold sprocket holes
 - Wordmark: weight 900, gold, letterSpacing 6, gold text-shadow glow
 - Props: `iconSize` (default 48), `showWordmark` (default true), `layout` (vertical | horizontal)
 
-### Timeline
-Horizontal scroll of cards with gap slots between them.
-- Existing cards: `CardFront` at 80×100dp
-- Gap (interactive): circular `+` button with gold border
-- Gap (selected): dashed card-shaped placeholder with checkmark
-- Gap (blocked, challenging): `✕` in danger color
-- Gap (observer, placed): `CardBack outlined` or `FlippingMovieCard` during reveal
-- Gap (spacer): 20dp invisible spacer
+---
 
-### ScoreBar
-Fixed bottom bar on all game screens.
-- Horizontal scroll of player chips
-- Each chip: `{name} · {card count (gold)} · {coin icon}`
-- Active player chip: gold border
-- Right: film-strip timeline button (opens "My Timeline" bottom sheet)
-
-### ChallengeTimer
-SVG animated countdown ring.
-- Duration: 5 seconds
-- Ring colour: red `#e63946` → amber `#f5a623` → grey `#555` (at 0%, 60%, 100% elapsed)
-- Stroke: 5px, round cap, starts at top (rotated -90°)
-- Background ring: `#2a2a3a`
-- Children (the challenge button) rendered inside the ring
-
-### CastModal
-Landscape-optimised modal for Cast/TV setup.
-- Backdrop: `rgba(0,0,0,0.72)`
-- Sheet: `surface` bg, `card` radius, max-width 560dp
-- Explains screen-mirroring setup
+### PaywallSheet
+Bottom sheet modal for RevenueCat subscription.
+- Overlay: `rgba(0,0,0,0.75)`
+- Sheet: surfaceHigh `#2a1f4a`, card radius 20, top handle bar
+- 3 plan options (monthly / annual / lifetime): radio button + label + price + optional badge
+- Selected plan: gold border + goldFaint background + filled gold radio dot
+- CTA: primary CinemaButton "GET PREMIUM" (full width, lg)
+- Footer: "Restore purchases" · "Not now" (caption links)
+- Decorative: 2 SVG icons top-corners at 6% opacity
 
 ---
 
-## 14. Animation Language
+## 11. Screen Inventory
 
-All animations serve narrative purpose. Timings reference:
+| Screen | Route | Orientation | Purpose |
+|--------|-------|-------------|---------|
+| Landing | `/` | Portrait | Entry: logo + "Let's Play" + "How to Play" |
+| Play | `/play` | Portrait | Mode: physical deck vs. digital |
+| Mode Select | `/mode-select` | Portrait | Standard (free) vs Collections (premium) |
+| Sign In | `/sign-in` | Portrait | Apple (iOS) / Google (Android) auth |
+| Rules | `/rules` | Portrait | 10-slide swipeable tutorial |
+| Local Lobby | `/local-lobby` | Portrait | Create / join room; host starts game |
+| Scanner | `/scanner` | Landscape | Camera QR scan for physical cards |
+| Trailer | `/trailer` | Landscape | Physical card mode: watch trailer |
+| Game | `/game` | Landscape | Full game loop (multiple sub-states) |
+
+---
+
+## 12. Game Screen Sub-states
+
+The game screen renders different UI based on `turn.status` and the player's role.
+
+### Drawing phase
+After a turn ends, before the next trailer starts.
+
+| Viewer | Layout |
+|--------|--------|
+| Active player | Overline "Your turn" · Active player's own timeline · "Let's Guess" primary button |
+| Observer | Overline "{name}'s timeline" · Active player's timeline (main) · "Waiting for {name}…" label · Own mini-timeline at bottom (52×70dp cards, horizontal scroll) |
+
+ScoreBar pinned to bottom on all states.
+
+### Placing — trailer
+| Viewer | Layout |
+|--------|--------|
+| Active player | Full-screen trailer · "I know it!" floating button · Report button |
+| Observer | Waiting state — blurred/dark background |
+
+### Placing — guess
+Active player only (portrait orientation). Text inputs for movie title + director name. Voice input button (boom mic icon). Submit → timeline.
+
+### Placing — timeline
+| Viewer | Layout |
+|--------|--------|
+| Active player | Interactive timeline · floating CardBack (pre-placement) · gap selection + confirm |
+| Observer | Non-interactive timeline · active player's placed CardBack visible |
+
+### Challenging
+10-second window for non-active players. Sequential two-phase flow:
+
+**Phase 1 — Decision** (for each observer):
+- Not decided: ChallengeTimer ring (5s) + [Challenge] button + [Pass] button
+- Challenged: "You challenged! Waiting for others…"
+- Passed: "You passed"
+- Active player: "Waiting for everyone…"
+
+**Phase 2 — Sequential picking** (after all decided, at least one challenged):
+- Active player: "Challengers are picking…" · challenger coins accumulating on timeline
+- Waiting for another: "Waiting for {name}…"
+- My turn to pick: Interactive timeline · blocked gaps marked ✕ · [↩ Withdraw] if not first challenger
+- Already picked: "Coin placed. Waiting for others…"
+- Withdrew: "You withdrew."
+
+### Revealing — flip phase
+All players see the timeline with `FlippingMovieCard` at the placed position. Card autoFlips after 300ms.
+
+### Revealing — result phase
+Result strip appears with:
+- Winner name + result icon
+- "Card moves to {name}'s timeline" (if challenger won)
+- "{name} also had it right" (if coin refunded)
+- Bonus coin indicator (active player)
+- [Next →] button
+
+Result types:
+- `correct` — active player placed correctly · star burst icon
+- `challenge` — challenger placed correctly · spotlight icon
+- `trash` — nobody correct · film canister icon
+
+---
+
+## 13. Animation Language
 
 | Animation | Duration | Easing | Trigger |
 |-----------|----------|--------|---------|
-| Card flip (timeline reveal) | 600ms | Linear (two-phase: 0→90° back, -90→0° front) | `status → revealing` |
-| Card flip (intro wheel) | 600ms | inOut(cubic) | After wheel stops |
+| Card flip (reveal) | 600ms | Linear (two-phase) | `status → revealing` |
+| Card flip (intro wheel) | 600ms | inOut(cubic) | Wheel stopped |
 | Intro wheel spin | 5500ms | inOut(cubic) | "Let's spin!" tap |
-| Highlight card glide to centre | 700ms | out(cubic) | After wheel stops |
-| Highlight card scale up | 700ms | out(back 1.1) | With glide |
-| Card placement fly | 380ms | — | Confirm placement |
+| Highlight card glide | 700ms | out(cubic) | Wheel stopped |
+| Highlight card scale | 700ms | out(back 1.1) | With glide |
+| Challenger card insert | Spring (damping 14, stiffness 180) | — | Sequential phase |
+| Trash card fly-off | 700ms (300ms delay) | in(cubic) | Result = trash |
+| Slot collapse | 600ms | inOut(quad) | After trash fly-off |
 | Confetti burst (28 particles) | 850–1300ms staggered | out(cubic) | Correct placement |
-| Trash card fly-off | 700ms (300ms delay) | in(cubic) | Nobody correct |
-| Screen transition | Fade | — | All nav via Expo Router |
+| ChallengeTimer ring | 5000ms | Linear | `status = challenging` |
+| Button press | Spring scale 0.97 | — | All CinemaButtons |
+| Screen transition | Fade | — | Expo Router |
 
 ---
 
-## 15. Emotion-to-Design Mapping
+## 14. Redesign Vision — What "Bold" Means
 
-| Moment | Design Response |
-|--------|----------------|
-| Dark background | Creates cinema atmosphere — the world falls away |
-| Gold accents | Signals reward, prestige, what matters most |
-| Large year number on CardFront | The moment of truth — nothing else matters |
-| Slow card flip animation | Builds anticipation — the audience holds its breath |
-| Challenge timer red ring | Danger, urgency, social pressure |
-| Confetti burst | Pure joy — the audience erupts |
-| Trash card flying off-screen | Comic deflation — theatrical groaning |
-| "Let's spin!" wheel | Fate, randomness, ceremony |
+The current design is correct in direction but conservative in execution. The redesign should push harder on the cinematic premise while keeping all the dark/gold foundations.
+
+### Key opportunities
+
+**1. Typography needs more contrast**
+The current UI uses similar weights/sizes throughout. A bold redesign would use much larger type — hero-level sizes on secondary screens, not just on cards. Think magazine editorial: one massive number or word that commands the screen, everything else secondary.
+
+**2. Cards should feel dimensional**
+CardFront currently uses flat color. Introduce subtle gradient overlays, a film grain texture at 4–6% opacity, and stronger inner-shadow at the bottom edge. The card should feel like it has weight and depth.
+
+**3. The timeline needs a visual identity**
+Currently functional but plain. Consider a film-strip aesthetic — sprocket holes at top and bottom edges, or a subtle horizontal track behind the cards. The timeline is the game — it deserves a stronger visual language.
+
+**4. Screens need a focal point**
+Landing screen is good. Game screen is crowded. Each screen should have one unmissable focal element (the year on the card, the challenge timer ring, the wheel). Everything else recedes.
+
+**5. Gold usage can be bolder**
+Currently gold appears as small accents. In a bold redesign, the primary action moment (the reveal, the result) should feel like a spotlight — a full gold flash, a gold glow emanating from the correct card, the screen briefly lighting up gold on a win.
+
+**6. The challenge moment is the emotional peak**
+The challenge window (5-second timer, Challenge vs. Pass) is the highest-stakes moment. It needs to feel urgent and cinematic — the timer ring could be larger, the background could pulse slightly, the social tension should be physically felt through the UI.
+
+### Things NOT to change
+- The dark purple-navy background
+- Gold as the primary accent — not blue, not white
+- Card proportions and the flip animation
+- The overall vocabulary (cards, timeline, coins)
 
 ---
 
-## 16. What Makes Cinescenes Feel Premium
+## 15. Figma Setup
 
-1. **No emojis in the final product** — every icon is bespoke cinema vocabulary
-2. **Cards feel physical** — weight, texture implied by gradients and borders
-3. **Gold is never misused** — only on things that are earned or matter
-4. **Typography does the heavy lifting** — no decorative fonts, but weight and spacing create sophistication
-5. **Darkness is intentional** — the bg is not "dark mode", it is a *cinema*
-6. **Motion is slow and deliberate** — no snappy transitions; every animation breathes
+### Variables to create
+Import `figma-tokens.json` (included in repo root) using the **Tokens Studio for Figma** plugin.
 
----
-
-## 17. Figma Setup Recommendations
-
-### Colour Styles
-Create these as named colour styles:
+### Manual color styles
 `bg / surface / surfaceHigh / gold / goldFaint / goldGlow / danger / textPrimary / textSub / textMuted / textOnGold / border / borderSubtle`
 
-### Text Styles
-Create these as named text styles:
+### Text styles
 `hero / display / title / subtitle / body / label / overline / caption / micro / wordmark`
 
-### Component Frames (suggested order)
-1. Colour palette overview
-2. Typography specimen
-3. Icon set (all icons at 24dp, shown on dark bg)
-4. CardBack + CardFront (all 12 colour variants)
-5. FlippingMovieCard (back + front states)
-6. Buttons (primary / ghost / gold-outline / disabled)
-7. Input fields (idle / focused / error)
-8. ChallengeTimer ring (0%, 50%, 100% states)
-9. ScoreBar
-10. Timeline (empty / with cards / interactive / observer)
-11. All screens (Landing → Play → Rules → Lobby → Game states)
+### Suggested component frames (in order)
+1. Color palette — all swatches + decade card colors
+2. Typography specimen — all 10 styles on dark bg
+3. Icon set — all icons at 24dp on surface bg, grouped by type
+4. Buttons — all variants × sizes × states
+5. Cards — CardBack + CardFront (all decade variants) + FlippingMovieCard states
+6. Timeline — 6 states documented
+7. ChallengeTimer — 0%, 50%, 100% states
+8. ScoreBar
+9. PaywallSheet — all plan states
+10. All screens (Landing → Play → Mode Select → Sign In → Rules → Lobby → Game all sub-states)
 
-### Icon File
-Create a dedicated icon component file:
-- All icons at 24dp on a `surface` (#1e1630) frame
-- Organised in groups: UI / Results / Rules illustrations / Decorative
-- Export as SVG for implementation in `react-native-svg`
+### Icon file
+Dedicated component file, all icons at 24dp on surface bg. Groups: UI / Results / Rules illustrations / Decorative. Export as SVG for implementation in `react-native-svg`.
