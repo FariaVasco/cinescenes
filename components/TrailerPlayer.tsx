@@ -16,34 +16,40 @@ interface TrailerPlayerProps {
   onEnded?: () => void;
 }
 
-// Unmutes the YouTube player after it starts (IFrame API starts muted by policy)
-// and auto-clicks the skip-ad button whenever it appears.
-const YOUTUBE_INJECT = `
+// Skips skippable ads, detects when actual content starts (not ad),
+// then unmutes and notifies React Native via postMessage.
+// The loading overlay stays up during any pre-roll ad — users never see it.
+function makeYouTubeInject(safeStart: number) {
+  return `
 (function() {
-  // Unmute once playing
-  var unmutePoll = setInterval(function() {
-    if (window.player && typeof window.player.getPlayerState === 'function') {
-      if (window.player.getPlayerState() === 1) {
-        window.player.unMute();
-        window.player.setVolume(100);
-        clearInterval(unmutePoll);
-      }
-    }
-  }, 200);
+  var notified = false;
 
-  // Auto-skip ads
+  // Poll: skip skippable ads + detect when real content is playing
   setInterval(function() {
+    // Click skip / close buttons for skippable and overlay ads
     var skip = document.querySelector(
       '.ytp-skip-ad-button, .ytp-ad-skip-button, .ytp-ad-skip-button-slot'
     );
-    if (skip) { skip.click(); return; }
-    // Close non-skippable overlay ads
+    if (skip) { skip.click(); }
     var close = document.querySelector('.ytp-ad-overlay-close-button');
-    if (close) close.click();
+    if (close) { close.click(); }
+
+    // Notify React Native once the actual trailer content is playing
+    // (ad-showing class is present on <html> during any pre-roll ad)
+    if (!notified && window.player &&
+        typeof window.player.getPlayerState === 'function' &&
+        window.player.getPlayerState() === 1 &&
+        !document.documentElement.classList.contains('ad-showing')) {
+      notified = true;
+      window.player.unMute();
+      window.player.setVolume(100);
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'cs_content_ready' }));
+    }
   }, 300);
 })();
 true;
 `;
+}
 
 export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>(
   function TrailerPlayer({ movie, onEnded }, ref) {
@@ -60,6 +66,7 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
     const safeStart = movie.safe_start ?? 0;
     const safeEnd = movie.safe_end ?? 60;
     const duration = Math.max(safeEnd - safeStart, 10) * 1000;
+    const youtubeInject = makeYouTubeInject(safeStart);
 
     // Prefer Vimeo (no ads); fall back to YouTube
     const useVimeo = !!movie.vimeo_id;
@@ -101,7 +108,11 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
         setTimeout(() => {
           if (!useVimeo) playerRef.current?.seekTo(safeStart, true);
           setPlaying(true);
-          fallbackRef.current = setTimeout(() => setLoading(false), 5000);
+          // Fallback in case cs_content_ready doesn't fire on replay
+          fallbackRef.current = setTimeout(() => {
+            setLoading(false);
+            startEndTimer();
+          }, 15000);
         }, 300);
       },
     }));
@@ -109,21 +120,37 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
     // ── YouTube handlers ────────────────────────────────────────────────────
     function handleYouTubeReady() {
       playerRef.current?.seekTo(safeStart, true);
+      // Fallback: show content after 15s if the inject message never arrives
+      // (e.g. the ad-showing class detection fails on some YouTube versions)
       if (fallbackRef.current) clearTimeout(fallbackRef.current);
-      fallbackRef.current = setTimeout(() => setLoading(false), 5000);
+      fallbackRef.current = setTimeout(() => {
+        setLoading(false);
+        startEndTimer();
+      }, 15000);
     }
 
     function handleYouTubeStateChange(state: string) {
-      if (state === 'playing') {
-        if (fallbackRef.current) clearTimeout(fallbackRef.current);
-        setLoading(false);
-        startEndTimer();
-      }
+      // loading/timer are now driven by cs_content_ready from the inject —
+      // only handle terminal states here.
       if (state === 'ended') {
         if (timerRef.current) clearTimeout(timerRef.current);
+        if (fallbackRef.current) clearTimeout(fallbackRef.current);
         setLoading(true);
         onEnded?.();
       }
+    }
+
+    // Receives cs_content_ready from the inject once the actual trailer
+    // content is confirmed playing (ad-showing class is gone).
+    function handleWebViewMessage(event: { nativeEvent: { data: string } }) {
+      try {
+        const msg = JSON.parse(event.nativeEvent.data);
+        if (msg.type === 'cs_content_ready') {
+          if (fallbackRef.current) clearTimeout(fallbackRef.current);
+          setLoading(false);
+          startEndTimer();
+        }
+      } catch (_) {}
     }
 
     useEffect(() => {
@@ -175,7 +202,8 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
             webViewProps={{
               allowsInlineMediaPlayback: true,
               mediaPlaybackRequiresUserAction: false,
-              injectedJavaScript: YOUTUBE_INJECT,
+              injectedJavaScript: youtubeInject,
+              onMessage: handleWebViewMessage,
             }}
           />
         )}
