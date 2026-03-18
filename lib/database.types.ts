@@ -118,6 +118,7 @@ export interface Database {
           coins: number;
           timeline: number[];
           created_at: string;
+          last_seen: string | null;
         };
         Insert: {
           id?: string;
@@ -127,6 +128,7 @@ export interface Database {
           coins?: number;
           timeline?: number[];
           created_at?: string;
+          last_seen?: string | null;
         };
         Update: Partial<Database['public']['Tables']['players']['Insert']>;
       };

@@ -316,6 +316,50 @@ export default function GameScreen() {
       .map(m => ({ year: m.year, id: m.id }));
   }
 
+  // Removes a disconnected player and advances to the next turn.
+  // Safe to call from multiple devices — cross-device guard prevents double-processing.
+  async function advanceForStalePlayer(stalePlayerId: string, allPlayers: Player[]) {
+    const g = game;
+    const ct = currentTurnRef.current;
+    if (!g || !ct) return;
+
+    // Cross-device guard: if another device already advanced, bail out
+    const { data: existingNext } = await db
+      .from('turns').select('id').eq('game_id', g.id)
+      .neq('status', 'complete').gt('created_at', ct.created_at).limit(1) as { data: { id: string }[] | null };
+    if (existingNext && existingNext.length > 0) return;
+
+    const remaining = allPlayers.filter(p => p.id !== stalePlayerId);
+    if (remaining.length > 0) {
+      const staleIdx = allPlayers.findIndex(p => p.id === stalePlayerId);
+      const nextPlayer = remaining[staleIdx % remaining.length] ?? remaining[0];
+      const { data: pastTurns } = await db.from('turns').select('movie_id').eq('game_id', g.id);
+      const stalePastIds = new Set<string>(pastTurns?.map((t: { movie_id: string }) => t.movie_id) ?? []);
+      const stalePastYears = new Set<number>(
+        [...stalePastIds].map(id => activeMovies.find(m => m.id === id)?.year).filter((y): y is number => y !== undefined)
+      );
+      const staleStartYears = new Set<number>(
+        allPlayers.flatMap(p => p.timeline ?? []).filter(year => !stalePastYears.has(year))
+      );
+      const usedIds = new Set<string>([
+        ...stalePastIds,
+        ...startingMovieIds,
+        ...activeMovies.filter(m => staleStartYears.has(m.year)).map(m => m.id),
+      ]);
+      const pool = activeMovies.filter(m => !usedIds.has(m.id));
+      const nextMovie = pool.length > 0
+        ? pool[Math.floor(Math.random() * pool.length)]
+        : activeMovies[Math.floor(Math.random() * activeMovies.length)];
+      await db.from('turns').insert({
+        game_id: g.id,
+        active_player_id: nextPlayer.id,
+        movie_id: nextMovie.id,
+        status: 'drawing',
+      });
+    }
+    await db.from('players').delete().eq('id', stalePlayerId);
+  }
+
   async function poll() {
     const gId = gameIdRef.current;
     if (!gId) return;
@@ -333,6 +377,11 @@ export default function GameScreen() {
       db.from('games').select('status').eq('id', gId).single(),
       db.from('players').select('*').eq('game_id', gId).order('created_at'),
     ]);
+
+    // Heartbeat — fire and forget, no await so poll isn't delayed
+    if (myPlayerId) {
+      db.from('players').update({ last_seen: new Date().toISOString() }).eq('id', myPlayerId);
+    }
 
     if (gameRow?.status === 'finished') {
       const fp = (freshPlayers ?? []) as Player[];
@@ -442,6 +491,24 @@ export default function GameScreen() {
         setPlayers(freshPlayers as Player[]);
       }
 
+
+      // Stale active player detection — if active player hasn't sent a heartbeat in
+      // 45 s and the turn is stuck in drawing/placing, skip them automatically.
+      // Uses the same cross-device guard as handleNextTurn so only one device acts.
+      if (
+        freshPlayers &&
+        myPlayerId !== latestTurn.active_player_id &&
+        (latestTurn.status === 'drawing' || latestTurn.status === 'placing')
+      ) {
+        const fp = freshPlayers as Player[];
+        const activeP = fp.find(p => p.id === latestTurn.active_player_id);
+        const staleness = activeP?.last_seen
+          ? Date.now() - new Date(activeP.last_seen).getTime()
+          : Infinity;
+        if (staleness > 45000) {
+          await advanceForStalePlayer(latestTurn.active_player_id, fp);
+        }
+      }
 
       // Auto-reveal: active player's device triggers once the challenge window settles
       if (
@@ -815,39 +882,6 @@ export default function GameScreen() {
         });
       }
 
-      // Refund coin if this player challenged with a valid interval but active player also placed correctly.
-      // Both picked a "correct" spot for the same-year card — challenger didn't lose, so coin comes back.
-      // Each device handles its own player only, so no race condition.
-      if (myPlayerId !== ct.active_player_id && activeCorrect) {
-        const myC = challenges.find(c => c.challenger_id === myPlayerId);
-        if (myC && myC.interval_index >= 0 && validIntervals.includes(myC.interval_index)) {
-          const me = latestPlayers.find(p => p.id === myPlayerId);
-          if (me) {
-            const refunded = me.coins + 1;
-            await db.from('players').update({ coins: refunded }).eq('id', myPlayerId);
-            const newPlayers = latestPlayers.map(p => p.id === myPlayerId ? { ...p, coins: refunded } : p);
-            setLocalPlayers(newPlayers);
-            setPlayers(newPlayers);
-          }
-        }
-      }
-
-      // Same-year edge case: a challenger won AND I also picked a valid interval.
-      // The earlier challenger takes the card; the later challenger gets their coin back.
-      if (winnerId && winnerId !== myPlayerId && winnerId !== ct.active_player_id) {
-        const myC = challenges.find(c => c.challenger_id === myPlayerId);
-        if (myC && myC.interval_index >= 0 && validIntervals.includes(myC.interval_index)) {
-          const me = latestPlayers.find(p => p.id === myPlayerId);
-          if (me) {
-            const refunded = me.coins + 1;
-            await db.from('players').update({ coins: refunded }).eq('id', myPlayerId);
-            const newPlayers = latestPlayers.map(p => p.id === myPlayerId ? { ...p, coins: refunded } : p);
-            setLocalPlayers(newPlayers);
-            setPlayers(newPlayers);
-          }
-        }
-      }
-
       // Guard against double-processing across devices: if a newer real turn already exists,
       // another device already handled this. Call poll() to sync UI then exit.
       const { data: existingNext } = await db
@@ -862,16 +896,37 @@ export default function GameScreen() {
         return;
       }
 
-      let updatedPlayers = latestPlayers;
+      // Refund coins for challengers who placed at a valid interval but didn't win the card.
+      // Runs on the single device that passes the cross-device guard — no race condition.
+      // Cases: (1) active player correct AND challenger also valid (same-year duplicate);
+      //        (2) an earlier challenger wins AND a later one also had a valid interval.
+      let playersAfterRefunds = latestPlayers;
+      for (const c of challenges) {
+        if (c.interval_index < 0) continue; // passed / withdrew / unpicked
+        if (c.challenger_id === winnerId) continue; // winner keeps their coin
+        const shouldRefund =
+          (activeCorrect && validIntervals.includes(c.interval_index)) ||
+          (winnerId && winnerId !== ct.active_player_id && validIntervals.includes(c.interval_index));
+        if (shouldRefund) {
+          const p = playersAfterRefunds.find(pl => pl.id === c.challenger_id);
+          if (p) {
+            const refunded = p.coins + 1;
+            await db.from('players').update({ coins: refunded }).eq('id', c.challenger_id);
+            playersAfterRefunds = playersAfterRefunds.map(pl => pl.id === c.challenger_id ? { ...pl, coins: refunded } : pl);
+          }
+        }
+      }
+
+      let updatedPlayers = playersAfterRefunds;
       if (winnerId) {
-        const winner = latestPlayers.find(p => p.id === winnerId) ?? null;
+        const winner = playersAfterRefunds.find(p => p.id === winnerId) ?? null;
         if (winner) {
           const newTimeline = [...winner.timeline, movie.year].sort((a, b) => a - b);
           await db.from('players').update({ timeline: newTimeline }).eq('id', winnerId);
           // Keep updatedPlayers for nextPlayer calculation only — don't push to state here.
           // poll() will re-fetch players when it detects the new turn, ensuring the drawing
           // phase gets the correct timeline without the reveal phase ever seeing it early.
-          updatedPlayers = latestPlayers.map(p => p.id === winnerId ? { ...p, timeline: newTimeline } : p);
+          updatedPlayers = playersAfterRefunds.map(p => p.id === winnerId ? { ...p, timeline: newTimeline } : p);
 
           // Game over — winner reached the target card count
           if (newTimeline.length >= WIN_CARDS) {
@@ -1132,47 +1187,60 @@ export default function GameScreen() {
   if (currentTurn.status === 'drawing') {
     const drawingTimeline = amActive ? myTimeline : timeline;
     const drawingPlacedMovies = amActive ? myPlacedMovies : placedMovies;
-    const drawingTimelineOwner = amActive ? null : activePlayer?.display_name;
     return (
       <SafeAreaView style={styles.container}>
-        <View style={styles.phaseCenter}>
-          {amActive ? (
-            <>
-              <Text style={styles.bigTurnText}>{activePlayer?.display_name}'s turn!</Text>
+        <View style={{ flex: 1 }}>
+          {/* ── Active player's timeline — main section ── */}
+          <View style={styles.drawingTopSection}>
+            <Text style={styles.drawingTurnLabel}>
+              {amActive ? 'Your turn' : `${activePlayer?.display_name}'s timeline`}
+            </Text>
+            {movie && drawingTimeline.length > 0 && (
+              <Timeline
+                timeline={drawingTimeline}
+                currentCardMovie={movie}
+                interactive={false}
+                selectedInterval={null}
+                onIntervalSelect={() => {}}
+                onConfirm={() => {}}
+                placedMovies={drawingPlacedMovies}
+                hideFloatingCard
+              />
+            )}
+          </View>
+
+          {/* ── CTA ── */}
+          <View style={styles.drawingCTAArea}>
+            {amActive ? (
               <TouchableOpacity style={styles.primaryBtn} onPress={handleLetsDraw}>
                 <Text style={styles.primaryBtnText}>Let's Guess 🎬</Text>
               </TouchableOpacity>
-            </>
-          ) : (
-            <>
-              <View style={styles.avatarLarge}>
-                <Text style={styles.avatarLargeText}>
-                  {activePlayer?.display_name.slice(0, 2).toUpperCase()}
-                </Text>
-              </View>
-              <Text style={styles.waitingText}>{activePlayer?.display_name} is thinking…</Text>
-            </>
+            ) : (
+              <Text style={styles.drawingWaitingText}>{activePlayer?.display_name} is thinking…</Text>
+            )}
+          </View>
+
+          {/* ── Observer's own timeline ── */}
+          {!amActive && myTimeline.length > 0 && (
+            <View style={styles.drawingMySection}>
+              <Text style={styles.drawingMySectionLabel}>Your timeline</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.drawingMyScroll}
+              >
+                {myTimeline.map((year, i) => {
+                  const mv = resolveMovie(myTimeline, i, myMoviePairs);
+                  return mv
+                    ? <CardFront key={i} movie={mv} width={52} height={70} />
+                    : <View key={i} style={styles.myTimelinePlaceholder}><Text style={styles.myTimelinePlaceholderYear}>{year}</Text></View>;
+                })}
+              </ScrollView>
+            </View>
           )}
         </View>
-        {drawingTimeline.length > 0 && movie && (
-          <>
-            {drawingTimelineOwner && (
-              <Text style={styles.timelineOwnerLabel}>{drawingTimelineOwner}'s timeline</Text>
-            )}
-            <Timeline
-              timeline={drawingTimeline}
-              currentCardMovie={movie}
-              interactive={false}
-              selectedInterval={null}
-              onIntervalSelect={() => {}}
-              onConfirm={() => {}}
-              placedMovies={drawingPlacedMovies}
-              hideFloatingCard
-            />
-          </>
-        )}
-        <ScoreBar players={players} myId={myPlayerId} onShowTimeline={() => setShowMyTimeline(true)} myTimelineHint={!amActive} />
-        {myTimelineModal}
+
+        <ScoreBar players={players} myId={myPlayerId} />
         {leaveModal}
       </SafeAreaView>
     );
@@ -2368,6 +2436,7 @@ function GameIntroScreen({
               <Text style={introStyles.subtext}>Draw from the deck, {playerName}</Text>
             </View>
 
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
             <View style={{ height: WHEEL_RADIUS * 2 + CARD_H, alignSelf: 'stretch' }}>
               {/* Pointer arrow */}
               <Animated.View style={[introStyles.pointerRow, {
@@ -2439,6 +2508,7 @@ function GameIntroScreen({
                 })}
               </Animated.View>
             </View>
+            </View>
 
             <Animated.View style={[introStyles.footer, { opacity: tapHintOpacity }]}>
               {startingMovie && (
@@ -2470,7 +2540,6 @@ const introStyles = StyleSheet.create({
   },
   inner: {
     flex: 1,
-    justifyContent: 'space-between',
   },
   header: {
     alignItems: 'center',
@@ -2603,6 +2672,51 @@ const introStyles = StyleSheet.create({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
+
+  // ── Drawing phase ──
+  drawingTopSection: {
+    paddingTop: 16,
+  },
+  drawingTurnLabel: {
+    color: C.gold,
+    fontSize: FS.xs,
+    fontWeight: '700',
+    textAlign: 'center',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    opacity: 0.8,
+    marginBottom: 2,
+  },
+  drawingCTAArea: {
+    paddingHorizontal: 32,
+    paddingVertical: 18,
+    alignItems: 'center',
+  },
+  drawingWaitingText: {
+    color: C.textSub,
+    fontSize: FS.sm,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  drawingMySection: {
+    maxHeight: 110,
+    paddingTop: 4,
+  },
+  drawingMySectionLabel: {
+    color: 'rgba(255,255,255,0.3)',
+    fontSize: FS.micro,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    paddingHorizontal: 16,
+    marginBottom: 6,
+  },
+  drawingMyScroll: {
+    paddingHorizontal: 16,
+    gap: 8,
+    alignItems: 'center',
+  },
+
   phaseCenter: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 24, paddingHorizontal: 40 },
   bigTurnText: { color: C.textPrimary, fontSize: FS['2xl'], fontWeight: '900', textAlign: 'center' },
   waitingText: { color: C.textSub, fontSize: FS.lg, textAlign: 'center' },

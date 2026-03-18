@@ -60,7 +60,7 @@ export function CardFront({ movie, width, height }: CardFrontProps) {
         {movie.director ? (
           <Text
             style={[s.frontDirector, { fontSize: Math.max(6, width * 0.09) }]}
-            numberOfLines={1}
+            numberOfLines={2}
           >
             {movie.director}
           </Text>
