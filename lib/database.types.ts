@@ -50,11 +50,12 @@ export interface Database {
           name: string | null;
           mode: 'digital' | 'physical';
           multiplayer_type: 'local' | 'online';
-          status: 'lobby' | 'active' | 'finished';
+          status: 'lobby' | 'active' | 'finished' | 'cancelled';
           game_code: string;
           game_mode: 'standard' | 'collection';
           collection_id: string | null;
           max_players: number;
+          visibility: 'public' | 'invite_only';
           created_at: string;
         };
         Insert: {
@@ -62,11 +63,12 @@ export interface Database {
           name?: string | null;
           mode?: 'digital' | 'physical';
           multiplayer_type?: 'local' | 'online';
-          status?: 'lobby' | 'active' | 'finished';
+          status?: 'lobby' | 'active' | 'finished' | 'cancelled';
           game_code: string;
           game_mode?: 'standard' | 'collection';
           collection_id?: string | null;
           max_players?: number;
+          visibility?: 'public' | 'invite_only';
           created_at?: string;
         };
         Update: Partial<Database['public']['Tables']['games']['Insert']>;

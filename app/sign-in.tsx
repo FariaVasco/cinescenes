@@ -2,9 +2,19 @@ import { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { C, R, FS } from '@/constants/theme';
+import { C, T, SP } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { CinescenesLogo } from '@/components/CinescenesLogo';
+import { CinemaButton } from '@/components/CinemaButton';
+import { BackButton } from '@/components/BackButton';
+import { DecoFilmReel, DecoClapperboard, DecoStar } from '@/components/CinemaIcons';
+
+const DECOS = [
+  { Component: DecoClapperboard, size: 72,  top: '6%',  left: '4%',   rotate: '-12deg', opacity: 0.06 },
+  { Component: DecoFilmReel,     size: 88,  top: '5%',  right: '5%',  rotate: '8deg',   opacity: 0.07 },
+  { Component: DecoStar,         size: 52,  top: '70%', left: '6%',   rotate: '15deg',  opacity: 0.06 },
+  { Component: DecoFilmReel,     size: 76,  top: '76%', right: '4%',  rotate: '-10deg', opacity: 0.06 },
+];
 
 export default function SignInScreen() {
   const router = useRouter();
@@ -40,43 +50,42 @@ export default function SignInScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-        <Text style={styles.backBtnText}>← Back</Text>
-      </TouchableOpacity>
+      {/* Decorative background */}
+      {DECOS.map(({ Component, size, top, left, right, rotate, opacity }, i) => (
+        <View
+          key={i}
+          style={{ position: 'absolute', top: top as any, left: left as any, right: right as any, transform: [{ rotate }] }}
+          pointerEvents="none"
+        >
+          <Component size={size} opacity={opacity} />
+        </View>
+      ))}
+
+      <BackButton onPress={() => router.back()} />
 
       <View style={styles.content}>
-        <CinescenesLogo size="sm" />
-        <Text style={styles.headline}>Sign in to unlock Premium</Text>
+        <CinescenesLogo layout="vertical" iconSize={56} />
 
-        <View style={styles.buttons}>
-          {Platform.OS === 'ios' ? (
-            <TouchableOpacity
-              style={styles.appleBtn}
-              onPress={handleApple}
-              disabled={loading}
-              activeOpacity={0.85}
-            >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.appleBtnText}>Continue with Apple</Text>
-              )}
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              style={styles.googleBtn}
-              onPress={handleGoogle}
-              disabled={loading}
-              activeOpacity={0.85}
-            >
-              {loading ? (
-                <ActivityIndicator color="#111" />
-              ) : (
-                <Text style={styles.googleBtnText}>Continue with Google</Text>
-              )}
-            </TouchableOpacity>
-          )}
+        <View style={styles.textGroup}>
+          <Text style={styles.overline}>SIGN IN TO CONTINUE</Text>
+          <Text style={styles.title}>Unlock Premium</Text>
+          <Text style={styles.body}>
+            Host themed movie collections{'\n'}and future game modes
+          </Text>
         </View>
+
+        <CinemaButton
+          size="lg"
+          onPress={Platform.OS === 'ios' ? handleApple : handleGoogle}
+          disabled={loading}
+          style={styles.fullWidth}
+        >
+          {loading
+            ? '…'
+            : Platform.OS === 'ios'
+            ? 'CONTINUE WITH APPLE'
+            : 'CONTINUE WITH GOOGLE'}
+        </CinemaButton>
 
         <Text style={styles.hint}>Only needed to host premium games</Text>
       </View>
@@ -85,28 +94,38 @@ export default function SignInScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: C.bg },
-  backBtn: { paddingHorizontal: 20, paddingVertical: 12 },
-  backBtnText: { color: 'rgba(255,255,255,0.4)', fontSize: FS.base },
+  container: {
+    flex: 1,
+    backgroundColor: C.bg,
+  },
   content: {
-    flex: 1, justifyContent: 'center', alignItems: 'center',
-    paddingHorizontal: 40, gap: 28,
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: SP.xl + 8,
+    gap: SP.xl,
   },
-  headline: {
-    color: C.textPrimary, fontSize: FS.xl, fontWeight: '800',
-    textAlign: 'center', letterSpacing: 0.2,
+  textGroup: {
+    alignItems: 'center',
+    gap: SP.sm,
   },
-  buttons: { width: '100%', gap: 12 },
-  appleBtn: {
-    backgroundColor: '#000', borderRadius: R.btn,
-    paddingVertical: 16, alignItems: 'center',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
+  overline: {
+    ...T.overline,
   },
-  appleBtnText: { color: '#fff', fontSize: FS.md, fontWeight: '700', letterSpacing: 0.3 },
-  googleBtn: {
-    backgroundColor: '#fff', borderRadius: R.btn,
-    paddingVertical: 16, alignItems: 'center',
+  title: {
+    ...T.display,
+    color: C.textPrimary,
+    textAlign: 'center',
   },
-  googleBtnText: { color: '#111', fontSize: FS.md, fontWeight: '700', letterSpacing: 0.3 },
-  hint: { color: C.textMuted, fontSize: FS.sm, textAlign: 'center' },
+  body: {
+    ...T.body,
+    textAlign: 'center',
+  },
+  fullWidth: {
+    width: '100%',
+  },
+  hint: {
+    ...T.caption,
+    textAlign: 'center',
+  },
 });

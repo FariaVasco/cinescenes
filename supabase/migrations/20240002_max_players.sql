@@ -1,0 +1,1 @@
+ALTER TABLE games ADD COLUMN IF NOT EXISTS max_players integer NOT NULL DEFAULT 8;

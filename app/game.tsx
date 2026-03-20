@@ -64,6 +64,8 @@ export default function GameScreen() {
   const [currentTurn, setLocalTurn] = useState<Turn | null>(null);
   const [challenges, setLocalChallenges] = useState<Challenge[]>([]);
   const [trailerEnded, setTrailerEnded] = useState(false);
+  const [canSkipTrailer, setCanSkipTrailer] = useState(true);
+  const skipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [readyToPlace, setReadyToPlace] = useState(false);
   const [userPaused, setUserPaused] = useState(false);
   const [hasReplayed, setHasReplayed] = useState(false);
@@ -225,6 +227,23 @@ export default function GameScreen() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trailerEnded, readyToPlace, myPlayerId, currentTurn?.active_player_id, currentTurn?.status, loading]);
+
+  // Skip-trailer gate: for public games, the active player must watch at least half
+  // the safe window before "I know it!" becomes tappable.
+  useEffect(() => {
+    if (skipTimerRef.current) { clearTimeout(skipTimerRef.current); skipTimerRef.current = null; }
+    if (trailerEnded) { setCanSkipTrailer(true); return; }
+    const isPublicGame = game?.visibility === 'public';
+    if (!isPublicGame) { setCanSkipTrailer(true); return; }
+    setCanSkipTrailer(false);
+    const m = activeMovies.find((mv) => mv.id === currentTurn?.movie_id) ?? null;
+    const safeStart = m?.safe_start ?? 0;
+    const safeEnd = m?.safe_end ?? 60;
+    const minMs = ((safeEnd - safeStart) / 2) * 1000;
+    skipTimerRef.current = setTimeout(() => setCanSkipTrailer(true), minMs);
+    return () => { if (skipTimerRef.current) { clearTimeout(skipTimerRef.current); skipTimerRef.current = null; } };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trailerEnded, currentTurn?.id]);
 
   // Auto-reveal: when all challengers have decided and the lock period has passed,
   // trigger reveal automatically on the active player's device after a short grace period.
@@ -1131,7 +1150,7 @@ export default function GameScreen() {
       // Best-effort — navigate away regardless.
     }
     ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
-    router.replace('/');
+    router.replace('/local-lobby');
   }
 
   // ── Leave dialog — absolute overlay instead of Modal to preserve landscape lock on iOS ──
@@ -1485,7 +1504,8 @@ export default function GameScreen() {
                 <Text style={styles.reportButtonText}>⚑ Report</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={styles.skipButton}
+                style={[styles.skipButton, !canSkipTrailer && styles.skipButtonDisabled]}
+                disabled={!canSkipTrailer}
                 onPress={async () => {
                   trailerRef.current?.stop();
                   setUserPaused(false);
@@ -2001,8 +2021,8 @@ function GameOverScreen({ winner, players, myId }: { winner: Player; players: Pl
             {winner.timeline.length} cards collected
           </Text>
 
-          <TouchableOpacity style={[styles.revealNextBtn, { marginTop: 8, alignSelf: 'stretch' }]} onPress={() => router.replace('/')} activeOpacity={0.85}>
-            <Text style={styles.revealNextBtnText}>Back to Home</Text>
+          <TouchableOpacity style={[styles.revealNextBtn, { marginTop: 8, alignSelf: 'stretch' }]} onPress={() => router.replace('/local-lobby')} activeOpacity={0.85}>
+            <Text style={styles.revealNextBtnText}>Back to Lobby</Text>
           </TouchableOpacity>
         </View>
 
@@ -2927,6 +2947,7 @@ const styles = StyleSheet.create({
     shadowRadius: 6, elevation: 6,
   },
   skipButtonText: { color: C.textOnGold, fontSize: FS.md, fontWeight: '800', letterSpacing: 0.4 },
+  skipButtonDisabled: { opacity: 0.4 },
   pauseOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center',

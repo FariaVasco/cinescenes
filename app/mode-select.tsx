@@ -6,13 +6,24 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
-import { C, R, FS } from '@/constants/theme';
+import { C, R, T, SP } from '@/constants/theme';
 import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
-import { presentPaywall, presentCustomerCenter, checkPremium } from '@/lib/revenuecat';
+import { presentCustomerCenter, checkPremium } from '@/lib/revenuecat';
 import { Collection } from '@/lib/database.types';
+import { DecoFilmReel, DecoClapperboard, DecoStar } from '@/components/CinemaIcons';
+import { CinemaButton } from '@/components/CinemaButton';
+import { BackButton } from '@/components/BackButton';
+import { PaywallSheet } from '@/components/PaywallSheet';
 
 const db = supabase as unknown as { from: (t: string) => any };
+
+const DECOS = [
+  { Component: DecoFilmReel,     size: 96,  top: '3%',  right: '3%',  rotate: '12deg',  opacity: 0.05 },
+  { Component: DecoClapperboard, size: 80,  top: '5%',  left: '2%',   rotate: '-8deg',  opacity: 0.05 },
+  { Component: DecoStar,         size: 44,  top: '60%', left: '5%',   rotate: '20deg',  opacity: 0.06 },
+  { Component: DecoFilmReel,     size: 68,  top: '72%', right: '4%',  rotate: '-14deg', opacity: 0.05 },
+];
 
 export default function ModeSelectScreen() {
   const router = useRouter();
@@ -21,6 +32,7 @@ export default function ModeSelectScreen() {
     setSelectedGameMode, setSelectedCollectionId,
   } = useAppStore();
 
+  const [paywallVisible, setPaywallVisible] = useState(false);
   const [collectionPickerVisible, setCollectionPickerVisible] = useState(false);
   const [collections, setCollections] = useState<Collection[]>([]);
   const [loadingCollections, setLoadingCollections] = useState(false);
@@ -48,7 +60,7 @@ export default function ModeSelectScreen() {
   function handleStandard() {
     setSelectedGameMode('standard');
     setSelectedCollectionId(null);
-    router.push('/local-lobby');
+    router.replace({ pathname: '/local-lobby', params: { startView: 'create' } });
   }
 
   async function handleCollections() {
@@ -57,15 +69,17 @@ export default function ModeSelectScreen() {
       return;
     }
     if (!isPremium) {
-      const purchased = await presentPaywall();
-      if (purchased) {
-        const premium = await checkPremium();
-        setIsPremium(premium);
-        if (premium) setCollectionPickerVisible(true);
-      }
+      setPaywallVisible(true);
       return;
     }
     setCollectionPickerVisible(true);
+  }
+
+  async function handlePaywallPurchased() {
+    setPaywallVisible(false);
+    const premium = await checkPremium();
+    setIsPremium(premium);
+    if (premium) setCollectionPickerVisible(true);
   }
 
   async function handleAccount() {
@@ -76,15 +90,29 @@ export default function ModeSelectScreen() {
     setSelectedGameMode('collection');
     setSelectedCollectionId(col.id);
     setCollectionPickerVisible(false);
-    router.push('/local-lobby');
+    router.replace({ pathname: '/local-lobby', params: { startView: 'create' } });
   }
+
+  const collectionSubtitle = collections.length > 0
+    ? collections.map((c) => c.name).join(' · ')
+    : 'Christmas · Horror · The 2010s…';
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Decorative background */}
+      {DECOS.map(({ Component, size, top, left, right, rotate, opacity }, i) => (
+        <View
+          key={i}
+          style={{ position: 'absolute', top: top as any, left: left as any, right: right as any, transform: [{ rotate }] }}
+          pointerEvents="none"
+        >
+          <Component size={size} opacity={opacity} />
+        </View>
+      ))}
+
+      {/* Top bar */}
       <View style={styles.topBar}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Text style={styles.backBtnText}>← Back</Text>
-        </TouchableOpacity>
+        <BackButton onPress={() => router.back()} style={{ marginHorizontal: 0, marginTop: 0 }} />
         {authUser && (
           <TouchableOpacity style={styles.accountBtn} onPress={handleAccount}>
             <Text style={styles.accountBtnText}>Account</Text>
@@ -93,12 +121,15 @@ export default function ModeSelectScreen() {
       </View>
 
       <View style={styles.content}>
-        <Text style={styles.heading}>Choose a Mode</Text>
+        <View style={styles.headerGroup}>
+          <Text style={styles.overline}>DIGITAL MODE</Text>
+          <Text style={styles.heading}>Choose a Mode</Text>
+        </View>
 
         {/* Standard */}
         <TouchableOpacity style={styles.modeCard} onPress={handleStandard} activeOpacity={0.8}>
           <View style={styles.modeRow}>
-            <Text style={styles.modeName}>Standard Mode</Text>
+            <Text style={styles.modeName}>Standard</Text>
             <View style={styles.freeBadge}>
               <Text style={styles.freeBadgeText}>FREE</Text>
             </View>
@@ -107,18 +138,14 @@ export default function ModeSelectScreen() {
         </TouchableOpacity>
 
         {/* Collections */}
-        <TouchableOpacity style={styles.modeCard} onPress={handleCollections} activeOpacity={0.8}>
+        <TouchableOpacity style={[styles.modeCard, styles.modeCardPremium]} onPress={handleCollections} activeOpacity={0.8}>
           <View style={styles.modeRow}>
             <Text style={styles.modeName}>Collections</Text>
             <View style={styles.premiumBadge}>
-              <Text style={styles.premiumBadgeText}>PREMIUM</Text>
+              <Text style={styles.premiumBadgeText}>★ PREMIUM</Text>
             </View>
           </View>
-          <Text style={styles.modeSub}>
-            {collections.length > 0
-              ? collections.map((c) => c.name).join(' · ')
-              : 'Christmas · Horror · The 2010s…'}
-          </Text>
+          <Text style={styles.modeSub}>{collectionSubtitle}</Text>
         </TouchableOpacity>
 
         {/* Coming soon: Insane Mode */}
@@ -144,6 +171,12 @@ export default function ModeSelectScreen() {
         </View>
       </View>
 
+      <PaywallSheet
+        visible={paywallVisible}
+        onClose={() => setPaywallVisible(false)}
+        onPurchased={handlePaywallPurchased}
+      />
+
       {/* Collection picker */}
       <Modal
         visible={collectionPickerVisible}
@@ -154,7 +187,8 @@ export default function ModeSelectScreen() {
         <View style={styles.overlay}>
           <View style={styles.sheet}>
             <View style={styles.handle} />
-            <Text style={styles.sheetTitle}>Choose a Collection</Text>
+            <Text style={styles.sheetOverline}>SELECT A COLLECTION</Text>
+            <Text style={styles.sheetTitle}>What's tonight's theme?</Text>
             {loadingCollections ? (
               <ActivityIndicator color={C.gold} style={{ marginVertical: 32 }} />
             ) : (
@@ -174,12 +208,9 @@ export default function ModeSelectScreen() {
                 ))}
               </ScrollView>
             )}
-            <TouchableOpacity
-              onPress={() => setCollectionPickerVisible(false)}
-              style={styles.dismissBtn}
-            >
-              <Text style={styles.dismissText}>Cancel</Text>
-            </TouchableOpacity>
+            <CinemaButton variant="ghost" size="sm" onPress={() => setCollectionPickerVisible(false)}>
+              Cancel
+            </CinemaButton>
           </View>
         </View>
       </Modal>
@@ -189,68 +220,111 @@ export default function ModeSelectScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
-  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  backBtn: { paddingHorizontal: 20, paddingVertical: 12 },
-  backBtnText: { color: 'rgba(255,255,255,0.4)', fontSize: FS.base },
-  accountBtn: { paddingHorizontal: 20, paddingVertical: 12 },
-  accountBtnText: { color: C.textSub, fontSize: FS.sm },
+
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: SP.lg,
+    paddingVertical: SP.md,
+  },
+  accountBtn: {},
+  accountBtnText: { ...T.caption },
+
   content: {
-    flex: 1, justifyContent: 'center',
-    paddingHorizontal: 28, gap: 14,
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: SP.lg,
+    gap: SP.md - 2,
   },
-  heading: {
-    color: C.textPrimary, fontSize: FS['2xl'], fontWeight: '900',
-    marginBottom: 8, textAlign: 'center',
+
+  headerGroup: {
+    alignItems: 'center',
+    marginBottom: SP.sm,
+    gap: SP.xs,
   },
+  overline: { ...T.overline },
+  heading: { ...T.display, color: C.textPrimary, textAlign: 'center' },
+
+  // Mode cards
   modeCard: {
-    backgroundColor: C.surface, borderRadius: R.card,
-    padding: 20, gap: 6,
-    borderWidth: 1, borderColor: C.border,
+    backgroundColor: C.surface,
+    borderRadius: R.card,
+    paddingVertical: SP.md,
+    paddingHorizontal: SP.lg,
+    gap: 5,
+    borderWidth: 1,
+    borderColor: C.border,
   },
-  modeCardDisabled: { opacity: 0.4 },
-  modeRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  modeName: { color: C.textPrimary, fontSize: FS.lg, fontWeight: '800', flex: 1 },
+  modeCardPremium: {
+    borderColor: C.goldGlow,
+    backgroundColor: 'rgba(245,197,24,0.04)',
+  },
+  modeCardDisabled: { opacity: 0.35 },
+
+  modeRow: { flexDirection: 'row', alignItems: 'center', gap: SP.sm },
+  modeName: { ...T.subtitle, color: C.textPrimary, flex: 1 },
   modeNameDisabled: { color: C.textSub },
-  modeSub: { color: C.textMuted, fontSize: FS.sm },
+  modeSub: { ...T.caption },
+
   freeBadge: {
-    backgroundColor: 'rgba(34,197,94,0.15)', borderRadius: R.xs,
-    paddingHorizontal: 8, paddingVertical: 3,
+    backgroundColor: 'rgba(34,197,94,0.15)',
+    borderRadius: R.xs,
+    paddingHorizontal: SP.sm,
+    paddingVertical: 3,
   },
-  freeBadgeText: { color: '#4ade80', fontSize: FS.xs, fontWeight: '800', letterSpacing: 0.5 },
+  freeBadgeText: { ...T.micro, color: '#4ade80' },
+
   premiumBadge: {
-    backgroundColor: C.goldFaint, borderRadius: R.xs,
-    paddingHorizontal: 8, paddingVertical: 3,
+    backgroundColor: C.goldFaint,
+    borderRadius: R.xs,
+    paddingHorizontal: SP.sm,
+    paddingVertical: 3,
   },
-  premiumBadgeText: { color: C.gold, fontSize: FS.xs, fontWeight: '800', letterSpacing: 0.5 },
+  premiumBadgeText: { ...T.micro, color: C.gold },
+
   soonBadge: {
-    backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: R.xs,
-    paddingHorizontal: 8, paddingVertical: 3,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: R.xs,
+    paddingHorizontal: SP.sm,
+    paddingVertical: 3,
   },
-  soonBadgeText: { color: C.textMuted, fontSize: FS.xs, fontWeight: '700', letterSpacing: 0.5 },
+  soonBadgeText: { ...T.micro },
 
   // Collection picker sheet
   overlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.7)',
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: C.surface,
-    borderTopLeftRadius: R.card, borderTopRightRadius: R.card,
-    padding: 24, paddingBottom: 40, alignItems: 'center', gap: 16, maxHeight: '70%',
+    backgroundColor: C.surfaceHigh,
+    borderTopLeftRadius: R.card,
+    borderTopRightRadius: R.card,
+    padding: SP.lg,
+    paddingBottom: SP.xl,
+    alignItems: 'center',
+    gap: SP.md,
+    maxHeight: '70%',
   },
   handle: {
-    width: 40, height: 4, borderRadius: 2,
-    backgroundColor: C.border, marginBottom: 4,
+    width: 40, height: 4,
+    borderRadius: 2,
+    backgroundColor: C.border,
+    marginBottom: SP.xs,
   },
-  sheetTitle: { color: C.textPrimary, fontSize: FS.xl, fontWeight: '900' },
+  sheetOverline: { ...T.overline },
+  sheetTitle: { ...T.title, color: C.textPrimary },
   colList: { width: '100%' },
-  colListContent: { gap: 10 },
+  colListContent: { gap: SP.sm },
   colItem: {
-    backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: R.md,
-    borderWidth: 1, borderColor: C.border, padding: 16, gap: 4,
+    backgroundColor: C.surface,
+    borderRadius: R.md,
+    borderWidth: 1,
+    borderColor: C.border,
+    padding: SP.md,
+    gap: 4,
   },
-  colName: { color: C.textPrimary, fontSize: FS.md, fontWeight: '700' },
-  colDesc: { color: C.textMuted, fontSize: FS.sm },
-  dismissBtn: { paddingVertical: 8 },
-  dismissText: { color: C.textMuted, fontSize: FS.sm },
+  colName: { ...T.label, color: C.textPrimary },
+  colDesc: { ...T.caption },
 });

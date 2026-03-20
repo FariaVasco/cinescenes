@@ -8,6 +8,7 @@ import {
 import { C, R, FS } from '@/constants/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { CastToTVIcon } from '@/components/CinemaIcons';
+import { BackButton } from '@/components/BackButton';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ScreenOrientation from 'expo-screen-orientation';
@@ -42,9 +43,7 @@ export default function PlayScreen() {
     <SafeAreaView style={styles.container}>
       {/* Top bar: back ← on left, cast icon on right */}
       <View style={styles.topBar}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Text style={styles.backBtnText}>←</Text>
-        </TouchableOpacity>
+        <BackButton onPress={() => router.back()} label="" style={{ marginHorizontal: 0, marginTop: 0 }} />
         <TouchableOpacity style={styles.castBtn} onPress={() => setCastModalVisible(true)}>
           <CastToTVIcon size={20} color="rgba(255,255,255,0.4)" />
           <Text style={styles.castBtnLabel}>Cast</Text>
@@ -56,7 +55,7 @@ export default function PlayScreen() {
         <View style={styles.cards}>
           <TouchableOpacity
             style={[styles.card, styles.cardPrimary]}
-            onPress={() => router.push('/mode-select')}
+            onPress={() => router.push('/local-lobby')}
             activeOpacity={0.8}
           >
             <MaterialCommunityIcons name="account-group" size={36} color="#0a0a0a" />
@@ -107,16 +106,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  backBtnText: {
-    color: 'rgba(255,255,255,0.4)',
-    fontSize: 24,
   },
   castBtn: {
     flexDirection: 'row',

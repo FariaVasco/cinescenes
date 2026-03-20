@@ -9,6 +9,7 @@ import {
   Animated,
 } from 'react-native';
 import { C, R, FS } from '@/constants/theme';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { CinemaButton } from '@/components/CinemaButton';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -107,8 +108,8 @@ export default function RulesScreen() {
 
       {/* ── Header ── */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.headerBtn} onPress={() => router.back()}>
-          <Text style={styles.backArrow}>←</Text>
+        <TouchableOpacity style={styles.headerBtn} onPress={() => router.back()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <MaterialCommunityIcons name="chevron-left" size={24} color={C.textMuted} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>HOW TO PLAY</Text>
         <View style={styles.headerBtn}>
@@ -214,12 +215,6 @@ const styles = StyleSheet.create({
     width: 56,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  backArrow: {
-    color: C.gold,
-    fontSize: 30,
-    fontWeight: '600',
-    alignSelf: 'flex-start',
   },
   headerTitle: {
     color: C.textPrimary,

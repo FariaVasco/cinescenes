@@ -10,24 +10,28 @@ import {
   Clipboard,
   KeyboardAvoidingView,
   Platform,
+  BackHandler,
 } from 'react-native';
 import { C, R, FS } from '@/constants/theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { CinemaButton } from '@/components/CinemaButton';
+import { BackButton } from '@/components/BackButton';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
 import { Game, Player } from '@/lib/database.types';
 
 type LobbyView = 'choice' | 'create' | 'join';
+type Visibility = 'public' | 'invite_only';
 
 const db = supabase as unknown as { from: (t: string) => any };
 const POLL_MS = 1000;
 
 export default function LocalLobbyScreen() {
   const router = useRouter();
+  const { joinCode: joinCodeParam, startView } = useLocalSearchParams<{ joinCode?: string; startView?: string }>();
   const {
     activeMovies,
     setGame,
@@ -42,9 +46,12 @@ export default function LocalLobbyScreen() {
     selectedCollectionId,
   } = useAppStore();
 
-  const [view, setView] = useState<LobbyView>('choice');
+  const [view, setView] = useState<LobbyView>(
+    startView === 'create' ? 'create' : joinCodeParam ? 'join' : 'choice'
+  );
   const [displayName, setDisplayName] = useState('');
-  const [joinCode, setJoinCode] = useState('');
+  const [joinCode, setJoinCode] = useState(joinCodeParam ?? '');
+  const [visibility, setVisibility] = useState<Visibility>('invite_only');
   const [loading, setLoading] = useState(false);
   const [localGame, setLocalGame] = useState<Game | null>(null);
   const [localPlayers, setLocalPlayers] = useState<Player[]>([]);
@@ -59,6 +66,7 @@ export default function LocalLobbyScreen() {
   const gameIdRef = useRef<string | null>(null);
   const isHostRef = useRef(false);
   const navigatedRef = useRef(false);
+  const playerIdRef = useRef<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -85,31 +93,52 @@ export default function LocalLobbyScreen() {
 
     pollRef.current = setInterval(async () => {
       const gId = gameIdRef.current;
-      if (!gId) return;
+      if (!gId || navigatedRef.current) return;
 
-      // Always refresh player list
-      const { data: players } = await db
-        .from('players')
-        .select('*')
-        .eq('game_id', gId)
-        .order('created_at') as { data: Player[] | null };
+      const [{ data: players }, { data: g }] = await Promise.all([
+        db.from('players').select('*').eq('game_id', gId).order('created_at') as Promise<{ data: Player[] | null }>,
+        db.from('games').select('*').eq('id', gId).single() as Promise<{ data: Game | null }>,
+      ]);
+
       if (players) setLocalPlayers(players);
+      if (!g) return;
 
-      // Non-hosts watch for game becoming active
-      if (!isHostRef.current && !navigatedRef.current) {
-        const { data: g } = await db
-          .from('games')
-          .select('*')
-          .eq('id', gId)
-          .single() as { data: Game | null };
-        if (g?.status === 'active') {
-          navigatedRef.current = true;
-          stopPolling();
-          setGame(g);
-          setGameId(gId);
-          setIsHost(false);
-          router.replace('/game');
+      // Game was cancelled (by host action or pg_cron stale cleanup)
+      if (g.status === 'cancelled') {
+        navigatedRef.current = true;
+        stopPolling();
+        Alert.alert(
+          'Game closed',
+          isHostRef.current ? 'The lobby has been closed.' : 'The host closed the game.',
+          [{ text: 'OK', onPress: () => router.back() }]
+        );
+        return;
+      }
+
+      // Client-side stale detection (fallback if pg_cron is not available)
+      const stale = new Date(g.created_at).getTime() < Date.now() - 10 * 60 * 1000;
+      if (g.status === 'lobby' && stale) {
+        navigatedRef.current = true;
+        stopPolling();
+        if (isHostRef.current) {
+          await db.from('games').update({ status: 'cancelled' }).eq('id', gId);
         }
+        Alert.alert(
+          'Lobby expired',
+          'This lobby was open for more than 10 minutes and has been closed.',
+          [{ text: 'OK', onPress: () => router.back() }]
+        );
+        return;
+      }
+
+      // Non-host: watch for game becoming active
+      if (!isHostRef.current && g.status === 'active') {
+        navigatedRef.current = true;
+        stopPolling();
+        setGame(g);
+        setGameId(gId);
+        setIsHost(false);
+        router.replace('/game');
       }
     }, POLL_MS);
   }
@@ -139,6 +168,7 @@ export default function LocalLobbyScreen() {
           game_mode: selectedGameMode,
           collection_id: selectedCollectionId,
           max_players: maxPlayers,
+          visibility,
         })
         .select()
         .single() as { data: Game | null; error: any };
@@ -153,7 +183,9 @@ export default function LocalLobbyScreen() {
 
       setLocalGame(newGame);
       setLocalPlayerId(newPlayer.id);
+      playerIdRef.current = newPlayer.id;
       setLocalIsHost(true);
+      setLocalPlayers([newPlayer]);
       setNameEntered(true);
 
       setGame(newGame);
@@ -201,6 +233,7 @@ export default function LocalLobbyScreen() {
 
       setLocalGame(foundGame);
       setLocalPlayerId(newPlayer.id);
+      playerIdRef.current = newPlayer.id;
       setLocalIsHost(false);
       setMaxPlayers(foundGame.max_players ?? 8);
       setNameEntered(true);
@@ -227,6 +260,40 @@ export default function LocalLobbyScreen() {
       await db.from('games').update({ max_players: next }).eq('id', localGame.id);
     }
   }
+
+  // ── Cancel / Leave lobby ──
+
+  async function handleLeaveWaitingRoom() {
+    if (localIsHost && localGame) {
+      const { error } = await db.from('games').update({ status: 'cancelled' }).eq('id', localGame.id);
+      if (error) Alert.alert('Cancel failed', `${error.message} (${error.code})`);
+    } else {
+      const pid = playerIdRef.current ?? localPlayerId;
+      if (pid) {
+        const { data: deleted, error } = await db.from('players').delete().eq('id', pid).select();
+        if (error) {
+          Alert.alert('Leave failed', `${error.message} (${error.code})`);
+        } else if (!deleted || deleted.length === 0) {
+          Alert.alert('Leave debug', `Delete ran but matched 0 rows.\npid: ${pid}`);
+        }
+      } else {
+        Alert.alert('Leave debug', 'No player ID in state or ref.');
+      }
+    }
+    navigatedRef.current = true;
+    stopPolling();
+    router.back();
+  }
+
+  useEffect(() => {
+    if (!nameEntered) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      handleLeaveWaitingRoom();
+      return true;
+    });
+    return () => sub.remove();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nameEntered, localGame, localIsHost]);
 
   // ── Start game (host only) ──
 
@@ -316,16 +383,14 @@ export default function LocalLobbyScreen() {
   if (view === 'choice') {
     return (
       <SafeAreaView style={styles.container}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Text style={styles.backBtnText}>←  Back</Text>
-        </TouchableOpacity>
+        <BackButton onPress={() => router.back()} />
         <View style={styles.choiceCenter}>
           <Text style={styles.title}>Go Digital</Text>
           <Text style={styles.subtitle}>Up to 10 players — each on their own phone</Text>
           <View style={styles.choiceCards}>
             <TouchableOpacity
               style={styles.choiceCard}
-              onPress={() => setView('create')}
+              onPress={() => router.push('/mode-select')}
               activeOpacity={0.8}
             >
               <MaterialCommunityIcons name="plus-circle-outline" size={40} color="#f5c518" />
@@ -333,12 +398,21 @@ export default function LocalLobbyScreen() {
               <Text style={styles.choiceCardSub}>Share the code with friends</Text>
             </TouchableOpacity>
             <TouchableOpacity
+              style={[styles.choiceCard, styles.choiceBrowseCard]}
+              onPress={() => router.push('/lobby-browser')}
+              activeOpacity={0.8}
+            >
+              <MaterialCommunityIcons name="earth" size={40} color="#f5c518" />
+              <Text style={styles.choiceCardTitle}>Browse Open Games</Text>
+              <Text style={styles.choiceCardSub}>Jump into a public game</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
               style={[styles.choiceCard, styles.choiceCardSecondary]}
               onPress={() => setView('join')}
               activeOpacity={0.8}
             >
               <MaterialCommunityIcons name="login" size={40} color="#f5c518" />
-              <Text style={styles.choiceCardTitle}>Join Game</Text>
+              <Text style={styles.choiceCardTitle}>Join with Code</Text>
               <Text style={styles.choiceCardSub}>Enter the host's code</Text>
             </TouchableOpacity>
           </View>
@@ -351,6 +425,11 @@ export default function LocalLobbyScreen() {
   if (nameEntered && localGame) {
     return (
       <SafeAreaView style={styles.container}>
+        <BackButton
+          onPress={handleLeaveWaitingRoom}
+          label={localIsHost ? 'Cancel Game' : 'Leave'}
+          icon={localIsHost ? 'close' : 'chevron-left'}
+        />
         <View style={styles.waitingHeader}>
           <Text style={styles.waitingLabel}>Game Code</Text>
           <TouchableOpacity
@@ -394,7 +473,8 @@ export default function LocalLobbyScreen() {
         </View>
 
         <ScrollView style={styles.playerList} contentContainerStyle={styles.playerListContent}>
-          {localPlayers.map((p) => {
+          {localPlayers.map((p, i) => {
+            const isHost = i === 0;
             return (
               <View key={p.id} style={styles.playerChip}>
                 <View style={styles.playerChipTop}>
@@ -402,6 +482,7 @@ export default function LocalLobbyScreen() {
                     <Text style={styles.playerAvatarText}>{initials(p.display_name)}</Text>
                   </View>
                   <Text style={styles.playerName}>{p.display_name}</Text>
+                  {isHost && <Text style={styles.hostBadge}>host</Text>}
                   {p.id === localPlayerId && <Text style={styles.youBadge}>you</Text>}
                 </View>
               </View>
@@ -434,9 +515,7 @@ export default function LocalLobbyScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <TouchableOpacity style={styles.backBtn} onPress={() => setView('choice')}>
-        <Text style={styles.backBtnText}>←  Back</Text>
-      </TouchableOpacity>
+      <BackButton onPress={() => setView('choice')} />
 
       <KeyboardAvoidingView
         style={styles.formCenter}
@@ -481,6 +560,30 @@ export default function LocalLobbyScreen() {
           </View>
         )}
 
+        {isCreate && (
+          <View style={styles.visibilityToggleWrap}>
+            <Text style={styles.inputLabel}>Visibility</Text>
+            <View style={styles.visibilityToggle}>
+              <TouchableOpacity
+                style={[styles.visibilityOption, visibility === 'invite_only' && styles.visibilityOptionActive]}
+                onPress={() => setVisibility('invite_only')}
+              >
+                <Text style={[styles.visibilityOptionText, visibility === 'invite_only' && styles.visibilityOptionTextActive]}>
+                  Invite Only
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.visibilityOption, visibility === 'public' && styles.visibilityOptionActive]}
+                onPress={() => setVisibility('public')}
+              >
+                <Text style={[styles.visibilityOptionText, visibility === 'public' && styles.visibilityOptionTextActive]}>
+                  Public
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
         <CinemaButton
           onPress={handleSubmit}
           disabled={!canSubmit || loading}
@@ -496,8 +599,6 @@ export default function LocalLobbyScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
-  backBtn: { paddingHorizontal: 20, paddingVertical: 12 },
-  backBtnText: { color: 'rgba(255,255,255,0.4)', fontSize: FS.base },
 
   choiceCenter: {
     flex: 1, justifyContent: 'center', alignItems: 'center',
@@ -511,6 +612,7 @@ const styles = StyleSheet.create({
     alignItems: 'center', gap: 8, borderWidth: 1, borderColor: C.border,
   },
   choiceCardSecondary: { borderColor: C.goldFaint },
+  choiceBrowseCard: { borderColor: C.gold, backgroundColor: C.goldFaint },
   choiceCardTitle: { color: C.textPrimary, fontSize: FS.lg, fontWeight: '800' },
   choiceCardSub: { color: C.textMuted, fontSize: FS.sm },
 
@@ -526,6 +628,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, paddingVertical: 14,
   },
   actionBtn: { marginTop: 8 },
+  visibilityToggleWrap: { gap: 6 },
+  visibilityToggle: {
+    flexDirection: 'row', backgroundColor: C.surface,
+    borderRadius: R.md, borderWidth: 1, borderColor: C.border, overflow: 'hidden',
+  },
+  visibilityOption: {
+    flex: 1, paddingVertical: 12, alignItems: 'center',
+  },
+  visibilityOptionActive: { backgroundColor: C.gold },
+  visibilityOptionText: { color: C.textSub, fontSize: FS.sm, fontWeight: '700' },
+  visibilityOptionTextActive: { color: C.textOnGold },
 
   waitingHeader: { alignItems: 'center', paddingTop: 24, paddingBottom: 16, gap: 6 },
   waitingLabel: {
@@ -568,6 +681,11 @@ const styles = StyleSheet.create({
   },
   playerAvatarText: { color: C.textOnGold, fontSize: FS.sm, fontWeight: '800' },
   playerName: { color: C.textPrimary, fontSize: FS.base, fontWeight: '600', flex: 1 },
+  hostBadge: {
+    color: '#a78bfa', fontSize: FS.xs, fontWeight: '700',
+    backgroundColor: 'rgba(167,139,250,0.12)',
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: R.xs,
+  },
   youBadge: {
     color: C.gold, fontSize: FS.xs, fontWeight: '700',
     backgroundColor: C.goldFaint,
