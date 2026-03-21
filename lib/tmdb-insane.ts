@@ -2,8 +2,8 @@
  * tmdb-insane.ts
  *
  * Fetches a random movie from TMDb for Insane Mode.
- * Tries up to 20 random integer IDs, validates the movie has a YouTube trailer,
- * skips anything already flagged unusable in the DB, then upserts the row.
+ * Uses the discover endpoint with a random page to get movies that are
+ * likely to have YouTube trailers, then validates and upserts the row.
  */
 
 import { Movie } from '@/lib/database.types';
@@ -24,12 +24,30 @@ async function tmdbGet(path: string): Promise<any> {
   }
 }
 
-export async function fetchRandomInsaneMovie(db: Db): Promise<Movie> {
-  for (let attempt = 0; attempt < 20; attempt++) {
-    const tmdbId = Math.floor(Math.random() * 1_000_000) + 1;
+function shuffled<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
 
+export async function fetchRandomInsaneMovie(db: Db): Promise<Movie> {
+  // Pick a random page from TMDb discover — movies with some votes are far
+  // more likely to have YouTube trailers than purely random IDs.
+  const page = Math.floor(Math.random() * 400) + 1;
+  const discover = await tmdbGet(
+    `/discover/movie?sort_by=vote_count.desc&vote_count.gte=10&page=${page}`
+  );
+
+  const candidateIds: number[] = discover?.results?.length
+    ? shuffled(discover.results.map((r: any) => r.id))
+    : Array.from({ length: 20 }, () => Math.floor(Math.random() * 1_000_000) + 1);
+
+  for (const tmdbId of candidateIds) {
     const data = await tmdbGet(`/movie/${tmdbId}?append_to_response=videos,credits`);
-    if (!data || !data.title || !data.release_date) continue;
+    if (!data?.title || !data?.release_date) continue;
 
     const year = parseInt(data.release_date.slice(0, 4), 10);
     if (isNaN(year)) continue;
@@ -42,7 +60,7 @@ export async function fetchRandomInsaneMovie(db: Db): Promise<Movie> {
     const director =
       (data.credits?.crew ?? []).find((c: any) => c.job === 'Director')?.name ?? 'Unknown';
 
-    // Check if already in DB
+    // Return existing row if already in DB
     const { data: existing } = await db
       .from('movies')
       .select('*')
@@ -73,9 +91,10 @@ export async function fetchRandomInsaneMovie(db: Db): Promise<Movie> {
       .select()
       .single();
 
-    if (error || !inserted) continue;
+    if (error) { console.warn('[insane] insert error:', error.message); continue; }
+    if (!inserted) continue;
     return inserted as Movie;
   }
 
-  throw new Error('Could not find a valid movie from TMDb after 20 attempts');
+  throw new Error('Could not find a valid movie from TMDb after exhausting candidates');
 }
