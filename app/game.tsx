@@ -18,6 +18,7 @@ import {
 import { SpeechModule, speechAvailable, useSpeechRecognitionEvent } from '@/lib/speech-recognition';
 import { C, R, FS } from '@/constants/theme';
 import { parseTranscript, fuzzyMatch, computeCorrectInterval, computeValidIntervals } from '@/lib/game-logic';
+import { fetchRandomInsaneMovie } from '@/lib/tmdb-insane';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Snackbar } from 'react-native-paper';
 import { useRouter } from 'expo-router';
@@ -237,9 +238,11 @@ export default function GameScreen() {
     if (!isPublicGame) { setCanSkipTrailer(true); return; }
     setCanSkipTrailer(false);
     const m = activeMovies.find((mv) => mv.id === currentTurn?.movie_id) ?? null;
-    const safeStart = m?.safe_start ?? 0;
-    const safeEnd = m?.safe_end ?? 60;
-    const minMs = ((safeEnd - safeStart) / 2) * 1000;
+    const safeStart = m?.safe_start ?? null;
+    const safeEnd = m?.safe_end ?? null;
+    const minMs = (safeStart !== null && safeEnd !== null)
+      ? ((safeEnd - safeStart) / 2) * 1000
+      : 15_000; // insane mode default (safe_start is null)
     skipTimerRef.current = setTimeout(() => setCanSkipTrailer(true), minMs);
     return () => { if (skipTimerRef.current) { clearTimeout(skipTimerRef.current); skipTimerRef.current = null; } };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -360,19 +363,26 @@ export default function GameScreen() {
       const staleStartYears = new Set<number>(
         allPlayers.flatMap(p => p.timeline ?? []).filter(year => !stalePastYears.has(year))
       );
-      const usedIds = new Set<string>([
-        ...stalePastIds,
-        ...startingMovieIds,
-        ...activeMovies.filter(m => staleStartYears.has(m.year)).map(m => m.id),
-      ]);
-      const pool = activeMovies.filter(m => !usedIds.has(m.id));
-      const nextMovie = pool.length > 0
-        ? pool[Math.floor(Math.random() * pool.length)]
-        : activeMovies[Math.floor(Math.random() * activeMovies.length)];
+      let staleNextMovieId: string;
+      if (g.game_mode === 'insane') {
+        const m = await fetchRandomInsaneMovie(db);
+        staleNextMovieId = m.id;
+      } else {
+        const usedIds = new Set<string>([
+          ...stalePastIds,
+          ...startingMovieIds,
+          ...activeMovies.filter(m => staleStartYears.has(m.year)).map(m => m.id),
+        ]);
+        const pool = activeMovies.filter(m => !usedIds.has(m.id));
+        const nextMovie = pool.length > 0
+          ? pool[Math.floor(Math.random() * pool.length)]
+          : activeMovies[Math.floor(Math.random() * activeMovies.length)];
+        staleNextMovieId = nextMovie.id;
+      }
       await db.from('turns').insert({
         game_id: g.id,
         active_player_id: nextPlayer.id,
-        movie_id: nextMovie.id,
+        movie_id: staleNextMovieId,
         status: 'drawing',
       });
     }
@@ -807,6 +817,11 @@ export default function GameScreen() {
     setShowReportDialog(false);
     if (!currentTurn) return;
     await db.from('reports').insert({ movie_id: currentTurn.movie_id, reason });
+    // Retire unvalidated insane-mode movies so they won't be re-dealt
+    await db.from('movies')
+      .update({ scan_status: 'unusable' })
+      .eq('id', currentTurn.movie_id)
+      .eq('scan_status', 'unvalidated');
     setSnackMessage("Thanks! 🙏  We'll review this trailer soon.");
   }
 
@@ -856,7 +871,12 @@ export default function GameScreen() {
       const ct = currentTurnRef.current;
       if (!g || !ct) return;
 
-      const movie = activeMovies.find((m) => m.id === ct.movie_id) ?? null;
+      let movie = activeMovies.find((m) => m.id === ct.movie_id) ?? null;
+      if (!movie) {
+        // Not in cache (e.g. insane mode movie) — fetch from DB
+        const { data: dbMovie } = await db.from('movies').select('*').eq('id', ct.movie_id).single();
+        movie = dbMovie ?? null;
+      }
       if (!movie) return;
 
       // Fetch fresh player data BEFORE the cross-device guard so winner computation
@@ -987,20 +1007,27 @@ export default function GameScreen() {
       const startingCardYears = new Set<number>(
         latestPlayers.flatMap(p => p.timeline ?? []).filter(year => !pastTurnYears.has(year))
       );
-      const usedMovieIds = new Set<string>([
-        ...pastTurnMovieIds,
-        ...startingMovieIds,
-        ...activeMovies.filter(m => startingCardYears.has(m.year)).map(m => m.id),
-      ]);
-      const pool = activeMovies.filter((m) => !usedMovieIds.has(m.id));
-      const nextMovie = pool.length > 0
-        ? pool[Math.floor(Math.random() * pool.length)]
-        : activeMovies[Math.floor(Math.random() * activeMovies.length)];
+      let nextMovieId: string;
+      if (g.game_mode === 'insane') {
+        const m = await fetchRandomInsaneMovie(db);
+        nextMovieId = m.id;
+      } else {
+        const usedMovieIds = new Set<string>([
+          ...pastTurnMovieIds,
+          ...startingMovieIds,
+          ...activeMovies.filter(m => startingCardYears.has(m.year)).map(m => m.id),
+        ]);
+        const pool = activeMovies.filter((m) => !usedMovieIds.has(m.id));
+        const nextMovie = pool.length > 0
+          ? pool[Math.floor(Math.random() * pool.length)]
+          : activeMovies[Math.floor(Math.random() * activeMovies.length)];
+        nextMovieId = nextMovie.id;
+      }
 
       const { error: insertError } = await db.from('turns').insert({
         game_id: g.id,
         active_player_id: nextPlayer.id,
-        movie_id: nextMovie.id,
+        movie_id: nextMovieId,
         status: 'drawing',
       });
       if (insertError) {
@@ -1117,28 +1144,35 @@ export default function GameScreen() {
           const myIdx = allPlayers.findIndex(p => p.id === myPlayerId);
           const nextPlayer = remaining[myIdx % remaining.length] ?? remaining[0];
           const { data: pastTurns } = await db.from('turns').select('movie_id').eq('game_id', g.id);
-          const leavePastIds = new Set<string>(pastTurns?.map((t: { movie_id: string }) => t.movie_id) ?? []);
-          const leavePastYears = new Set<number>(
-            [...leavePastIds]
-              .map(id => activeMovies.find(m => m.id === id)?.year)
-              .filter((y): y is number => y !== undefined)
-          );
-          const leaveStartYears = new Set<number>(
-            allPlayers.flatMap(p => p.timeline ?? []).filter(year => !leavePastYears.has(year))
-          );
-          const usedIds = new Set<string>([
-            ...leavePastIds,
-            ...startingMovieIds,
-            ...activeMovies.filter(m => leaveStartYears.has(m.year)).map(m => m.id),
-          ]);
-          const pool = activeMovies.filter(m => !usedIds.has(m.id));
-          const nextMovie = pool.length > 0
-            ? pool[Math.floor(Math.random() * pool.length)]
-            : activeMovies[Math.floor(Math.random() * activeMovies.length)];
+          let leaveNextMovieId: string;
+          if (g.game_mode === 'insane') {
+            const m = await fetchRandomInsaneMovie(db);
+            leaveNextMovieId = m.id;
+          } else {
+            const leavePastIds = new Set<string>(pastTurns?.map((t: { movie_id: string }) => t.movie_id) ?? []);
+            const leavePastYears = new Set<number>(
+              [...leavePastIds]
+                .map(id => activeMovies.find(m => m.id === id)?.year)
+                .filter((y): y is number => y !== undefined)
+            );
+            const leaveStartYears = new Set<number>(
+              allPlayers.flatMap(p => p.timeline ?? []).filter(year => !leavePastYears.has(year))
+            );
+            const usedIds = new Set<string>([
+              ...leavePastIds,
+              ...startingMovieIds,
+              ...activeMovies.filter(m => leaveStartYears.has(m.year)).map(m => m.id),
+            ]);
+            const pool = activeMovies.filter(m => !usedIds.has(m.id));
+            const nextMovie = pool.length > 0
+              ? pool[Math.floor(Math.random() * pool.length)]
+              : activeMovies[Math.floor(Math.random() * activeMovies.length)];
+            leaveNextMovieId = nextMovie.id;
+          }
           await db.from('turns').insert({
             game_id: g.id,
             active_player_id: nextPlayer.id,
-            movie_id: nextMovie.id,
+            movie_id: leaveNextMovieId,
             status: 'drawing',
           });
         }

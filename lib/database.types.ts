@@ -24,6 +24,7 @@ export interface Database {
           active: boolean;
           standard_pool: boolean;
           tags: string[];
+          scan_status: 'validated' | 'unvalidated' | 'unusable';
           created_at: string;
         };
         Insert: {
@@ -40,6 +41,7 @@ export interface Database {
           active?: boolean;
           standard_pool?: boolean;
           tags?: string[];
+          scan_status?: 'validated' | 'unvalidated' | 'unusable';
           created_at?: string;
         };
         Update: Partial<Database['public']['Tables']['movies']['Insert']>;
@@ -52,7 +54,7 @@ export interface Database {
           multiplayer_type: 'local' | 'online';
           status: 'lobby' | 'active' | 'finished' | 'cancelled';
           game_code: string;
-          game_mode: 'standard' | 'collection';
+          game_mode: 'standard' | 'collection' | 'insane';
           collection_id: string | null;
           max_players: number;
           visibility: 'public' | 'invite_only';
@@ -65,7 +67,7 @@ export interface Database {
           multiplayer_type?: 'local' | 'online';
           status?: 'lobby' | 'active' | 'finished' | 'cancelled';
           game_code: string;
-          game_mode?: 'standard' | 'collection';
+          game_mode?: 'standard' | 'collection' | 'insane';
           collection_id?: string | null;
           max_players?: number;
           visibility?: 'public' | 'invite_only';

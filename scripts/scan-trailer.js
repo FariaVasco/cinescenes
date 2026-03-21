@@ -34,12 +34,12 @@ const { createClient } = require('@supabase/supabase-js');
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const TMDB_BASE          = 'https://api.themoviedb.org/3';
-const FRAMES_FPS         = 1;     // 1 frame every 1s — catches short title cards
+const FRAMES_FPS         = 0.66;  // 1 frame every ~1.5s — balance between coverage and API cost
 const MAX_CLIP_S         = 60;    // max safe window length (seconds)
 const MIN_CLIP_S         = 30;    // minimum useful window
 const BUFFER_S           = 2;     // seconds of padding around flagged segments
+const TAIL_BLOCK_S       = 15;    // always block the final N seconds — title card reliably appears here
 const VISION_MODEL       = 'meta-llama/llama-4-scout-17b-16e-instruct';
-const VISION_DELAY_MS    = 500;   // delay between vision API calls (raise if hitting rate limits)
 const ENV_FILE           = path.join(__dirname, '../.env');
 
 // Known major studio / distributor channel keywords — trailers from these
@@ -197,17 +197,18 @@ function extractAudio(videoPath, audioPath) {
 }
 
 /**
- * Extract frames from the entire video at FRAMES_FPS.
- * Scans the full trailer to catch title cards that appear mid-video
- * (e.g. "Director of The Dark Knight" at 0:45 in a 2:30 trailer).
- * Returns [{framePath, timestamp}] sorted by timestamp.
+ * Extract frames from a specific window [windowStart, windowEnd] of the video.
+ * Clears framesDir before extracting. Returns [{framePath, timestamp}].
  */
-function extractFullVideoFrames(videoPath, framesDir) {
+function extractWindowFrames(videoPath, windowStart, windowEnd, framesDir) {
+  try { fs.rmSync(framesDir, { recursive: true, force: true }); } catch {}
   fs.mkdirSync(framesDir, { recursive: true });
 
   spawnSync('ffmpeg', [
+    '-ss', String(windowStart),
+    '-to', String(windowEnd),
     '-i',  videoPath,
-    '-vf', `fps=${FRAMES_FPS}`,
+    '-vf', `fps=${FRAMES_FPS},scale=160:-2`,
     `${framesDir}/frame_%05d.jpg`,
     '-y',
   ], { encoding: 'utf-8' });
@@ -215,7 +216,7 @@ function extractFullVideoFrames(videoPath, framesDir) {
   const files = fs.readdirSync(framesDir).filter(f => f.endsWith('.jpg')).sort();
   return files.map((f, i) => ({
     framePath: path.join(framesDir, f),
-    timestamp: i / FRAMES_FPS,
+    timestamp: windowStart + i / FRAMES_FPS,
   }));
 }
 
@@ -227,38 +228,110 @@ function extractFullVideoFrames(videoPath, framesDir) {
  * spoiler word list with the same regex logic used for audio.
  * Returns flagged intervals in the same shape as audio flagged intervals.
  */
+// Minimum spacing between vision calls — persisted to a file so it carries
+// across process boundaries (movie-to-movie in a batch run).
+const VISION_SPACING_MS  = 2200;
+const VISION_STATE_FILE  = path.join(os.tmpdir(), 'cinescenes_vision_state.json');
+
+function readLastCallAt() {
+  try { return JSON.parse(fs.readFileSync(VISION_STATE_FILE, 'utf-8')).lastCallAt ?? 0; } catch { return 0; }
+}
+function writeLastCallAt(ts) {
+  fs.writeFileSync(VISION_STATE_FILE, JSON.stringify({ lastCallAt: ts }));
+}
+
+const VISION_PARAMS = (imageB64, wordList) => ({
+  model: VISION_MODEL,
+  messages: [{
+    role: 'user',
+    content: [
+      { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${imageB64}` } },
+      { type: 'text', text: `Look only at text displayed on screen (title cards, overlays, credits, subtitles). Do NOT describe the image or its content. Are any of these exact words visible as on-screen text: ${wordList}? List only the matching words you can see, one per line. If none of these words appear as on-screen text, reply exactly: NONE` },
+    ],
+  }],
+  max_tokens:  80,
+  temperature: 0,
+});
+
+// Read a header from a Headers object (fetch API) or plain object
+function getHeader(headers, name) {
+  if (!headers) return null;
+  if (typeof headers.get === 'function') return headers.get(name);
+  return headers[name] ?? headers[name.toLowerCase()] ?? null;
+}
+
+// Parse Groq's reset header — can be "Xs", "Xms", or a plain number (seconds)
+function parseResetSec(value) {
+  if (!value) return null;
+  if (value.endsWith('ms')) return Math.ceil(parseInt(value) / 1000);
+  if (value.endsWith('s'))  return parseInt(value);
+  return parseInt(value);  // plain number = seconds
+}
+
+async function visionRequest(groq, imageB64, wordList) {
+  // Enforce minimum spacing, honouring the last call time across process boundaries
+  const lastCallAt = readLastCallAt();
+  const spacingWait = lastCallAt + VISION_SPACING_MS - Date.now();
+  if (spacingWait > 0) await new Promise(r => setTimeout(r, spacingWait));
+  writeLastCallAt(Date.now());
+
+  let rawResponse;
+  try {
+    const { data, response } = await groq.chat.completions.create(VISION_PARAMS(imageB64, wordList)).withResponse();
+    rawResponse = response;
+    // Log rate limit state on first call so we can see actual limits
+    const limReq = getHeader(response.headers, 'x-ratelimit-limit-requests');
+    const remReq = getHeader(response.headers, 'x-ratelimit-remaining-requests');
+    const rstReq = getHeader(response.headers, 'x-ratelimit-reset-requests');
+    const limTok = getHeader(response.headers, 'x-ratelimit-limit-tokens');
+    const remTok = getHeader(response.headers, 'x-ratelimit-remaining-tokens');
+    const rstTok = getHeader(response.headers, 'x-ratelimit-reset-tokens');
+    if (limReq || limTok) {
+      process.stdout.write(`    [rl] req ${remReq}/${limReq} (reset ${rstReq})  tok ${remTok}/${limTok} (reset ${rstTok})\n`);
+    }
+    return data;
+  } catch (e) {
+    const is429 = e.status === 429 || e.message?.includes('429') || e.message?.toLowerCase().includes('rate limit');
+    if (!is429) throw e;
+
+    // Headers can be on the error object directly (OpenAI SDK APIError) or on e.response
+    const errHeaders = e.headers ?? e.response?.headers ?? rawResponse?.headers ?? null;
+    const retryAfter  = getHeader(errHeaders, 'retry-after');
+    const rstRequests = getHeader(errHeaders, 'x-ratelimit-reset-requests');
+    const rstTokens   = getHeader(errHeaders, 'x-ratelimit-reset-tokens');
+
+    // Wait for whichever limit is exhausted (tokens often resets faster than requests)
+    const waitReq = parseResetSec(rstRequests);
+    const waitTok = parseResetSec(rstTokens);
+    const waitSec = retryAfter ? parseInt(retryAfter, 10)
+                  : (waitReq != null && waitTok != null) ? Math.max(waitReq, waitTok)
+                  : waitReq ?? waitTok ?? 65;
+
+    const limReq = getHeader(errHeaders, 'x-ratelimit-limit-requests');
+    const limTok = getHeader(errHeaders, 'x-ratelimit-limit-tokens');
+    console.warn(`\n    ⚠️  429 — limits: req=${limReq} tok=${limTok}  retry-after=${retryAfter}  reset-req=${rstRequests}  reset-tok=${rstTokens}`);
+    console.warn(`    ⏳  Waiting ${waitSec}s…`);
+    await new Promise(r => setTimeout(r, waitSec * 1000 + 500));
+    writeLastCallAt(Date.now());
+
+    // One retry after waiting
+    const { data } = await groq.chat.completions.create(VISION_PARAMS(imageB64, wordList)).withResponse();
+    return data;
+  }
+}
+
 async function detectVisualSpoilers(frames, spoilerWords, groq) {
   const regexes = buildSpoilerRegexes(spoilerWords);
+  const wordList = [...spoilerWords].join(', ');
   const flagged = [];
 
   for (const { framePath, timestamp } of frames) {
     const imageB64 = fs.readFileSync(framePath).toString('base64');
 
     try {
-      const response = await groq.chat.completions.create({
-        model: VISION_MODEL,
-        messages: [{
-          role: 'user',
-          content: [
-            {
-              type:      'image_url',
-              image_url: { url: `data:image/jpeg;base64,${imageB64}` },
-            },
-            {
-              type: 'text',
-              text: 'Transcribe ALL text visible in this image, including title cards, logos, subtitles, and any stylized or decorative text. Reply with ONLY the visible text exactly as it appears. If no text is visible, reply with "NONE".',
-            },
-          ],
-        }],
-        max_tokens:  150,
-        temperature: 0,
-      });
-
-      let text = (response.choices[0]?.message?.content ?? '').trim();
-      // Strip common model preambles ("The visible text is:", "The text in the image is:", etc.)
-      text = text.replace(/^(the\s+)?(visible\s+)?text\s+(in\s+(the|this)\s+image\s+)?is\s*:\s*/i, '').trim();
-      // Skip frames with no text (model may reply "NONE", "None", "No text", etc.)
-      if (!text || /^(none|no\s+text|nothing|no\s+visible\s+text)/i.test(text)) continue;
+      const response = await visionRequest(groq, imageB64, wordList);
+      const text = (response.choices[0]?.message?.content ?? '').trim();
+      if (!text || /^none$/i.test(text)) continue;
 
       const matched = regexes.filter(({ regex }) => regex.test(text)).map(({ word }) => word);
       if (matched.length > 0) {
@@ -272,8 +345,6 @@ async function detectVisualSpoilers(frames, spoilerWords, groq) {
     } catch (e) {
       console.warn(`    ⚠️  Vision API error at ${fmt(timestamp)}: ${e.message}`);
     }
-
-    await new Promise(r => setTimeout(r, VISION_DELAY_MS));
   }
 
   return flagged;
@@ -428,49 +499,6 @@ function findFlaggedIntervals(segments, spoilerWords) {
   return flagged;
 }
 
-// ── Vision verification pass ──────────────────────────────────────────────────
-
-const VERIFY_FPS = 1;   // 1 frame/s — 2× denser than the full-scan to catch short title cards
-
-/**
- * Re-scans the candidate safe window with the Vision LLM at VERIFY_FPS (1fps).
- *
- * The full-video scan runs at 0.5fps (1 frame every 2s).  A title card visible
- * for ~1.5s can fall entirely between two sample points and be missed.
- * Running the Vision LLM on the shorter, already-selected window at 1fps ensures
- * every 1s+ title card is seen, without the cost of re-scanning the whole trailer.
- *
- * Each call clears and recreates verifyFramesDir so stale frames from a
- * previous iteration never pollute the results.
- *
- * Returns flagged intervals in the same shape as audio/visual flags.
- */
-async function verifyWindowWithVision(videoPath, windowStart, windowEnd, verifyFramesDir, spoilerWords, groq) {
-  // Clear stale frames from any previous iteration
-  try { fs.rmSync(verifyFramesDir, { recursive: true, force: true }); } catch {}
-  fs.mkdirSync(verifyFramesDir, { recursive: true });
-
-  spawnSync('ffmpeg', [
-    '-ss', String(windowStart),
-    '-to', String(windowEnd),
-    '-i',  videoPath,
-    '-vf', `fps=${VERIFY_FPS}`,
-    `${verifyFramesDir}/verify_%05d.jpg`,
-    '-y',
-  ], { encoding: 'utf-8' });
-
-  const files = fs.readdirSync(verifyFramesDir)
-    .filter(f => f.startsWith('verify_') && f.endsWith('.jpg'))
-    .sort();
-
-  const frames = files.map((f, i) => ({
-    framePath: path.join(verifyFramesDir, f),
-    timestamp: windowStart + i / VERIFY_FPS,
-  }));
-
-  return detectVisualSpoilers(frames, spoilerWords, groq);
-}
-
 // ── Safe window algorithm ─────────────────────────────────────────────────────
 
 function mergeIntervals(intervals) {
@@ -486,52 +514,26 @@ function mergeIntervals(intervals) {
 }
 
 /**
- * Forward-scanning safe window algorithm.
- *
- * Starts at T=0 and tries to accumulate MAX_CLIP_S (60s) of clean time.
- * When a spoiler is hit, resets the counter past it and tries again.
- * Falls back to the first gap ≥ MIN_CLIP_S (30s) if no 60s window exists.
+ * Compute clean intervals from audio flags.
+ * Applies BUFFER_S padding around each flag, blocks the final TAIL_BLOCK_S,
+ * and returns the gaps as [{start, end, len}].
  */
-function findSafeWindow(totalDuration, flaggedIntervals) {
-  // Expand each flagged segment by BUFFER_S on both sides and merge overlaps
-  const buffered = flaggedIntervals.map(f => [
+function computeAudioSafeIntervals(audioFlagged, duration) {
+  const buffered = audioFlagged.map(f => [
     Math.max(0, f.start - BUFFER_S),
-    Math.min(totalDuration, f.end + BUFFER_S),
+    Math.min(duration, f.end + BUFFER_S),
   ]);
+  buffered.push([Math.max(0, duration - TAIL_BLOCK_S), duration]);
   const blocked = mergeIntervals(buffered);
 
-  // Forward scan: start at 0, advance past each blocked region.
-  // Return as soon as a MAX_CLIP_S-wide clean gap is found.
+  const intervals = [];
   let pos = 0;
   for (const [bs, be] of blocked) {
-    if (bs >= pos + MAX_CLIP_S) {
-      // Clean gap of ≥ 60s found starting at pos — stop here
-      return { start: Math.round(pos), end: Math.round(pos + MAX_CLIP_S), len: MAX_CLIP_S };
-    }
-    if (be > pos) pos = be; // skip past this spoiler block
-  }
-  // Check the tail after the last blocked region
-  if (totalDuration - pos >= MAX_CLIP_S) {
-    return { start: Math.round(pos), end: Math.round(pos + MAX_CLIP_S), len: MAX_CLIP_S };
-  }
-
-  // Fallback: find the first clean gap ≥ MIN_CLIP_S (30s)
-  pos = 0;
-  for (const [bs, be] of blocked) {
-    const gapLen = bs - pos;
-    if (gapLen >= MIN_CLIP_S) {
-      const len = Math.min(gapLen, MAX_CLIP_S);
-      return { start: Math.round(pos), end: Math.round(pos + len), len: Math.round(len) };
-    }
+    if (bs > pos) intervals.push({ start: pos, end: bs, len: bs - pos });
     if (be > pos) pos = be;
   }
-  const remaining = totalDuration - pos;
-  if (remaining >= MIN_CLIP_S) {
-    const len = Math.min(remaining, MAX_CLIP_S);
-    return { start: Math.round(pos), end: Math.round(pos + len), len: Math.round(len) };
-  }
-
-  return null;
+  if (pos < duration) intervals.push({ start: pos, end: duration, len: duration - pos });
+  return intervals;
 }
 
 // ── Supabase write ────────────────────────────────────────────────────────────
@@ -546,7 +548,7 @@ async function updateDatabase(movieTitle, movieYear, movieDirector, youtubeId, s
   // Try updating an existing row first
   const { data: updated, error: updateError } = await supabase
     .from('movies')
-    .update({ youtube_id: youtubeId, safe_start: safeStart, safe_end: safeEnd, active: true })
+    .update({ youtube_id: youtubeId, safe_start: safeStart, safe_end: safeEnd, active: true, scan_status: 'validated' })
     .ilike('title', movieTitle)
     .eq('year', movieYear)
     .select('id, title, year');
@@ -559,7 +561,7 @@ async function updateDatabase(movieTitle, movieYear, movieDirector, youtubeId, s
   const { data: inserted, error: insertError } = await supabase
     .from('movies')
     .insert({ title: movieTitle, year: movieYear, director: movieDirector ?? null,
-              youtube_id: youtubeId, safe_start: safeStart, safe_end: safeEnd, active: true })
+              youtube_id: youtubeId, safe_start: safeStart, safe_end: safeEnd, active: true, scan_status: 'validated' })
     .select('id, title, year');
 
   if (insertError) throw new Error(`Supabase insert failed: ${insertError.message}`);
@@ -695,8 +697,7 @@ async function main() {
   const tmpBase    = path.join(tmpDir, `cinescenes_${Date.now()}`);
   const videoPath  = `${tmpBase}.mp4`;
   const audioPath  = `${tmpBase}.mp3`;
-  const framesDir     = `${tmpBase}_frames`;
-  const verifyFramesDir = `${tmpBase}_verify`;
+  const framesDir = `${tmpBase}_frames`;
 
   console.log(`\n📥  Downloading video (≤480p)…`);
   try {
@@ -733,32 +734,17 @@ async function main() {
       console.log('------------------\n');
     }
 
-    // ── Step 6: Extract full-video frames ────────────────────────────────────
+    // ── Step 6: Build spoiler word lists ─────────────────────────────────────
 
-    console.log(`\n🖼️   Extracting full-video frames at ${FRAMES_FPS}fps…`);
-    const frames = extractFullVideoFrames(videoPath, framesDir);
-    console.log(`    ${frames.length} frame(s) extracted`);
+    console.log(`\n🔍  Building spoiler word lists…`);
+    const visualSpoilerWords = await buildSpoilerWords(movieTitle, movieDirector, movieYear, tmdbId, tmdbKey);
+    const audioSpoilerWords  = await buildSpoilerWords(movieTitle, movieDirector, movieYear, null, null);
 
-    // ── Step 7: Visual spoiler detection (Tesseract OCR) ─────────────────────
+    // ── Step 7: Audio analysis → compute safe intervals ──────────────────────
 
-    console.log(`\n🔍  Building spoiler word list…`);
-    const spoilerWords = await buildSpoilerWords(movieTitle, movieDirector, movieYear, tmdbId, tmdbKey);
+    audioFlagged = findFlaggedIntervals(segments, audioSpoilerWords);
 
-    console.log(`\n👁️   Running vision analysis on frames (${VISION_MODEL})…`);
-    visualFlagged = await detectVisualSpoilers(frames, spoilerWords, groq);
-    if (visualFlagged.length === 0) {
-      console.log(`    ✅  No visual spoilers detected`);
-    } else {
-      visualFlagged.forEach(f => {
-        console.log(`    ⚠️   [${fmt(f.start)} – ${fmt(f.end)}]  "${f.text}"  → matched: ${f.matched.join(', ')}`);
-      });
-    }
-
-    // ── Step 8: Audio spoiler analysis ────────────────────────────────────────
-
-    audioFlagged = findFlaggedIntervals(segments, spoilerWords);
-
-    console.log(`\n🔎  Audio spoiler analysis  (watching for: ${[...spoilerWords].join(', ')})`);
+    console.log(`\n🔎  Audio spoiler analysis  (watching for: ${[...audioSpoilerWords].join(', ')})`);
     if (audioFlagged.length === 0) {
       console.log(`    ✅  No spoilers detected in transcript`);
     } else {
@@ -767,57 +753,115 @@ async function main() {
       });
     }
 
-    // ── Step 9: Find safe window + Vision LLM verification ────────────────────
+    const audioIntervals = computeAudioSafeIntervals(audioFlagged, duration)
+      .filter(iv => iv.len >= MIN_CLIP_S);
 
-    const allFlagged = [...audioFlagged, ...visualFlagged];
-    let candidateWindow = findSafeWindow(duration, allFlagged);
+    if (audioIntervals.length === 0) {
+      console.log(`    ❌  No audio-safe interval ≥ ${MIN_CLIP_S}s — cannot find a safe window`);
+    } else {
+      // Sort: middle intervals first (don't start at 0, don't end at effective trailer end)
+      // then longest first within each group
+      const effectiveEnd = duration - TAIL_BLOCK_S;
+      const isMid = iv => iv.start > 0 && iv.end < effectiveEnd;
+      audioIntervals.sort((a, b) => {
+        const am = isMid(a), bm = isMid(b);
+        if (am !== bm) return am ? -1 : 1;
+        return b.len - a.len;
+      });
 
-    if (candidateWindow) {
-      console.log(`\n🔬  Second-pass vision verification  (${fmt(candidateWindow.start)} – ${fmt(candidateWindow.end)})…`);
-      console.log(`    Re-scanning at ${VERIFY_FPS}fps — 2× denser than full-video scan…`);
-      const MAX_ITER = 3;
-      let iter = 0;
-      let windowClean = false;
+      console.log(`\n    Audio-safe intervals (${audioIntervals.length}):`);
+      audioIntervals.forEach((iv, i) => {
+        console.log(`    ${i + 1}. [${fmt(iv.start)} – ${fmt(iv.end)}]  ${Math.round(iv.len)}s${isMid(iv) ? '  [middle]' : ''}`);
+      });
 
-      while (!windowClean && candidateWindow && iter < MAX_ITER) {
-        const verifyFlagged = await verifyWindowWithVision(
-          videoPath, candidateWindow.start, candidateWindow.end, verifyFramesDir, spoilerWords, groq,
-        );
+      // ── Step 8: Vision analysis — audio-first approach ────────────────────
 
-        if (verifyFlagged.length === 0) {
-          windowClean = true;
-          console.log(`    ✅  Window is clean`);
-        } else {
-          iter++;
-          verifyFlagged.forEach(f =>
-            console.log(`    ⚠️   [${fmt(f.start)} – ${fmt(f.end)}]  "${f.text}"  → matched: ${f.matched.join(', ')}`),
-          );
-          allFlagged.push(...verifyFlagged);
-          candidateWindow = findSafeWindow(duration, allFlagged);
-          if (!candidateWindow) {
-            console.log(`    ❌  No clean window remains after vision verification`);
+      console.log(`\n👁️   Vision analysis per interval (${VISION_MODEL})…`);
+
+      const candidates = [];  // clean intervals 30–60s (fallback pool)
+      const queue = [...audioIntervals];
+
+      while (queue.length > 0 && !finalWindow) {
+        const iv = queue.shift();
+        const scanEnd = Math.min(iv.start + MAX_CLIP_S, iv.end);
+        console.log(`\n    Scanning [${fmt(iv.start)} – ${fmt(scanEnd)}]  (${Math.round(scanEnd - iv.start)}s)…`);
+
+        const frames  = extractWindowFrames(videoPath, iv.start, scanEnd, framesDir);
+        const spoilers = await detectVisualSpoilers(frames, visualSpoilerWords, groq);
+
+        if (spoilers.length === 0) {
+          if (iv.len >= MAX_CLIP_S) {
+            finalWindow = { start: Math.round(iv.start), end: Math.round(iv.start + MAX_CLIP_S), len: MAX_CLIP_S };
+            console.log(`    ✅  Clean ${MAX_CLIP_S}s window — done`);
           } else {
-            console.log(`    ↩️   Retrying with window ${fmt(candidateWindow.start)} – ${fmt(candidateWindow.end)}…`);
+            candidates.push(iv);
+            console.log(`    ✅  Clean ${Math.round(iv.len)}s (kept as fallback)`);
+          }
+        } else {
+          spoilers.forEach(s => {
+            console.log(`    ⚠️   [${fmt(s.start)} – ${fmt(s.end)}]  "${s.text}"  → matched: ${s.matched.join(', ')}`);
+          });
+
+          // Split interval around each spoiler block (with BUFFER_S padding)
+          const spoilerBlocked = mergeIntervals(spoilers.map(s => [
+            Math.max(iv.start, s.start - BUFFER_S),
+            Math.min(iv.end,   s.end   + BUFFER_S),
+          ]));
+
+          let pos = iv.start;
+          for (const [bs, be] of spoilerBlocked) {
+            const sub = { start: pos, end: Math.min(bs, iv.end), len: Math.min(bs, iv.end) - pos };
+            if (sub.len >= MIN_CLIP_S) {
+              if (sub.end <= scanEnd) {
+                candidates.push(sub);
+                console.log(`    📋  [${fmt(sub.start)} – ${fmt(sub.end)}]  ${Math.round(sub.len)}s — fallback candidate`);
+              } else {
+                queue.unshift(sub);
+                console.log(`    🔁  [${fmt(sub.start)} – ${fmt(sub.end)}]  ${Math.round(sub.len)}s — queued`);
+              }
+            } else {
+              console.log(`    ✂️   [${fmt(sub.start)} – ${fmt(sub.end)}]  ${Math.round(sub.len)}s — too short, discarded`);
+            }
+            pos = be;
+          }
+          // Remainder after last spoiler block
+          if (pos < iv.end) {
+            const sub = { start: pos, end: iv.end, len: iv.end - pos };
+            if (sub.len >= MIN_CLIP_S) {
+              queue.unshift(sub);
+              console.log(`    🔁  [${fmt(sub.start)} – ${fmt(sub.end)}]  ${Math.round(sub.len)}s — queued`);
+            } else {
+              console.log(`    ✂️   [${fmt(sub.start)} – ${fmt(sub.end)}]  ${Math.round(sub.len)}s — too short, discarded`);
+            }
           }
         }
       }
 
-      finalWindow = candidateWindow;
+      // Fallback: pick longest clean candidate
+      if (!finalWindow && candidates.length > 0) {
+        candidates.sort((a, b) => b.len - a.len);
+        const best = candidates[0];
+        finalWindow = {
+          start: Math.round(best.start),
+          end:   Math.round(Math.min(best.start + MAX_CLIP_S, best.end)),
+          len:   Math.round(Math.min(best.len, MAX_CLIP_S)),
+        };
+        console.log(`\n    📋  No ${MAX_CLIP_S}s clean window found — using longest fallback [${fmt(finalWindow.start)} – ${fmt(finalWindow.end)}]  ${finalWindow.len}s`);
+      }
     }
 
   } finally {
-    // ── Step 10: Cleanup ──────────────────────────────────────────────────────
+    // ── Step 9: Cleanup ───────────────────────────────────────────────────────
     try { fs.unlinkSync(videoPath); } catch {}
     try { fs.unlinkSync(audioPath); } catch {}
-    try { fs.rmSync(framesDir,      { recursive: true, force: true }); } catch {}
-    try { fs.rmSync(verifyFramesDir, { recursive: true, force: true }); } catch {}
+    try { fs.rmSync(framesDir, { recursive: true, force: true }); } catch {}
   }
 
   console.log('\n' + '─'.repeat(56));
   if (!finalWindow) {
     console.log(`❌  No clean ${MIN_CLIP_S}s+ window found in this trailer.`);
     console.log(`    Consider choosing a different trailer or reviewing manually.`);
-    process.exit(0);
+    process.exit(2);  // non-zero so batch scanner marks safe_start = -1
   }
 
   console.log(`\n✅  Safe window found`);

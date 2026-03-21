@@ -26,9 +26,9 @@ interface AppState {
   setIsPremium: (v: boolean) => void;
 
   // Game mode selection
-  selectedGameMode: 'standard' | 'collection';
+  selectedGameMode: 'standard' | 'collection' | 'insane';
   selectedCollectionId: string | null;
-  setSelectedGameMode: (m: 'standard' | 'collection') => void;
+  setSelectedGameMode: (m: 'standard' | 'collection' | 'insane') => void;
   setSelectedCollectionId: (id: string | null) => void;
 
   // Phase 3+: game state

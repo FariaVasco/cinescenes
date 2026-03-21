@@ -33,6 +33,7 @@ export default function ModeSelectScreen() {
   } = useAppStore();
 
   const [paywallVisible, setPaywallVisible] = useState(false);
+  const [paywallPendingMode, setPaywallPendingMode] = useState<'collection' | 'insane'>('collection');
   const [collectionPickerVisible, setCollectionPickerVisible] = useState(false);
   const [collections, setCollections] = useState<Collection[]>([]);
   const [loadingCollections, setLoadingCollections] = useState(false);
@@ -69,6 +70,7 @@ export default function ModeSelectScreen() {
       return;
     }
     if (!isPremium) {
+      setPaywallPendingMode('collection');
       setPaywallVisible(true);
       return;
     }
@@ -79,7 +81,30 @@ export default function ModeSelectScreen() {
     setPaywallVisible(false);
     const premium = await checkPremium();
     setIsPremium(premium);
-    if (premium) setCollectionPickerVisible(true);
+    if (premium) {
+      if (paywallPendingMode === 'insane') {
+        setSelectedGameMode('insane');
+        setSelectedCollectionId(null);
+        router.replace({ pathname: '/local-lobby', params: { startView: 'create' } });
+      } else {
+        setCollectionPickerVisible(true);
+      }
+    }
+  }
+
+  async function handleInsaneMode() {
+    if (!authUser) {
+      router.push('/sign-in?returnTo=mode-select');
+      return;
+    }
+    if (!isPremium) {
+      setPaywallPendingMode('insane');
+      setPaywallVisible(true);
+      return;
+    }
+    setSelectedGameMode('insane');
+    setSelectedCollectionId(null);
+    router.replace({ pathname: '/local-lobby', params: { startView: 'create' } });
   }
 
   async function handleAccount() {
@@ -148,16 +173,16 @@ export default function ModeSelectScreen() {
           <Text style={styles.modeSub}>{collectionSubtitle}</Text>
         </TouchableOpacity>
 
-        {/* Coming soon: Insane Mode */}
-        <View style={[styles.modeCard, styles.modeCardDisabled]}>
+        {/* Insane Mode */}
+        <TouchableOpacity style={[styles.modeCard, styles.modeCardPremium]} onPress={handleInsaneMode} activeOpacity={0.8}>
           <View style={styles.modeRow}>
-            <Text style={[styles.modeName, styles.modeNameDisabled]}>Insane Mode</Text>
-            <View style={styles.soonBadge}>
-              <Text style={styles.soonBadgeText}>COMING SOON</Text>
+            <Text style={styles.modeName}>Insane Mode</Text>
+            <View style={styles.premiumBadge}>
+              <Text style={styles.premiumBadgeText}>★ PREMIUM</Text>
             </View>
           </View>
           <Text style={styles.modeSub}>Every movie ever made</Text>
-        </View>
+        </TouchableOpacity>
 
         {/* Coming soon: Who's the Director? */}
         <View style={[styles.modeCard, styles.modeCardDisabled]}>

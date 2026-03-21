@@ -14,6 +14,7 @@ export interface TrailerPlayerHandle {
 interface TrailerPlayerProps {
   movie: Movie;
   onEnded?: () => void;
+  onWindowCalculated?: (start: number, end: number) => void;
 }
 
 // Skips skippable ads, detects when actual content starts (not ad),
@@ -52,7 +53,7 @@ true;
 }
 
 export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>(
-  function TrailerPlayer({ movie, onEnded }, ref) {
+  function TrailerPlayer({ movie, onEnded, onWindowCalculated }, ref) {
     const { width, height } = useWindowDimensions();
     const [loading, setLoading] = useState(true);
     const [playing, setPlaying] = useState(true);
@@ -62,10 +63,14 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
     const timerStartRef = useRef<number>(0);
     const remainingRef = useRef<number>(0);
     const playerRef = useRef<any>(null);
+    const skipEndTimerOnReady = useRef(false);
+    const dynStartRef = useRef<number>(0);
 
+    // Insane mode: safe_start is null until the window is dynamically calculated
+    const insaneMode = movie.safe_start === null && !movie.vimeo_id;
     const safeStart = movie.safe_start ?? 0;
-    const safeEnd = movie.safe_end ?? 60;
-    const duration = Math.max(safeEnd - safeStart, 10) * 1000;
+    const safeEnd = movie.safe_end ?? (insaneMode ? 99999 : 60);
+    const duration = insaneMode ? 30_000 : Math.max(safeEnd - safeStart, 10) * 1000;
     const youtubeInject = makeYouTubeInject(safeStart);
 
     // Prefer Vimeo (no ads); fall back to YouTube
@@ -104,29 +109,53 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
         setLoading(true);
         if (timerRef.current) clearTimeout(timerRef.current);
         if (fallbackRef.current) clearTimeout(fallbackRef.current);
+        skipEndTimerOnReady.current = false;
         setPlaying(false);
+        const replayStart = insaneMode ? dynStartRef.current : safeStart;
         setTimeout(() => {
-          if (!useVimeo) playerRef.current?.seekTo(safeStart, true);
+          if (!useVimeo) playerRef.current?.seekTo(replayStart, true);
           setPlaying(true);
           // Fallback in case cs_content_ready doesn't fire on replay
           fallbackRef.current = setTimeout(() => {
             setLoading(false);
-            startEndTimer();
+            startEndTimer(insaneMode ? 30_000 : duration);
           }, 15000);
         }, 300);
       },
     }));
 
     // ── YouTube handlers ────────────────────────────────────────────────────
-    function handleYouTubeReady() {
-      playerRef.current?.seekTo(safeStart, true);
-      // Fallback: show content after 15s if the inject message never arrives
-      // (e.g. the ad-showing class detection fails on some YouTube versions)
-      if (fallbackRef.current) clearTimeout(fallbackRef.current);
-      fallbackRef.current = setTimeout(() => {
-        setLoading(false);
-        startEndTimer();
-      }, 15000);
+    async function handleYouTubeReady() {
+      if (insaneMode) {
+        // Dynamic windowing: seek to middle ±15 s after getting total duration
+        skipEndTimerOnReady.current = true;
+        if (fallbackRef.current) clearTimeout(fallbackRef.current);
+        try {
+          const totalSec: number = (await playerRef.current?.getDuration()) ?? 120;
+          const mid = totalSec / 2;
+          const dynStart = Math.max(0, mid - 15);
+          const dynEnd = dynStart + 30;
+          dynStartRef.current = dynStart;
+          playerRef.current?.seekTo(dynStart, true);
+          onWindowCalculated?.(dynStart, dynEnd);
+        } catch (_) {
+          // getDuration failed — play from position 0
+          dynStartRef.current = 0;
+        }
+        // Show content and start 30 s timer after seek settles
+        fallbackRef.current = setTimeout(() => {
+          setLoading(false);
+          startEndTimer(30_000);
+        }, 2000);
+      } else {
+        playerRef.current?.seekTo(safeStart, true);
+        // Fallback: show content after 15s if the inject message never arrives
+        if (fallbackRef.current) clearTimeout(fallbackRef.current);
+        fallbackRef.current = setTimeout(() => {
+          setLoading(false);
+          startEndTimer();
+        }, 15000);
+      }
     }
 
     function handleYouTubeStateChange(state: string) {
@@ -146,9 +175,15 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
       try {
         const msg = JSON.parse(event.nativeEvent.data);
         if (msg.type === 'cs_content_ready') {
-          if (fallbackRef.current) clearTimeout(fallbackRef.current);
-          setLoading(false);
-          startEndTimer();
+          if (skipEndTimerOnReady.current) {
+            // Insane mode: our own timer is running — just hide the loader
+            setLoading(false);
+          } else {
+            // Normal mode: content confirmed, start timer
+            if (fallbackRef.current) clearTimeout(fallbackRef.current);
+            setLoading(false);
+            startEndTimer();
+          }
         }
       } catch (_) {}
     }

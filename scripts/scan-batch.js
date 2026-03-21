@@ -85,7 +85,7 @@ async function main() {
   if (cli.movieId) {
     query = query.eq('id', cli.movieId);
   } else if (cli.retryFailed) {
-    query = query.eq('safe_start', -1);
+    query = query.or('safe_start.is.null,safe_start.eq.-1');
     if (cli.year) query = query.eq('year', cli.year);
   } else {
     query = query.is('safe_start', null);
@@ -137,13 +137,17 @@ async function main() {
       ok++;
     } else if (result.signal === 'SIGTERM' || result.error?.code === 'ETIMEDOUT') {
       log(`  ⏱  ${label}  →  timed out after 10 min — skipping`);
-      // Mark as failed in DB so --retry-failed can pick it up
+      // Mark as failed in DB so --retry-failed can pick it up; keep scan_status for retry
       await supabase.from('movies').update({ safe_start: -1, safe_end: -1 }).eq('id', movie.id);
       skipped++;
     } else {
       log(`  ❌  ${label}  →  exited with code ${result.status}`);
-      // Mark as failed so --retry-failed can pick it up later
-      await supabase.from('movies').update({ safe_start: -1, safe_end: -1 }).eq('id', movie.id);
+      if (result.status === 2) {
+        // No clean window found — mark unusable so insane mode skips it
+        await supabase.from('movies').update({ safe_start: -1, safe_end: -1, scan_status: 'unusable' }).eq('id', movie.id);
+      } else {
+        await supabase.from('movies').update({ safe_start: -1, safe_end: -1 }).eq('id', movie.id);
+      }
       failed++;
     }
 

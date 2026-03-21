@@ -21,7 +21,8 @@ import { BackButton } from '@/components/BackButton';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
-import { Game, Player } from '@/lib/database.types';
+import { Game, Movie, Player } from '@/lib/database.types';
+import { fetchRandomInsaneMovie } from '@/lib/tmdb-insane';
 
 type LobbyView = 'choice' | 'create' | 'join';
 type Visibility = 'public' | 'invite_only';
@@ -301,41 +302,72 @@ export default function LocalLobbyScreen() {
     if (!localGame || localPlayers.length < 1) return;
     setLoading(true);
     try {
-      let pool: typeof activeMovies;
-      if (localGame.game_mode === 'collection' && localGame.collection_id) {
-        const { data: col } = await db
-          .from('collections')
-          .select('tag')
-          .eq('id', localGame.collection_id)
-          .single() as { data: { tag: string } | null };
-        pool = col
-          ? activeMovies.filter((m) => (m.tags ?? []).includes(col.tag))
-          : activeMovies.filter((m) => m.standard_pool === true);
+      let firstTurnMovie!: Movie;
+
+      const startingMovieIdsList: string[] = [];
+
+      if (localGame.game_mode === 'insane') {
+        // Insane Mode: fetch random TMDb movies live — no pre-loaded pool
+        const usedYoutubeIds = new Set<string>();
+
+        for (let i = 0; i < localPlayers.length; i++) {
+          let m: Movie;
+          let attempts = 0;
+          do {
+            m = await fetchRandomInsaneMovie(db);
+            attempts++;
+          } while (usedYoutubeIds.has(m.youtube_id!) && attempts < 30);
+          usedYoutubeIds.add(m.youtube_id!);
+          startingMovieIdsList.push(m.id);
+          await db
+            .from('players')
+            .update({ timeline: [m.year], coins: 5 })
+            .eq('id', localPlayers[i].id);
+        }
+
+        let attempts = 0;
+        do {
+          firstTurnMovie = await fetchRandomInsaneMovie(db);
+          attempts++;
+        } while (usedYoutubeIds.has(firstTurnMovie!.youtube_id!) && attempts < 30);
       } else {
-        pool = activeMovies.filter((m) => m.standard_pool === true);
-      }
-      if (pool.length < localPlayers.length + 1) throw new Error('Not enough movies available');
+        // Standard / Collection: use pre-loaded pool
+        let pool: typeof activeMovies;
+        if (localGame.game_mode === 'collection' && localGame.collection_id) {
+          const { data: col } = await db
+            .from('collections')
+            .select('tag')
+            .eq('id', localGame.collection_id)
+            .single() as { data: { tag: string } | null };
+          pool = col
+            ? activeMovies.filter((m) => (m.tags ?? []).includes(col.tag))
+            : activeMovies.filter((m) => m.standard_pool === true);
+        } else {
+          pool = activeMovies.filter((m) => m.standard_pool === true);
+        }
+        if (pool.length < localPlayers.length + 1) throw new Error('Not enough movies available');
 
-      // Shuffle pool
-      for (let i = pool.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [pool[i], pool[j]] = [pool[j], pool[i]];
+        // Shuffle pool
+        for (let i = pool.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [pool[i], pool[j]] = [pool[j], pool[i]];
+        }
+
+        // Assign one starting card to each player
+        for (let i = 0; i < localPlayers.length; i++) {
+          const startMovie = pool[i];
+          startingMovieIdsList.push(startMovie.id);
+          await db
+            .from('players')
+            .update({ timeline: [startMovie.year], coins: 5 })
+            .eq('id', localPlayers[i].id);
+        }
+
+        const usedSet = new Set(startingMovieIdsList);
+        const remaining = pool.filter((m) => !usedSet.has(m.id));
+        firstTurnMovie = remaining[Math.floor(Math.random() * remaining.length)];
       }
 
-      // Assign one starting card to each player
-      const usedIds = new Set<string>();
-      for (let i = 0; i < localPlayers.length; i++) {
-        const startMovie = pool[i];
-        usedIds.add(startMovie.id);
-        await db
-          .from('players')
-          .update({ timeline: [startMovie.year], coins: 5 })
-          .eq('id', localPlayers[i].id);
-      }
-
-      // Pick first turn movie (different from all starting cards)
-      const remaining = pool.filter((m) => !usedIds.has(m.id));
-      const firstTurnMovie = remaining[Math.floor(Math.random() * remaining.length)];
       const firstPlayer = localPlayers[0];
 
       // Mark game active BEFORE inserting phantom turns so RLS policies (if any) allow the inserts
@@ -346,9 +378,8 @@ export default function LocalLobbyScreen() {
 
       // Record each starting card as a completed turn so all devices exclude it from future draws.
       // Also store in Zustand so the host device has a local backup.
-      const startingIds = [...usedIds];
-      setStartingMovieIds(startingIds);
-      for (const [i, movieId] of startingIds.entries()) {
+      setStartingMovieIds(startingMovieIdsList);
+      for (const [i, movieId] of startingMovieIdsList.entries()) {
         const { error: phantomErr } = await db.from('turns').insert({
           game_id: localGame.id,
           active_player_id: localPlayers[i].id,
