@@ -9,6 +9,9 @@ export const ENTITLEMENT_ID = 'Cinescenes Pro';
 export function initRevenueCat() {
   Purchases.setLogLevel(LOG_LEVEL.ERROR);
   Purchases.configure({ apiKey: RC_KEY });
+  Purchases.getCustomerInfo().then(info =>
+    console.log('[RC] customer ID:', info.originalAppUserId)
+  ).catch(() => {});
 }
 
 export async function identifyUser(supabaseUserId: string) {
@@ -18,6 +21,7 @@ export async function identifyUser(supabaseUserId: string) {
 export async function checkPremium(): Promise<boolean> {
   try {
     const info = await Purchases.getCustomerInfo();
+    console.log('[RC] customer ID:', info.originalAppUserId);
     return info.entitlements.active[ENTITLEMENT_ID] !== undefined;
   } catch {
     return false;

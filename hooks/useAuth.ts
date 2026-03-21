@@ -62,10 +62,14 @@ export function useAuth() {
   }
 
   async function restoreSession() {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) return;
-    useAppStore.getState().setAuthUser(session.user);
-    await syncProfile(session.user.id);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+      useAppStore.getState().setAuthUser(session.user);
+      await syncProfile(session.user.id);
+    } catch (_) {
+      // Network unavailable on startup — app works fine without a restored session
+    }
   }
 
   return { signInWithApple, signInWithGoogle, signOut, restoreSession };
