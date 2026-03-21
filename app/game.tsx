@@ -2006,7 +2006,7 @@ function ScoreBar({ players, myId, onShowTimeline, myTimelineHint }: { players: 
 
 function LoadingScreen() {
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
       <ActivityIndicator size="large" color="#f5c518" />
     </SafeAreaView>
   );
