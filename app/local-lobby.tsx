@@ -307,17 +307,18 @@ export default function LocalLobbyScreen() {
       const startingMovieIdsList: string[] = [];
 
       if (localGame.game_mode === 'insane') {
-        // Insane Mode: fetch random TMDb movies live — no pre-loaded pool
-        const usedYoutubeIds = new Set<string>();
+        // Insane Mode: fetch random TMDb movies live — no pre-loaded pool.
+        // Starting cards don't need trailers — just need a year and a DB row.
+        const usedYears = new Set<number>();
 
         for (let i = 0; i < localPlayers.length; i++) {
           let m: Movie;
           let attempts = 0;
           do {
-            m = await fetchRandomInsaneMovie(db);
+            m = await fetchRandomInsaneMovie(db, false);
             attempts++;
-          } while (usedYoutubeIds.has(m.youtube_id!) && attempts < 30);
-          usedYoutubeIds.add(m.youtube_id!);
+          } while (usedYears.has(m.year) && attempts < 30);
+          usedYears.add(m.year);
           startingMovieIdsList.push(m.id);
           await db
             .from('players')
@@ -325,11 +326,8 @@ export default function LocalLobbyScreen() {
             .eq('id', localPlayers[i].id);
         }
 
-        let attempts = 0;
-        do {
-          firstTurnMovie = await fetchRandomInsaneMovie(db);
-          attempts++;
-        } while (usedYoutubeIds.has(firstTurnMovie!.youtube_id!) && attempts < 30);
+        // First turn movie needs a trailer
+        firstTurnMovie = await fetchRandomInsaneMovie(db, true);
       } else {
         // Standard / Collection: use pre-loaded pool
         let pool: typeof activeMovies;

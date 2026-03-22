@@ -33,10 +33,11 @@ function shuffled<T>(arr: T[]): T[] {
   return a;
 }
 
-export async function fetchRandomInsaneMovie(db: Db): Promise<Movie> {
+export async function fetchRandomInsaneMovie(db: Db, requireTrailer = true): Promise<Movie> {
   // Pick a random page from TMDb discover — movies with some votes are far
   // more likely to have YouTube trailers than purely random IDs.
   const page = Math.floor(Math.random() * 400) + 1;
+  const appendTo = requireTrailer ? 'videos,credits' : 'credits';
   const discover = await tmdbGet(
     `/discover/movie?sort_by=vote_count.desc&vote_count.gte=10&page=${page}`
   );
@@ -46,54 +47,79 @@ export async function fetchRandomInsaneMovie(db: Db): Promise<Movie> {
     : Array.from({ length: 20 }, () => Math.floor(Math.random() * 1_000_000) + 1);
 
   for (const tmdbId of candidateIds) {
-    const data = await tmdbGet(`/movie/${tmdbId}?append_to_response=videos,credits`);
+    const data = await tmdbGet(`/movie/${tmdbId}?append_to_response=${appendTo}`);
     if (!data?.title || !data?.release_date) continue;
 
     const year = parseInt(data.release_date.slice(0, 4), 10);
     if (isNaN(year)) continue;
 
-    const trailers = (data.videos?.results ?? [])
-      .filter((v: any) => v.site === 'YouTube' && v.type === 'Trailer');
-    if (trailers.length === 0) continue;
-
-    const trailer = trailers.sort((a: any, b: any) => (a.official ? -1 : 1))[0];
     const director =
       (data.credits?.crew ?? []).find((c: any) => c.job === 'Director')?.name ?? 'Unknown';
 
-    // Return existing row if already in DB
-    const { data: existing } = await db
-      .from('movies')
-      .select('*')
-      .eq('youtube_id', trailer.key)
-      .maybeSingle();
+    if (requireTrailer) {
+      const trailers = (data.videos?.results ?? [])
+        .filter((v: any) => v.site === 'YouTube' && v.type === 'Trailer');
+      if (trailers.length === 0) continue;
 
-    if (existing) {
-      if (existing.scan_status === 'unusable') continue;
-      return existing as Movie;
+      const trailer = trailers.sort((a: any, b: any) => (a.official ? -1 : 1))[0];
+
+      // Return existing row if already in DB
+      const { data: existing } = await db
+        .from('movies')
+        .select('*')
+        .eq('youtube_id', trailer.key)
+        .maybeSingle();
+
+      if (existing) {
+        if (existing.scan_status === 'unusable') continue;
+        return existing as Movie;
+      }
+
+      const { data: inserted, error } = await db
+        .from('movies')
+        .insert({
+          title: data.title,
+          year,
+          director,
+          youtube_id: trailer.key,
+          safe_start: null,
+          safe_end: null,
+          scan_status: 'unvalidated',
+          standard_pool: false,
+          tags: [],
+          flagged: false,
+          active: true,
+        })
+        .select()
+        .single();
+
+      if (error) { console.warn('[insane] insert error:', error.message); continue; }
+      if (!inserted) continue;
+      return inserted as Movie;
+    } else {
+      // Starting card: no trailer needed — just insert the movie and return
+      const { data: inserted, error } = await db
+        .from('movies')
+        .insert({
+          title: data.title,
+          year,
+          director,
+          youtube_id: null,
+          safe_start: null,
+          safe_end: null,
+          scan_status: 'unusable', // won't be dealt as a guessing turn
+          standard_pool: false,
+          tags: [],
+          flagged: false,
+          active: true,
+        })
+        .select()
+        .single();
+
+      if (error) { console.warn('[insane] starting card insert error:', error.message); continue; }
+      if (!inserted) continue;
+      return inserted as Movie;
     }
-
-    // Insert new unvalidated movie
-    const { data: inserted, error } = await db
-      .from('movies')
-      .insert({
-        title: data.title,
-        year,
-        director,
-        youtube_id: trailer.key,
-        safe_start: null,
-        safe_end: null,
-        scan_status: 'unvalidated',
-        standard_pool: false,
-        tags: [],
-        flagged: false,
-        active: true,
-      })
-      .select()
-      .single();
-
-    if (error) { console.warn('[insane] insert error:', error.message); continue; }
-    if (!inserted) continue;
-    return inserted as Movie;
   }
 
   throw new Error('Could not find a valid movie from TMDb after exhausting candidates');
