@@ -1069,8 +1069,10 @@ export default function GameScreen() {
 
   if (loading || !currentTurn) {
     return (
-      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color="#f5c518" />
+      <SafeAreaView style={styles.container}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color="#f5c518" />
+        </View>
       </SafeAreaView>
     );
   }
@@ -2027,8 +2029,10 @@ function ScoreBar({ players, myId, onShowTimeline, myTimelineHint }: { players: 
 
 function LoadingScreen() {
   return (
-    <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-      <ActivityIndicator size="large" color="#f5c518" />
+    <SafeAreaView style={styles.container}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#f5c518" />
+      </View>
     </SafeAreaView>
   );
 }
