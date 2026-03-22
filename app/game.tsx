@@ -624,6 +624,14 @@ export default function GameScreen() {
     setMyMoviePairs(wonTurnsToPairs(myWonTurns ?? []));
     setActivePlayerPairs(wonTurnsToPairs(activeWonTurns ?? []));
 
+    // Insane mode: hydrate activeMovies with any referenced movies not yet in the store
+    const allWonIds = [...new Set([...(myWonTurns ?? []), ...(activeWonTurns ?? [])].map(t => t.movie_id))];
+    const missingIds = allWonIds.filter(id => !activeMovies.find(m => m.id === id));
+    if (missingIds.length > 0) {
+      const { data: missing } = await db.from('movies').select('*').in('id', missingIds) as { data: Movie[] | null };
+      if (missing?.length) setActiveMovies([...activeMovies, ...missing]);
+    }
+
     const isGameStart = loadedPlayers.every(p => (p.timeline ?? []).length <= 1);
     if (isGameStart && !introShownRef.current) {
       setShowIntro(true);
