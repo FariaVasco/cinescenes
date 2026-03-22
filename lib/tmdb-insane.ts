@@ -97,7 +97,13 @@ export async function fetchRandomInsaneMovie(db: Db): Promise<Movie> {
       .single();
 
     if (error) { console.warn('[insane] insert error:', error.message); continue; }
-    if (!inserted) continue;
+    if (!inserted) {
+      // INSERT succeeded but RETURNING came back empty (RLS on RETURNING or transient issue).
+      // The row IS in the DB — fetch it directly rather than looping and inserting again.
+      const { data: fetched } = await db.from('movies').select('*').eq('tmdb_id', tmdbId).maybeSingle();
+      if (!fetched) continue;
+      return fetched as Movie;
+    }
     return inserted as Movie;
   }
 
