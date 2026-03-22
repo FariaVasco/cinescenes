@@ -1060,7 +1060,7 @@ export default function GameScreen() {
 
   if (loading || !currentTurn) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
         <ActivityIndicator size="large" color="#f5c518" />
       </SafeAreaView>
     );
