@@ -53,6 +53,7 @@ export default function GameScreen() {
   const {
     game,
     activeMovies,
+    setActiveMovies,
     playerId: myPlayerId,
     players: storePlayers,
     setPlayers,
