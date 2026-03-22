@@ -4,6 +4,7 @@
  * Fetches a random movie from TMDb for Insane Mode.
  * Uses the discover endpoint with a random page to get movies that are
  * likely to have YouTube trailers, then validates and upserts the row.
+ * Deduplicates via tmdb_id — never inserts the same movie twice.
  */
 
 import { Movie } from '@/lib/database.types';
@@ -47,6 +48,20 @@ export async function fetchRandomInsaneMovie(db: Db, requireTrailer = true): Pro
     : Array.from({ length: 20 }, () => Math.floor(Math.random() * 1_000_000) + 1);
 
   for (const tmdbId of candidateIds) {
+    // Check DB by tmdb_id first — avoids duplicate inserts and skips the API call
+    const { data: existing } = await db
+      .from('movies')
+      .select('*')
+      .eq('tmdb_id', tmdbId)
+      .maybeSingle();
+
+    if (existing) {
+      if (existing.scan_status === 'unusable') continue;
+      if (requireTrailer && !existing.youtube_id) continue; // no trailer, skip
+      return existing as Movie;
+    }
+
+    // Not in DB — fetch full details from TMDb
     const data = await tmdbGet(`/movie/${tmdbId}?append_to_response=${appendTo}`);
     if (!data?.title || !data?.release_date) continue;
 
@@ -63,24 +78,13 @@ export async function fetchRandomInsaneMovie(db: Db, requireTrailer = true): Pro
 
       const trailer = trailers.sort((a: any, b: any) => (a.official ? -1 : 1))[0];
 
-      // Return existing row if already in DB
-      const { data: existing } = await db
-        .from('movies')
-        .select('*')
-        .eq('youtube_id', trailer.key)
-        .maybeSingle();
-
-      if (existing) {
-        if (existing.scan_status === 'unusable') continue;
-        return existing as Movie;
-      }
-
       const { data: inserted, error } = await db
         .from('movies')
         .insert({
           title: data.title,
           year,
           director,
+          tmdb_id: tmdbId,
           youtube_id: trailer.key,
           safe_start: null,
           safe_end: null,
@@ -97,17 +101,18 @@ export async function fetchRandomInsaneMovie(db: Db, requireTrailer = true): Pro
       if (!inserted) continue;
       return inserted as Movie;
     } else {
-      // Starting card: no trailer needed — just insert the movie and return
+      // Starting card: no trailer needed
       const { data: inserted, error } = await db
         .from('movies')
         .insert({
           title: data.title,
           year,
           director,
+          tmdb_id: tmdbId,
           youtube_id: null,
           safe_start: null,
           safe_end: null,
-          scan_status: 'unusable', // won't be dealt as a guessing turn
+          scan_status: 'unusable',
           standard_pool: false,
           tags: [],
           flagged: false,

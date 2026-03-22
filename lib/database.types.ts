@@ -25,6 +25,7 @@ export interface Database {
           standard_pool: boolean;
           tags: string[];
           scan_status: 'validated' | 'unvalidated' | 'unusable';
+          tmdb_id: number | null;
           created_at: string;
         };
         Insert: {
@@ -42,6 +43,7 @@ export interface Database {
           standard_pool?: boolean;
           tags?: string[];
           scan_status?: 'validated' | 'unvalidated' | 'unusable';
+          tmdb_id?: number | null;
           created_at?: string;
         };
         Update: Partial<Database['public']['Tables']['movies']['Insert']>;
