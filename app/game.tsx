@@ -118,6 +118,8 @@ export default function GameScreen() {
   const [winnerPairs, setWinnerPairs] = useState<{ year: number; id: string }[]>([]);
   const [gameOver, setGameOver] = useState<Player | null>(null);
   const introShownRef = useRef(false);
+  // Insane mode: current turn's movie may not be in the activeMovies store
+  const [movieOverride, setMovieOverride] = useState<Movie | null>(null);
 
   const [voiceState, setVoiceState] = useState<'idle' | 'listening' | 'processing' | 'error'>('idle');
   const [voiceError, setVoiceError] = useState('');
@@ -237,7 +239,7 @@ export default function GameScreen() {
     const isPublicGame = game?.visibility === 'public';
     if (!isPublicGame) { setCanSkipTrailer(true); return; }
     setCanSkipTrailer(false);
-    const m = activeMovies.find((mv) => mv.id === currentTurn?.movie_id) ?? null;
+    const m = activeMovies.find((mv) => mv.id === currentTurn?.movie_id) ?? movieOverride;
     const safeStart = m?.safe_start ?? null;
     const safeEnd = m?.safe_end ?? null;
     const minMs = (safeStart !== null && safeEnd !== null)
@@ -247,6 +249,16 @@ export default function GameScreen() {
     return () => { if (skipTimerRef.current) { clearTimeout(skipTimerRef.current); skipTimerRef.current = null; } };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trailerEnded, currentTurn?.id]);
+
+  // Fetch current turn movie from DB when not in the store (insane mode movies)
+  useEffect(() => {
+    const id = currentTurn?.movie_id;
+    if (!id) { setMovieOverride(null); return; }
+    if (activeMovies.find(m => m.id === id)) { setMovieOverride(null); return; }
+    db.from('movies').select('*').eq('id', id).single()
+      .then(({ data }) => setMovieOverride((data as Movie) ?? null));
+  }, [currentTurn?.movie_id]);
+
 
   // Auto-reveal: when all challengers have decided and the lock period has passed,
   // trigger reveal automatically on the active player's device after a short grace period.
@@ -266,7 +278,7 @@ export default function GameScreen() {
     if (currentTurn?.status !== 'revealing') { setWinnerPairs([]); return; }
     const g = game;
     if (!g) return;
-    const movie = activeMovies.find(m => m.id === currentTurn.movie_id);
+    const movie = activeMovies.find(m => m.id === currentTurn.movie_id) ?? movieOverride;
     if (!movie || currentTurn.placed_interval == null) return;
     const activeTL = players.find(p => p.id === currentTurn.active_player_id)?.timeline ?? [];
     const validIntervals = computeValidIntervals(movie.year, activeTL);
@@ -627,7 +639,7 @@ export default function GameScreen() {
   }
   function getActivePlayer() { return getPlayer(currentTurn?.active_player_id ?? null); }
   function isActivePlayer() { return myPlayerId === currentTurn?.active_player_id; }
-  function getMovie() { return activeMovies.find((m) => m.id === currentTurn?.movie_id) ?? null; }
+  function getMovie() { return activeMovies.find((m) => m.id === currentTurn?.movie_id) ?? movieOverride; }
   function getActivePlayerTimeline(): number[] { return getActivePlayer()?.timeline ?? []; }
 
   // ── Actions (with optimistic updates so UI responds instantly) ──
