@@ -315,7 +315,7 @@ export default function LocalLobbyScreen() {
           let m: Movie;
           let attempts = 0;
           do {
-            m = await fetchRandomInsaneMovie(db, false);
+            m = await fetchRandomInsaneMovie(db);
             attempts++;
           } while (usedYears.has(m.year) && attempts < 30);
           usedYears.add(m.year);
