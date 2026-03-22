@@ -2466,12 +2466,16 @@ function GameIntroScreen({
     if (!readyToStart) return;
     const t = setInterval(() => {
       setCountdown(prev => {
-        if (prev <= 1) { clearInterval(t); onDone(); return 0; }
+        if (prev <= 1) { clearInterval(t); return 0; }
         return prev - 1;
       });
     }, 1000);
     return () => clearInterval(t);
   }, [readyToStart]);
+
+  useEffect(() => {
+    if (countdown === 0 && readyToStart) onDone();
+  }, [countdown]);
 
   // Both screens are always mounted — we switch between them via opacity so that
   // both Animated.Values remain attached to native views throughout (avoids
