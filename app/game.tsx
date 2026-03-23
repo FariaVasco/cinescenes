@@ -77,7 +77,6 @@ export default function GameScreen() {
   const [showIntro, setShowIntro] = useState(false);
   const [showLandscapePrompt, setShowLandscapePrompt] = useState(false);
   const [trailerKey, setTrailerKey] = useState(0);
-  const [showMyTimeline, setShowMyTimeline] = useState(false);
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
 
   const [selectedInterval, setSelectedInterval] = useState<number | null>(null);
@@ -1181,6 +1180,9 @@ export default function GameScreen() {
     .map((_, i) => resolveMovie(myTimeline, i, myMoviePairs))
     .filter((m): m is Movie => m !== undefined);
 
+  // Index-aligned cards for CollapsibleMyTimeline (undefined = movie not yet resolved).
+  const myTimelineCards = myTimeline.map((_, i) => resolveMovie(myTimeline, i, myMoviePairs));
+
   // ── Leave game ──
   async function handleLeaveConfirmed() {
     setShowLeaveDialog(false);
@@ -1261,34 +1263,7 @@ export default function GameScreen() {
     </TouchableOpacity>
   ) : null;
 
-  // ── "My Timeline" overlay — absolute instead of Modal to preserve landscape lock on iOS ──
-  const myTimelineModal = showMyTimeline ? (
-    <TouchableOpacity style={[StyleSheet.absoluteFill, styles.modalBackdrop]} activeOpacity={1} onPress={() => setShowMyTimeline(false)}>
-      <View style={styles.myTimelineSheet} onStartShouldSetResponder={() => true}>
-        <View style={styles.myTimelineHeader}>
-          <Text style={styles.myTimelineTitle}>My Timeline</Text>
-          <TouchableOpacity onPress={() => setShowMyTimeline(false)} style={styles.reportCloseBtn}>
-            <Text style={styles.reportCloseText}>✕</Text>
-          </TouchableOpacity>
-        </View>
-        {myTimeline.length === 0 ? (
-          <Text style={styles.myTimelineEmpty}>No cards yet</Text>
-        ) : (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.myTimelineScroll}>
-            {myTimeline.map((year, i) => {
-              const pairsForYear = myMoviePairs.filter(p => p.year === year);
-              const countBefore = myTimeline.slice(0, i).filter(y => y === year).length;
-              const pair = pairsForYear[countBefore];
-              const m = pair ? activeMovies.find(mv => mv.id === pair.id) : activeMovies.find(mv => mv.year === year);
-              return m
-                ? <CardFront key={i} movie={m} width={90} height={126} />
-                : <View key={i} style={styles.myTimelinePlaceholder}><Text style={styles.myTimelinePlaceholderYear}>{year}</Text></View>;
-            })}
-          </ScrollView>
-        )}
-      </View>
-    </TouchableOpacity>
-  ) : null;
+
 
   // ── DRAWING ──
   if (currentTurn.status === 'drawing') {
@@ -1329,21 +1304,7 @@ export default function GameScreen() {
 
           {/* ── Observer's own timeline ── */}
           {!amActive && myTimeline.length > 0 && (
-            <View style={styles.drawingMySection}>
-              <Text style={styles.drawingMySectionLabel}>Your timeline</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.drawingMyScroll}
-              >
-                {myTimeline.map((year, i) => {
-                  const mv = resolveMovie(myTimeline, i, myMoviePairs);
-                  return mv
-                    ? <CardFront key={i} movie={mv} width={52} height={70} />
-                    : <View key={i} style={styles.myTimelinePlaceholder}><Text style={styles.myTimelinePlaceholderYear}>{year}</Text></View>;
-                })}
-              </ScrollView>
-            </View>
+            <CollapsibleMyTimeline timeline={myTimeline} cards={myTimelineCards} />
           )}
         </View>
 
@@ -1379,8 +1340,10 @@ export default function GameScreen() {
               <CardBack width={80} height={CARD_H} />
             </View>
           </View>
-          <ScoreBar players={players} myId={myPlayerId} onShowTimeline={() => setShowMyTimeline(true)} />
-          {myTimelineModal}
+          {myTimeline.length > 0 && (
+            <CollapsibleMyTimeline timeline={myTimeline} cards={myTimelineCards} />
+          )}
+          <ScoreBar players={players} myId={myPlayerId} />
           {leaveModal}
         </SafeAreaView>
       );
@@ -1426,7 +1389,10 @@ export default function GameScreen() {
             </View>
           </View>
 
-          <ScoreBar players={players} myId={myPlayerId} onShowTimeline={() => setShowMyTimeline(true)} />
+          {!amActive && myTimeline.length > 0 && (
+            <CollapsibleMyTimeline timeline={myTimeline} cards={myTimelineCards} />
+          )}
+          <ScoreBar players={players} myId={myPlayerId} />
           {flyVisible && (
             <View style={StyleSheet.absoluteFill} pointerEvents="none">
               <Animated.View
@@ -1442,7 +1408,6 @@ export default function GameScreen() {
               </Animated.View>
             </View>
           )}
-          {myTimelineModal}
           {leaveModal}
         </SafeAreaView>
       );
@@ -1827,8 +1792,10 @@ export default function GameScreen() {
           </View>
         </View>
 
-        <ScoreBar players={players} myId={myPlayerId} onShowTimeline={() => setShowMyTimeline(true)} />
-        {myTimelineModal}
+        {!amActive && myTimeline.length > 0 && (
+          <CollapsibleMyTimeline timeline={myTimeline} cards={myTimelineCards} />
+        )}
+        <ScoreBar players={players} myId={myPlayerId} />
         {leaveModal}
       </SafeAreaView>
     );
@@ -1919,42 +1886,7 @@ export default function GameScreen() {
     const revealMyTimeline = (winnerId === myPlayerId && revealPhase === 'result')
       ? [...myTimeline, m.year].sort((a, b) => a - b)
       : myTimeline;
-    const revealMyTimelineModal = showMyTimeline ? (
-      <TouchableOpacity style={[StyleSheet.absoluteFill, styles.modalBackdrop]} activeOpacity={1} onPress={() => setShowMyTimeline(false)}>
-        <View style={styles.myTimelineSheet} onStartShouldSetResponder={() => true}>
-          <View style={styles.myTimelineHeader}>
-            <Text style={styles.myTimelineTitle}>My Timeline</Text>
-            <TouchableOpacity onPress={() => setShowMyTimeline(false)} style={styles.reportCloseBtn}>
-              <Text style={styles.reportCloseText}>✕</Text>
-            </TouchableOpacity>
-          </View>
-          {revealMyTimeline.length === 0 ? (
-            <Text style={styles.myTimelineEmpty}>No cards yet</Text>
-          ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.myTimelineScroll}>
-              {revealMyTimeline.map((year, i) => {
-                // The newly-won card is the last occurrence of m.year in revealMyTimeline
-                // (myMoviePairs isn't updated until handleNextTurn runs)
-                const isNewSlot = winnerId === myPlayerId && year === m.year &&
-                  i === revealMyTimeline.lastIndexOf(m.year);
-                let mid: string | undefined;
-                if (isNewSlot) {
-                  mid = m.id;
-                } else {
-                  const pairsForYear = myMoviePairs.filter(p => p.year === year);
-                  const countBefore = revealMyTimeline.slice(0, i).filter(y => y === year).length;
-                  mid = pairsForYear[countBefore]?.id;
-                }
-                const mv = mid ? activeMovies.find(mv => mv.id === mid) : activeMovies.find(mv => mv.year === year);
-                return mv
-                  ? <CardFront key={i} movie={mv} width={90} height={126} />
-                  : <View key={i} style={styles.myTimelinePlaceholder}><Text style={styles.myTimelinePlaceholderYear}>{year}</Text></View>;
-              })}
-            </ScrollView>
-          )}
-        </View>
-      </TouchableOpacity>
-    ) : null;
+
 
     return (
       <SafeAreaView style={styles.container}>
@@ -2015,8 +1947,10 @@ export default function GameScreen() {
           )}
         </View>
         {winnerId === myPlayerId && revealPhase === 'result' && <ConfettiBurst />}
-        <ScoreBar players={players} myId={myPlayerId} onShowTimeline={() => setShowMyTimeline(true)} />
-        {revealMyTimelineModal}
+        {!amActive && myTimeline.length > 0 && (
+          <CollapsibleMyTimeline timeline={myTimeline} cards={myTimelineCards} />
+        )}
+        <ScoreBar players={players} myId={myPlayerId} />
         {leaveModal}
       </SafeAreaView>
     );
@@ -2025,7 +1959,56 @@ export default function GameScreen() {
   return <LoadingScreen />;
 }
 
-function ScoreBar({ players, myId, onShowTimeline, myTimelineHint }: { players: Player[]; myId: string | null; onShowTimeline?: () => void; myTimelineHint?: boolean }) {
+function CollapsibleMyTimeline({ timeline, cards }: {
+  timeline: number[];
+  cards: (Movie | undefined)[];
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const CARD_W = 52, CARD_H = 68;
+  const OVERLAP = 34;
+
+  const renderCard = (year: number, i: number) => {
+    const mv = cards[i];
+    if (mv) return <CardFront key={i} movie={mv} width={CARD_W} height={CARD_H} />;
+    return (
+      <View key={i} style={styles.collapsedYearCard}>
+        <Text style={styles.collapsedYearText}>{year}</Text>
+      </View>
+    );
+  };
+
+  return (
+    <View style={styles.collapsibleBar}>
+      <View style={styles.collapsibleHeaderRow}>
+        <View style={{ width: 32 }} />
+        <Text style={styles.collapsibleBarLabel}>Your timeline</Text>
+        <TouchableOpacity onPress={() => setExpanded(e => !e)} style={styles.collapsibleToggleBtn}>
+          <Text style={styles.collapsibleToggleIcon}>{expanded ? '▲' : '▼'}</Text>
+        </TouchableOpacity>
+      </View>
+
+      {expanded ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.collapsibleExpandedContent}
+        >
+          {timeline.map((year, i) => renderCard(year, i))}
+        </ScrollView>
+      ) : (
+        <View style={styles.collapsibleFanWrap}>
+          {timeline.map((year, i) => (
+            <View key={i} style={[styles.collapsibleFanCard, i > 0 && { marginLeft: -OVERLAP }]}>
+              {renderCard(year, i)}
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
+function ScoreBar({ players, myId }: { players: Player[]; myId: string | null }) {
   return (
     <View style={styles.scoreBarRow}>
       <ScrollView
@@ -2042,18 +2025,6 @@ function ScoreBar({ players, myId, onShowTimeline, myTimelineHint }: { players: 
           </View>
         ))}
       </ScrollView>
-      {onShowTimeline && (
-        <TouchableOpacity style={styles.timelineBtn} onPress={onShowTimeline}>
-          {myTimelineHint && <Text style={styles.myTimelineHintLabel}>My timeline</Text>}
-          <View style={styles.timelineBtnIcon}>
-            <View style={styles.timelineMiniCard} />
-            <View style={styles.timelineMiniLine} />
-            <View style={styles.timelineMiniCard} />
-            <View style={styles.timelineMiniLine} />
-            <View style={styles.timelineMiniCard} />
-          </View>
-        </TouchableOpacity>
-      )}
     </View>
   );
 }
@@ -3328,6 +3299,63 @@ const styles = StyleSheet.create({
   gameOverPlayerCards: {
     color: C.gold,
     fontSize: FS.base,
+    fontWeight: '800',
+  },
+  collapsibleBar: {
+    paddingTop: 6,
+    paddingBottom: 2,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+  },
+  collapsibleHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginBottom: 6,
+  },
+  collapsibleBarLabel: {
+    flex: 1,
+    textAlign: 'center',
+    color: 'rgba(255,255,255,0.3)',
+    fontSize: FS.micro,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  collapsibleToggleBtn: {
+    width: 32,
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  collapsibleToggleIcon: {
+    color: 'rgba(255,255,255,0.35)',
+    fontSize: 11,
+  },
+  collapsibleFanWrap: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  collapsibleFanCard: {},
+  collapsibleExpandedContent: {
+    gap: 8,
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  collapsedYearCard: {
+    width: 52,
+    height: 68,
+    backgroundColor: C.surface,
+    borderRadius: R.md,
+    borderWidth: 1,
+    borderColor: C.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  collapsedYearText: {
+    color: C.gold,
+    fontSize: FS.sm,
     fontWeight: '800',
   },
 });
