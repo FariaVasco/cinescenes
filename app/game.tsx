@@ -121,6 +121,10 @@ export default function GameScreen() {
   const introShownRef = useRef(false);
   // Insane mode: current turn's movie may not be in the activeMovies store
   const [movieOverride, setMovieOverride] = useState<Movie | null>(null);
+  // Cache of insane mode movies keyed by id (not in activeMovies standard pool)
+  const insaneMoviesCacheRef = useRef<Map<string, Movie>>(new Map());
+  // Prefetched next-turn movie promise for insane mode — started during challenging phase
+  const prefetchedInsaneMovieRef = useRef<Promise<Movie> | null>(null);
 
   const [voiceState, setVoiceState] = useState<'idle' | 'listening' | 'processing' | 'error'>('idle');
   const [voiceError, setVoiceError] = useState('');
@@ -256,10 +260,32 @@ export default function GameScreen() {
     const id = currentTurn?.movie_id;
     if (!id) { setMovieOverride(null); return; }
     if (activeMovies.find(m => m.id === id)) { setMovieOverride(null); return; }
+    if (insaneMoviesCacheRef.current.has(id)) {
+      setMovieOverride(insaneMoviesCacheRef.current.get(id)!);
+      return;
+    }
     db.from('movies').select('*').eq('id', id).single()
-      .then(({ data }) => setMovieOverride((data as Movie) ?? null));
+      .then(({ data }) => {
+        if (data) {
+          insaneMoviesCacheRef.current.set(id, data as Movie);
+          setMovieOverride(data as Movie);
+        } else {
+          setMovieOverride(null);
+        }
+      });
   }, [currentTurn?.movie_id]);
 
+  // Insane mode prefetch: reset on new turn, then kick off next-movie fetch during challenging
+  // so it's ready (or nearly ready) by the time handleNextTurn is called.
+  useEffect(() => {
+    prefetchedInsaneMovieRef.current = null;
+  }, [currentTurn?.id]);
+
+  useEffect(() => {
+    if (currentTurn?.status !== 'challenging' || game?.game_mode !== 'insane') return;
+    if (prefetchedInsaneMovieRef.current) return; // already started
+    prefetchedInsaneMovieRef.current = fetchRandomInsaneMovie(db);
+  }, [currentTurn?.status, currentTurn?.id]);
 
   // Auto-reveal: when all challengers have decided and the lock period has passed,
   // trigger reveal automatically on the active player's device after a short grace period.
@@ -1030,7 +1056,10 @@ export default function GameScreen() {
       );
       let nextMovieId: string;
       if (g.game_mode === 'insane') {
-        const m = await fetchRandomInsaneMovie(db);
+        const m = await (prefetchedInsaneMovieRef.current ?? fetchRandomInsaneMovie(db));
+        prefetchedInsaneMovieRef.current = null;
+        insaneMoviesCacheRef.current.set(m.id, m);
+        setActiveMovies([...activeMovies, m]);
         nextMovieId = m.id;
       } else {
         const usedMovieIds = new Set<string>([
@@ -1114,12 +1143,13 @@ export default function GameScreen() {
   // (handles duplicate years like two 2025 films). Pass myMoviePairs for own timeline,
   // activePlayerPairs for the active player's timeline viewed as observer, or [] for fallback.
   function resolveMovie(years: number[], i: number, pairs: { year: number; id: string }[]): Movie | undefined {
+    const cache = insaneMoviesCacheRef.current;
     const year = years[i];
     if (pairs.length > 0) {
       const pairsForYear = pairs.filter(p => p.year === year);
       const countBefore  = years.slice(0, i).filter(y => y === year).length;
       const pair = pairsForYear[countBefore];
-      if (pair) return activeMovies.find(m => m.id === pair.id);
+      if (pair) return activeMovies.find(m => m.id === pair.id) ?? cache.get(pair.id);
     }
     return activeMovies.find(mv => mv.year === year);
   }
@@ -1131,16 +1161,17 @@ export default function GameScreen() {
   // On challenger devices: use activePlayerPairs (synced at turn start) so the
   // correct movie is shown even when multiple movies share the same year.
   const placedMovies: Movie[] = timeline.map((year, i) => {
+    const cache = insaneMoviesCacheRef.current;
     if (amIActive && myMoviePairs.length > 0) {
       const pairsForYear = myMoviePairs.filter(p => p.year === year);
       const countBefore = timeline.slice(0, i).filter(y => y === year).length;
       const pair = pairsForYear[countBefore];
-      if (pair) return activeMovies.find(m => m.id === pair.id);
+      if (pair) return activeMovies.find(m => m.id === pair.id) ?? cache.get(pair.id);
     } else if (!amIActive && activePlayerPairs.length > 0) {
       const pairsForYear = activePlayerPairs.filter(p => p.year === year);
       const countBefore = timeline.slice(0, i).filter(y => y === year).length;
       const pair = pairsForYear[countBefore];
-      if (pair) return activeMovies.find(m => m.id === pair.id);
+      if (pair) return activeMovies.find(m => m.id === pair.id) ?? cache.get(pair.id);
     }
     return activeMovies.find(mv => mv.year === year);
   }).filter((m): m is Movie => m !== undefined);

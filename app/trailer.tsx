@@ -96,7 +96,7 @@ export default function TrailerScreen() {
     let pool = activeMovies.filter((m) => m.id !== currentMovie!.id);
 
     if (pool.length === 0) {
-      const { data } = await supabase.from('movies').select('*').eq('active', true);
+      const { data } = await supabase.from('movies').select('*').eq('scan_status', 'validated');
       if (data) {
         setActiveMovies(data);
         pool = data.filter((m) => m.id !== currentMovie!.id);

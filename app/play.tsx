@@ -35,7 +35,7 @@ export default function PlayScreen() {
     const { data, error } = await supabase
       .from('movies')
       .select('*')
-      .eq('active', true);
+      .eq('scan_status', 'validated');
     if (data && !error) setActiveMovies(data);
   }
 

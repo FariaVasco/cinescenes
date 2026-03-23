@@ -16,12 +16,9 @@ export interface Database {
           year: number;
           director: string;
           youtube_id: string | null;
-          vimeo_id: string | null;
           safe_start: number | null;
           safe_end: number | null;
-          poster_url: string | null;
           flagged: boolean;
-          active: boolean;
           standard_pool: boolean;
           tags: string[];
           scan_status: 'validated' | 'unvalidated' | 'unusable';
@@ -34,12 +31,9 @@ export interface Database {
           year: number;
           director: string;
           youtube_id?: string | null;
-          vimeo_id?: string | null;
           safe_start?: number | null;
           safe_end?: number | null;
-          poster_url?: string | null;
           flagged?: boolean;
-          active?: boolean;
           standard_pool?: boolean;
           tags?: string[];
           scan_status?: 'validated' | 'unvalidated' | 'unusable';

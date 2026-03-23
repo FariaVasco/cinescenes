@@ -208,7 +208,7 @@ function extractWindowFrames(videoPath, windowStart, windowEnd, framesDir) {
     '-ss', String(windowStart),
     '-to', String(windowEnd),
     '-i',  videoPath,
-    '-vf', `fps=${FRAMES_FPS},scale=160:-2`,
+    '-vf', `fps=${FRAMES_FPS},scale=320:-2`,
     `${framesDir}/frame_%05d.jpg`,
     '-y',
   ], { encoding: 'utf-8' });

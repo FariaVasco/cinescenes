@@ -35,6 +35,7 @@ export default function LocalLobbyScreen() {
   const { joinCode: joinCodeParam, startView } = useLocalSearchParams<{ joinCode?: string; startView?: string }>();
   const {
     activeMovies,
+    setActiveMovies,
     setGame,
     setPlayerId,
     setPlayers,
@@ -307,11 +308,11 @@ export default function LocalLobbyScreen() {
       const startingMovieIdsList: string[] = [];
 
       if (localGame.game_mode === 'insane') {
-        // Insane Mode: fetch random TMDb movies live — no pre-loaded pool.
-        // Starting cards don't need trailers — just need a year and a DB row.
+        // Insane Mode: one starting card per player (from TMDb, like standard mode).
+        // Collected into a buffer so we call setActiveMovies once (avoids stale closure).
+        const insaneMoviesBuffer: Movie[] = [];
         const usedYears = new Set<number>();
-
-        for (let i = 0; i < localPlayers.length; i++) {
+        for (const player of localPlayers) {
           let m: Movie;
           let attempts = 0;
           do {
@@ -320,14 +321,15 @@ export default function LocalLobbyScreen() {
           } while (usedYears.has(m.year) && attempts < 30);
           usedYears.add(m.year);
           startingMovieIdsList.push(m.id);
-          await db
-            .from('players')
-            .update({ timeline: [m.year], coins: 5 })
-            .eq('id', localPlayers[i].id);
+          insaneMoviesBuffer.push(m);
+          await db.from('players').update({ timeline: [m.year], coins: 5 }).eq('id', player.id);
         }
 
-        // First turn movie needs a trailer
-        firstTurnMovie = await fetchRandomInsaneMovie(db, true);
+        // First turn movie (the trailer players will watch on turn 1)
+        firstTurnMovie = await fetchRandomInsaneMovie(db);
+        insaneMoviesBuffer.push(firstTurnMovie);
+        // Add all at once so game.tsx can resolve them without a DB re-fetch
+        setActiveMovies([...activeMovies, ...insaneMoviesBuffer]);
       } else {
         // Standard / Collection: use pre-loaded pool
         let pool: typeof activeMovies;
