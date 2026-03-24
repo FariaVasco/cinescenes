@@ -119,7 +119,7 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
           fallbackRef.current = setTimeout(() => {
             setLoading(false);
             startEndTimer(insaneMode ? 30_000 : duration);
-          }, 15000);
+          }, 3000);
         }, 300);
       },
     }));
@@ -149,12 +149,12 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
         }, 2000);
       } else {
         playerRef.current?.seekTo(safeStart, true);
-        // Fallback: show content after 15s if the inject message never arrives
+        // Fallback: show content after 3s if the inject message never arrives
         if (fallbackRef.current) clearTimeout(fallbackRef.current);
         fallbackRef.current = setTimeout(() => {
           setLoading(false);
           startEndTimer();
-        }, 15000);
+        }, 3000);
       }
     }
 

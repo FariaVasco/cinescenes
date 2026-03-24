@@ -376,57 +376,6 @@ export default function GameScreen() {
       .map(m => ({ year: m.year, id: m.id }));
   }
 
-  // Removes a disconnected player and advances to the next turn.
-  // Safe to call from multiple devices — cross-device guard prevents double-processing.
-  const advanceForStalePlayer = async (stalePlayerId: string, allPlayers: Player[]) => {
-    const g = game;
-    const ct = currentTurnRef.current;
-    if (!g || !ct) return;
-
-    // Cross-device guard: if another device already advanced, bail out
-    const { data: existingNext } = await db
-      .from('turns').select('id').eq('game_id', g.id)
-      .neq('status', 'complete').gt('created_at', ct.created_at).limit(1) as { data: { id: string }[] | null };
-    if (existingNext && existingNext.length > 0) return;
-
-    const remaining = allPlayers.filter(p => p.id !== stalePlayerId);
-    if (remaining.length > 0) {
-      const staleIdx = allPlayers.findIndex(p => p.id === stalePlayerId);
-      const nextPlayer = remaining[staleIdx % remaining.length] ?? remaining[0];
-      const { data: pastTurns } = await db.from('turns').select('movie_id').eq('game_id', g.id);
-      const stalePastIds = new Set<string>(pastTurns?.map((t: { movie_id: string }) => t.movie_id) ?? []);
-      const stalePastYears = new Set<number>(
-        [...stalePastIds].map(id => activeMovies.find(m => m.id === id)?.year).filter((y): y is number => y !== undefined)
-      );
-      const staleStartYears = new Set<number>(
-        allPlayers.flatMap(p => p.timeline ?? []).filter(year => !stalePastYears.has(year))
-      );
-      let staleNextMovieId: string;
-      if (g.game_mode === 'insane') {
-        const m = await fetchRandomInsaneMovie(db);
-        staleNextMovieId = m.id;
-      } else {
-        const usedIds = new Set<string>([
-          ...stalePastIds,
-          ...startingMovieIds,
-          ...activeMovies.filter(m => staleStartYears.has(m.year)).map(m => m.id),
-        ]);
-        const pool = activeMovies.filter(m => !usedIds.has(m.id));
-        const nextMovie = pool.length > 0
-          ? pool[Math.floor(Math.random() * pool.length)]
-          : activeMovies[Math.floor(Math.random() * activeMovies.length)];
-        staleNextMovieId = nextMovie.id;
-      }
-      await db.from('turns').insert({
-        game_id: g.id,
-        active_player_id: nextPlayer.id,
-        movie_id: staleNextMovieId,
-        status: 'drawing',
-      });
-    }
-    await db.from('players').delete().eq('id', stalePlayerId);
-  }
-
   async function poll() {
     const gId = gameIdRef.current;
     if (!gId) return;
@@ -558,24 +507,6 @@ export default function GameScreen() {
         setPlayers(freshPlayers as Player[]);
       }
 
-
-      // Stale active player detection — if active player hasn't sent a heartbeat in
-      // 45 s and the turn is stuck in drawing/placing, skip them automatically.
-      // Uses the same cross-device guard as handleNextTurn so only one device acts.
-      if (
-        freshPlayers &&
-        myPlayerId !== latestTurn.active_player_id &&
-        (latestTurn.status === 'drawing' || latestTurn.status === 'placing')
-      ) {
-        const fp = freshPlayers as Player[];
-        const activeP = fp.find(p => p.id === latestTurn.active_player_id);
-        const staleness = activeP?.last_seen
-          ? Date.now() - new Date(activeP.last_seen).getTime()
-          : Infinity;
-        if (staleness > 45000) {
-          await advanceForStalePlayer(latestTurn.active_player_id, fp);
-        }
-      }
 
       // Auto-reveal: active player's device triggers once the challenge window settles
       if (
