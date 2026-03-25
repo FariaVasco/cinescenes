@@ -94,6 +94,7 @@ export default function GameScreen() {
   const flyAnimY = useRef(new Animated.Value(0)).current;
   const flyAnimOpacity = useRef(new Animated.Value(1)).current;
   const timelineFade = useRef(new Animated.Value(1)).current;
+  const challengerTransitionOpacity = useRef(new Animated.Value(0)).current;
   const [flyVisible, setFlyVisible] = useState(false);
   const [flyStart, setFlyStart] = useState({ x: 0, y: 0 });
   const floatingCardRef = useRef<any>(null);
@@ -169,6 +170,7 @@ export default function GameScreen() {
     setRevealPhase('flip');
     setShowChallengerTimeline(false);
     timelineFade.setValue(1);
+    challengerTransitionOpacity.setValue(0);
     const turn = currentTurnRef.current;
     const t = setTimeout(async () => {
       if (turn) {
@@ -181,11 +183,15 @@ export default function GameScreen() {
     return () => clearTimeout(t);
   }, [currentTurn?.status]);
 
-  // After the result strip appears, if a challenger won, wait 1.8 s then
-  // fade the timeline over to the challenger's view so everyone can see
-  // where the card lands before pressing Next.
+  // After the result strip appears and the card drifts away from the active player's
+  // timeline, transition to the challenger's timeline with a named overlay so everyone
+  // knows whose timeline they're about to see.
   useEffect(() => {
-    if (revealPhase !== 'result') { setShowChallengerTimeline(false); return; }
+    if (revealPhase !== 'result') {
+      setShowChallengerTimeline(false);
+      challengerTransitionOpacity.setValue(0);
+      return;
+    }
     const ct = currentTurnRef.current;
     const m = movie;
     if (!ct || !m) return;
@@ -197,16 +203,27 @@ export default function GameScreen() {
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
       .find(c => validIntervals.includes(c.interval_index));
     if (!wc) return; // trashed — no switch needed
+    // Wait for the card drift animation to finish (trashAfter=1200 + 700ms fly = 1900ms),
+    // then show challenger name overlay, then cross-fade to their timeline.
+    const innerTimers: ReturnType<typeof setTimeout>[] = [];
     const t = setTimeout(() => {
-      Animated.sequence([
-        Animated.timing(timelineFade, { toValue: 0, duration: 350, useNativeDriver: true }),
-        Animated.delay(120),
-      ]).start(() => {
+      // Fade out active player's timeline
+      Animated.timing(timelineFade, { toValue: 0, duration: 450, useNativeDriver: true }).start();
+      // 150ms into fade-out: challenger name fades in
+      innerTimers.push(setTimeout(() => {
+        Animated.timing(challengerTransitionOpacity, { toValue: 1, duration: 350, useNativeDriver: true }).start();
+      }, 150));
+      // 1100ms later: name fades out, switch to challenger timeline, fade in
+      innerTimers.push(setTimeout(() => {
+        Animated.timing(challengerTransitionOpacity, { toValue: 0, duration: 350, useNativeDriver: true }).start();
         setShowChallengerTimeline(true);
-        Animated.timing(timelineFade, { toValue: 1, duration: 500, useNativeDriver: true }).start();
-      });
-    }, 1800);
-    return () => clearTimeout(t);
+        Animated.timing(timelineFade, { toValue: 1, duration: 550, useNativeDriver: true }).start();
+      }, 1100));
+    }, 1950);
+    return () => {
+      clearTimeout(t);
+      innerTimers.forEach(clearTimeout);
+    };
   }, [revealPhase]);
 
   // Lock the Reveal button for 5.5 s after challenging starts
@@ -1850,7 +1867,7 @@ export default function GameScreen() {
               placedMovies={revealPlacedMovies}
               revealingMovie={m}
               insertDelay={showChallengerTimeline ? 700 : undefined}
-              trashAfter={isTrash && revealPhase === 'result' ? 1000 : undefined}
+              trashAfter={(isTrash || (!!winningChallenger && !showChallengerTimeline)) && revealPhase === 'result' ? 1200 : undefined}
             />
           </Animated.View>
           <Animated.View style={[styles.leftOverlay, { opacity: timelineFade }]}>
@@ -1860,6 +1877,18 @@ export default function GameScreen() {
               </Text>
             )}
           </Animated.View>
+          {/* Challenger name overlay — shown during the cross-fade between timelines */}
+          {revealPhase === 'result' && winningChallenger && !activeCorrect && (
+            <Animated.View
+              pointerEvents="none"
+              style={[styles.challengerTransitionOverlay, { opacity: challengerTransitionOpacity }]}
+            >
+              <Text style={styles.challengerTransitionName}>
+                {getPlayer(winningChallenger.challenger_id)?.display_name}
+              </Text>
+              <Text style={styles.challengerTransitionSub}>took the card</Text>
+            </Animated.View>
+          )}
           {revealPhase === 'result' && (
             <View style={styles.revealStrip}>
               <View style={[styles.revealStripAccent, { backgroundColor: isTrash ? C.danger : C.gold }]} />
@@ -2923,6 +2952,32 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   revealStripBtnText: { color: C.textOnGold, fontSize: FS.base, fontWeight: '900', letterSpacing: 0.3 },
+  challengerTransitionOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 56, // above score bar
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  challengerTransitionName: {
+    color: C.textPrimary,
+    fontSize: 28,
+    fontWeight: '900',
+    letterSpacing: 0.3,
+    textAlign: 'center',
+  },
+  challengerTransitionSub: {
+    color: C.gold,
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
+    textAlign: 'center',
+    marginTop: 8,
+    opacity: 0.85,
+  },
   // Used by GameOverScreen
   revealNextBtn: {
     backgroundColor: C.gold,

@@ -82,24 +82,35 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
       insertSlotMargin.setValue(0);
       return;
     }
+    // Slot 0 (before all cards) or last slot (after all cards) — open space already exists,
+    // no need to push the timeline apart. Pre-set to full size immediately.
+    const isExtreme = placedInterval === 0 || placedInterval === timeline.length;
     setInsertVisible(false);
     setInsertOverlay(null);
     insertScale.setValue(0.85);
     insertOpacity.setValue(0);
     insertTranslateY.setValue(-600);
-    insertSlotWidth.setValue(0);
-    insertSlotMargin.setValue(0);
+    if (isExtreme) {
+      insertSlotWidth.setValue(80);
+      insertSlotMargin.setValue(24);
+    } else {
+      insertSlotWidth.setValue(0);
+      insertSlotMargin.setValue(0);
+    }
     const t = setTimeout(() => {
       const runAnim = () => {
-        Animated.parallel([
-          // Slot opens to receive the card
-          Animated.spring(insertSlotWidth,  { toValue: 80, damping: 16, stiffness: 140, useNativeDriver: false }),
-          Animated.spring(insertSlotMargin, { toValue: 24, damping: 16, stiffness: 140, useNativeDriver: false }),
-          // Card flies in from above
-          Animated.spring(insertTranslateY, { toValue: 0, damping: 14, stiffness: 120, useNativeDriver: true }),
-          Animated.spring(insertScale,      { toValue: 1, damping: 14, stiffness: 180, useNativeDriver: true }),
+        // Card entry speed mirrors the trash fly-off: 700ms Easing.out(cubic) (decelerate into slot)
+        // Slot expansion (non-extreme only) mirrors the trash slot collapse: 600ms Easing.inOut(quad)
+        const anims: Animated.CompositeAnimation[] = [
+          Animated.timing(insertTranslateY, { toValue: 0, duration: 700, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+          Animated.timing(insertScale,      { toValue: 1, duration: 700, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
           Animated.timing(insertOpacity,    { toValue: 1, duration: 200, useNativeDriver: true }),
-        ]).start(() => {
+        ];
+        if (!isExtreme) {
+          anims.push(Animated.timing(insertSlotWidth,  { toValue: 80, duration: 600, easing: Easing.inOut(Easing.quad), useNativeDriver: false }));
+          anims.push(Animated.timing(insertSlotMargin, { toValue: 24, duration: 600, easing: Easing.inOut(Easing.quad), useNativeDriver: false }));
+        }
+        Animated.parallel(anims).start(() => {
           setInsertVisible(true);
           setInsertOverlay(null);
         });
@@ -110,9 +121,8 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
         let wrapPos: { pageX: number; pageY: number } | null = null;
         const tryStart = () => {
           if (!slotPos || !wrapPos) return;
-          // +24: account for the marginHorizontal that will be applied when slot expands
+          // +24: account for the marginHorizontal applied when the slot is at full size
           setInsertOverlay({ x: slotPos.pageX - wrapPos.pageX + 24, y: slotPos.pageY - wrapPos.pageY });
-          // Start translateY far enough above the screen
           insertTranslateY.setValue(-(slotPos.pageY + 100));
           runAnim();
         };
