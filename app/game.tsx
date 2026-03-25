@@ -252,7 +252,7 @@ export default function GameScreen() {
     skipTimerRef.current = setTimeout(() => setCanSkipTrailer(true), minMs);
     return () => { if (skipTimerRef.current) { clearTimeout(skipTimerRef.current); skipTimerRef.current = null; } };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trailerEnded, currentTurn?.id]);
+  }, [trailerEnded, currentTurn?.id, game?.visibility]);
 
   // Fetch current turn movie from DB when not in the store (insane mode movies)
   useEffect(() => {
@@ -1458,6 +1458,23 @@ export default function GameScreen() {
       );
     }
 
+    // ── Observers in private games: show waiting screen instead of trailer ──
+    if (!amActive && game?.visibility !== 'public') {
+      return (
+        <View style={styles.endedOverlay}>
+          <SafeAreaView style={styles.endedInner} edges={['top', 'bottom']}>
+            <View style={styles.endedCenter}>
+              <Text style={styles.endedTitle}>🎬</Text>
+              <Text style={styles.endedWaiting}>
+                {activePlayer?.display_name} is watching the trailer…
+              </Text>
+            </View>
+          </SafeAreaView>
+          {leaveModal}
+        </View>
+      );
+    }
+
     // ── Trailer playing ──
     return (
       <View style={styles.trailerContainer}>
@@ -1877,11 +1894,11 @@ export default function GameScreen() {
             </View>
           )}
         </View>
-        {winnerId === myPlayerId && revealPhase === 'result' && <ConfettiBurst />}
         {!amActive && myTimeline.length > 0 && (
           <CollapsibleMyTimeline timeline={myTimeline} cards={myTimelineCards} />
         )}
         <ScoreBar players={players} myId={myPlayerId} />
+        {winnerId === myPlayerId && revealPhase === 'result' && <ConfettiBurst />}
         {leaveModal}
       </SafeAreaView>
     );
@@ -1898,9 +1915,9 @@ function CollapsibleMyTimeline({ timeline, cards }: {
   const CARD_W = 52, CARD_H = 68;
   const OVERLAP = 34;
 
-  const renderCard = (year: number, i: number) => {
+  const renderCard = (year: number, i: number, full: boolean) => {
     const mv = cards[i];
-    if (mv) return <CardFront key={i} movie={mv} width={CARD_W} height={CARD_H} />;
+    if (full && mv) return <CardFront key={i} movie={mv} width={CARD_W} height={CARD_H} />;
     return (
       <View key={i} style={styles.collapsedYearCard}>
         <Text style={styles.collapsedYearText}>{year}</Text>
@@ -1910,30 +1927,29 @@ function CollapsibleMyTimeline({ timeline, cards }: {
 
   return (
     <View style={styles.collapsibleBar}>
-      <View style={styles.collapsibleHeaderRow}>
-        <View style={{ width: 32 }} />
-        <Text style={styles.collapsibleBarLabel}>Your timeline</Text>
-        <TouchableOpacity onPress={() => setExpanded(e => !e)} style={styles.collapsibleToggleBtn}>
-          <Text style={styles.collapsibleToggleIcon}>{expanded ? '▲' : '▼'}</Text>
-        </TouchableOpacity>
-      </View>
-
       {expanded ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.collapsibleExpandedContent}
-        >
-          {timeline.map((year, i) => renderCard(year, i))}
-        </ScrollView>
+        <>
+          <Text style={styles.collapsibleBarLabel}>Your timeline</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.collapsibleExpandedContent}>
+            {timeline.map((year, i) => renderCard(year, i, true))}
+          </ScrollView>
+          <TouchableOpacity onPress={() => setExpanded(false)} style={styles.collapsibleCollapseBtn}>
+            <Text style={styles.collapsibleCollapseBtnText}>▲ collapse</Text>
+          </TouchableOpacity>
+        </>
       ) : (
-        <View style={styles.collapsibleFanWrap}>
-          {timeline.map((year, i) => (
-            <View key={i} style={[styles.collapsibleFanCard, i > 0 && { marginLeft: -OVERLAP }]}>
-              {renderCard(year, i)}
-            </View>
-          ))}
-        </View>
+        <TouchableOpacity onPress={() => setExpanded(true)} activeOpacity={0.75}
+          style={styles.collapsibleFanTouchable}>
+          <Text style={styles.collapsibleBarLabel}>Your timeline ▼</Text>
+          <View style={styles.collapsibleFanWrap}>
+            {timeline.map((year, i) => (
+              <View key={i} style={[styles.collapsibleFanCard, i > 0 && { marginLeft: -OVERLAP }]}>
+                {renderCard(year, i, false)}
+              </View>
+            ))}
+          </View>
+        </TouchableOpacity>
       )}
     </View>
   );
@@ -3238,30 +3254,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     alignItems: 'center',
   },
-  collapsibleHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
-    marginBottom: 6,
-  },
   collapsibleBarLabel: {
-    flex: 1,
     textAlign: 'center',
     color: 'rgba(255,255,255,0.3)',
     fontSize: FS.micro,
     fontWeight: '700',
     letterSpacing: 0.8,
     textTransform: 'uppercase',
+    marginBottom: 6,
   },
-  collapsibleToggleBtn: {
-    width: 32,
+  collapsibleFanTouchable: {
     alignItems: 'center',
-    paddingVertical: 4,
+    width: '100%',
   },
-  collapsibleToggleIcon: {
+  collapsibleCollapseBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+  },
+  collapsibleCollapseBtnText: {
     color: 'rgba(255,255,255,0.35)',
-    fontSize: 11,
+    fontSize: FS.micro,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   collapsibleFanWrap: {
     flexDirection: 'row',

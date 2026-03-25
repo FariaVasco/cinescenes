@@ -63,19 +63,22 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
 
   // Card insertion animation — used when insertDelay is set
   const [insertVisible, setInsertVisible] = useState(false);
-  const insertScale = useRef(new Animated.Value(0)).current;
+  const insertScale = useRef(new Animated.Value(0.6)).current;
   const insertOpacity = useRef(new Animated.Value(0)).current;
+  const insertTranslateY = useRef(new Animated.Value(-250)).current;
 
   useEffect(() => {
     if (!insertDelay || !revealingMovie) { setInsertVisible(false); return; }
     setInsertVisible(false);
-    insertScale.setValue(0);
+    insertScale.setValue(0.6);
     insertOpacity.setValue(0);
+    insertTranslateY.setValue(-250);
     const t = setTimeout(() => {
       setInsertVisible(true);
       Animated.parallel([
         Animated.spring(insertScale, { toValue: 1, damping: 14, stiffness: 180, useNativeDriver: true }),
-        Animated.timing(insertOpacity, { toValue: 1, duration: 220, useNativeDriver: true }),
+        Animated.spring(insertTranslateY, { toValue: 0, damping: 12, stiffness: 120, useNativeDriver: true }),
+        Animated.timing(insertOpacity, { toValue: 1, duration: 180, useNativeDriver: true }),
       ]).start();
     }, insertDelay);
     return () => clearTimeout(t);
@@ -160,7 +163,8 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
           return (
             <Animated.View
               key={`gap-${index}`}
-              style={{ marginHorizontal: 24, opacity: insertOpacity, transform: [{ scale: insertScale }] }}
+              style={{ marginHorizontal: 24, opacity: insertOpacity,
+              transform: [{ scale: insertScale }, { translateY: insertTranslateY }] }}
             >
               <CardFront movie={revealingMovie} width={80} height={100} />
             </Animated.View>
@@ -180,7 +184,7 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
           return (
             <Animated.View
               key={`gap-${index}`}
-              style={{ width: collapseWidth, marginHorizontal: collapseMargin, overflow: 'hidden' }}
+              style={{ width: collapseWidth, marginHorizontal: collapseMargin }}
             >
               <Animated.View style={{ opacity: op, transform: [{ translateX: tx }, { translateY: ty }, { rotate: rot }] }}>
                 <CardFront movie={revealingMovie} width={80} height={100} />

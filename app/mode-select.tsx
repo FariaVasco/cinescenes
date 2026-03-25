@@ -159,18 +159,7 @@ export default function ModeSelectScreen() {
               <Text style={styles.freeBadgeText}>FREE</Text>
             </View>
           </View>
-          <Text style={styles.modeSub}>500+ curated movies</Text>
-        </TouchableOpacity>
-
-        {/* Collections */}
-        <TouchableOpacity style={[styles.modeCard, styles.modeCardPremium]} onPress={handleCollections} activeOpacity={0.8}>
-          <View style={styles.modeRow}>
-            <Text style={styles.modeName}>Collections</Text>
-            <View style={styles.premiumBadge}>
-              <Text style={styles.premiumBadgeText}>★ PREMIUM</Text>
-            </View>
-          </View>
-          <Text style={styles.modeSub}>{collectionSubtitle}</Text>
+          <Text style={styles.modeSub}>500+ curated movies · Trailer on every phone</Text>
         </TouchableOpacity>
 
         {/* Insane Mode */}
@@ -181,18 +170,29 @@ export default function ModeSelectScreen() {
               <Text style={styles.premiumBadgeText}>★ PREMIUM</Text>
             </View>
           </View>
-          <Text style={styles.modeSub}>Every movie ever made</Text>
+          <Text style={styles.modeSub}>Every movie ever made · Trailer on host's phone only</Text>
         </TouchableOpacity>
 
-        {/* Coming soon: Who's the Director? */}
+        {/* Collections — coming soon */}
         <View style={[styles.modeCard, styles.modeCardDisabled]}>
           <View style={styles.modeRow}>
-            <Text style={[styles.modeName, styles.modeNameDisabled]}>Who's the Director?</Text>
+            <Text style={[styles.modeName, styles.modeNameDisabled]}>Collections</Text>
             <View style={styles.soonBadge}>
               <Text style={styles.soonBadgeText}>COMING SOON</Text>
             </View>
           </View>
-          <Text style={styles.modeSub}>Guess movies by their director</Text>
+          <Text style={styles.modeSub}>Christmas · Horror · The 2010s…</Text>
+        </View>
+
+        {/* Coming soon: Movie Trivia */}
+        <View style={[styles.modeCard, styles.modeCardDisabled]}>
+          <View style={styles.modeRow}>
+            <Text style={[styles.modeName, styles.modeNameDisabled]}>Movie Trivia</Text>
+            <View style={styles.soonBadge}>
+              <Text style={styles.soonBadgeText}>COMING SOON</Text>
+            </View>
+          </View>
+          <Text style={styles.modeSub}>Answer questions about the movies you've placed</Text>
         </View>
       </View>
 
