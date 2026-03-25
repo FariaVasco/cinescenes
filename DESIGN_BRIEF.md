@@ -1,33 +1,41 @@
-# Cinescenes — Design Brief
-> Complete handoff document for the Figma redesign. Covers brand, design system, all screens, all components, and redesign direction.
+# Cinescenes — Product Brief
+> Complete description of the app, the game, every screen, every state, and every interaction. Written for a designer approaching the product for the first time with full creative freedom.
 
 ---
 
 ## 1. What Is Cinescenes?
 
-Cinescenes is a **party card game about movies**. Players watch a mystery trailer — no title, no year shown — and must place the movie in its correct chronological position on their personal timeline. The player who builds the longest accurate timeline wins.
+Cinescenes is a **party game about movies** for 2–8 players. Players watch a mystery movie trailer — with the title and year hidden — and must place the film in its correct chronological position on their personal timeline. The first player to collect 10 cards wins.
 
-Two editions:
-- **Physical**: printed cards with a QR code on the back → scan → watch trailer on phone
-- **Digital**: fully app-based, up to 8 players on the same Wi-Fi
+The game exists in two editions:
 
-The core tension: *you know you've seen this film… but was it 1987 or 1994?*
+- **Physical edition**: A boxed card game. Each physical card has a QR code on the back. Players scan the code with their phone to watch the trailer. The game is played around a shared phone or TV.
+- **Digital edition**: Fully app-based. Up to 8 players connect on the same Wi-Fi network. Each player uses their own phone. No physical cards required.
+
+Both editions use the same app. The physical and digital flows diverge early and rejoin at the game screen.
+
+The core tension of the game: *you recognise the film... but was it 1987 or 1994?*
 
 ---
 
-## 2. Emotional Experience
+## 2. The Emotional Arc
 
-| Moment | Feeling |
-|--------|---------|
-| Opening the app | Anticipation — settling into a dark cinema seat |
-| The trailer starts | Suspense. The screen becomes everything |
-| "I know it!" | Rush of recognition. Adrenaline |
-| Placing the card | Strategic tension. Second-guessing |
-| The challenge window | Social electricity. Reading the room |
-| The card flips | Revelation. The audience leans in |
-| Correct placement | Triumph. Prestige |
-| Wrong placement | Theatrical groan. Laughter |
-| Winning | The credits roll on your victory |
+The game is designed around a sequence of distinct emotional beats. Understanding these moments is essential to understanding why the UI is structured the way it is.
+
+| Moment | What's happening | How the player feels |
+|--------|-----------------|---------------------|
+| Opening the app | The session is about to begin | Anticipation — settling into a cinema seat before the film |
+| The trailer starts | A mystery clip plays with no title | Suspense. Total focus on the screen |
+| Recognition | A detail clicks — you know this film | Rush of adrenaline. The urge to shout it out |
+| "I know it!" | The player commits | Confidence or bluff — others are watching |
+| Placing the card | Choosing a slot in the timeline | Strategic tension — second-guessing yourself |
+| The challenge window | Other players decide whether to bet against you | Social electricity. Reading the room. Who's confident? Who's nervous? |
+| Picking a challenge position | A challenger picks their own slot on your timeline | High stakes — committing real coins |
+| The card flips | The year is revealed | The whole room leans in. Revelation. |
+| Correct placement | You nailed it | Triumph. Vindication |
+| Wrong placement | You got it wrong | Theatrical groan, laughter, the card flies away |
+| Challenger wins | Someone else was right | Begrudging respect — and they take your card |
+| Reaching 10 cards | Victory | The credits roll on your win |
 
 ---
 
@@ -37,476 +45,675 @@ The core tension: *you know you've seen this film… but was it 1987 or 1994?*
 > *Cinescenes is a love letter to cinema, disguised as a party game.*
 
 ### Personality
-- **Cinematic** — serious about film, not about itself
-- **Prestigious** — the feel of a film festival, not a quiz app
-- **Tactile** — digital UI that feels like handling real cards
-- **Social** — built for a room full of people
-
-### Visual references
-- The Criterion Collection — editorial, typographic restraint
-- BAFTA / Academy Awards — gold, dark, formal but exciting
-- Film noir — deep shadow, high contrast, dramatic light
-- A vintage movie palace at night — velvet darkness, gold ornament
-
-### What it is NOT
-- Bright, casual, cartoonish
-- Generic mobile game UI
-- Neon / cyberpunk
-- Playful rounded bubbly shapes
+- **Cinematic** — serious about film, not about itself. This is a game for people who care about movies.
+- **Prestigious** — the feel of a film festival, not a casual quiz app.
+- **Tactile** — even on a phone, the experience should feel like handling real cards.
+- **Social** — designed for a room full of people. The UI serves the group, not just the individual player.
 
 ---
 
-## 4. Design Pillars
+## 4. Complete Game Rules
 
-### 1. DARK AS THE CINEMA
-The primary background (`#100a20`) is the darkness of a cinema before the film starts — deep purple-navy, almost black. All content is lit by the screen.
+### Setup
+- 2–8 players connect to the same game session
+- Each player receives **1 starting card** before the first turn begins. The starting card is dealt face-up (year, title, and director visible) so every player begins with exactly one anchor point in their timeline
+- Each player starts with **5 coins**
 
-### 2. GOLD IS EARNED
-Gold (`#f5c518`) is used exclusively for things that matter: the brand, primary actions, earned rewards, the active player. Never decorative. The colour of trophies, IMDb stars, house lights.
+### The timeline
+Each player maintains their own personal timeline — a horizontal row of movie cards arranged in chronological order from left to right (oldest on the left, newest on the right). Cards are placed with gaps between them. The timeline grows as players collect more cards.
 
-### 3. CARDS ARE REAL OBJECTS
-The movie cards are the soul of the game. They should feel like premium playing cards — weighted, physical. Dark backgrounds, large typography, precise proportions.
+### Turn structure
+Turns cycle through all players in order. On each turn, one player is the **active player** and all others are **observers**.
 
-### 4. MOTION IS NARRATIVE
-Every animation tells a small story. The wheel spin is a drawing of fate. The card flip is the moment of truth. Animations are never decorative — they are beats in the game's drama.
+**Step 1 — Watch the trailer**
+The active player watches a mystery movie trailer. No title, no year, no director is displayed anywhere during playback. The trailer plays from a "safe window" — a portion of the clip that has been pre-screened to avoid any text overlays, title cards, or obvious spoilers.
+
+**Step 2 — "I know it!"**
+When the active player recognises the film (or wants to make a guess), they tap "I know it!" to stop the trailer and proceed. In public games, this button only becomes available after watching a minimum portion of the safe window. In private games, it is immediately available.
+
+**Step 3 — Submit a guess**
+The active player enters the movie title and director name. Voice input is available — the player can speak the title instead of typing.
+
+**Step 4 — Place the card**
+The active player's timeline is shown with interactive gap slots between each existing card. The player selects a gap — indicating which year they think the film belongs in relation to their existing cards — and confirms the placement. A face-down card (back side visible) appears in the chosen gap to mark the pick.
+
+**Step 5 — Challenge window**
+Immediately after placement, a 5-second countdown begins for all observers. Each observer independently decides:
+- **Challenge** (costs 1 coin): The observer believes the active player placed the card in the wrong position
+- **Pass**: The observer does not challenge
+
+Observers cannot challenge if they have 0 coins. The active player waits.
+
+**Step 6 — Sequential picking (if at least one observer challenged)**
+Challengers take turns picking their own alternative position on the active player's timeline. This happens one challenger at a time, in the order they joined the game:
+- The active player's chosen gap is **blocked** — no one can pick that position
+- Each gap can only be picked by one challenger — once claimed, it's blocked for subsequent challengers
+- Each challenger's coin visually lands on their chosen gap
+- A challenger (except the very first) may **withdraw** before picking — their coin is returned and they forfeit the challenge
+- The active player watches as challengers claim positions on their timeline
+
+If nobody challenged, the game skips directly to the reveal.
+
+**Step 7 — The reveal**
+The face-down card in the timeline flips to reveal the movie: year, title, and director name are now visible. Every player sees this simultaneously.
+
+**Step 8 — Result**
+The correct year is now known. One of three outcomes:
+
+1. **Active player correct** — The active player's chosen position was right (the card belongs between those two years). The card stays in the active player's timeline permanently. If any challenger also happened to pick a correct alternative position, the active player earns 1 bonus coin as a reward for being right while challenged.
+
+2. **Challenger correct** — The active player placed incorrectly, but a challenger picked a correct alternative position. The card is moved to that challenger's timeline. The challenger's coin is returned (no net coin loss). If multiple challengers all picked correct positions, the one whose position was most accurate wins (the gap whose neighbouring years are closest to the film's actual year). If the active player's original position was also technically correct, their coin is refunded but the card still moves to the winning challenger's timeline.
+
+3. **Trash** — Neither the active player nor any challenger placed the card correctly. The card is discarded — it belongs to no one. All challenger coins are lost. The card flies off-screen with an animation.
+
+**Step 9 — Next turn**
+Play passes to the next player. The game continues until someone reaches 10 cards.
+
+### Winning
+The first player to have 10 cards in their timeline wins the game immediately.
+
+### Coins in detail
+Coins are the betting currency of the challenge system:
+- Starting amount: 5 coins per player
+- **Spend**: 1 coin to challenge on any turn
+- **Earn**: 1 bonus coin if you placed correctly and at least one challenger also placed correctly (vindication bonus)
+- **Refund**: Coin returned if you withdraw from a challenge (before picking a position) or if the active player placed correctly and you challenged — you lose your coin
+- **Win a challenge**: Coin refunded (no net loss) + you receive the card
 
 ---
 
-## 5. Color System
+## 5. App Navigation Structure
+
+The app has two separate entry paths (physical vs. digital) that converge at the game screen.
 
 ```
-── Backgrounds ──────────────────────────────────────────────────────
-bg           #100a20    Primary screen — cinema darkness
-surface      #1e1630    Cards, panels, inputs, chips
-surfaceHigh  #2a1f4a    Modals, elevated panels, bottom sheets
-
-── Brand ────────────────────────────────────────────────────────────
-gold         #f5c518    Primary accent — prestige, action, reward
-goldFaint    rgba(245,197,24, 0.12)   Subtle gold wash (active states)
-goldGlow     rgba(245,197,24, 0.25)   Gold halos on buttons and rings
-
-── Semantic ─────────────────────────────────────────────────────────
-danger       #e63946    Challenge, errors, destructive actions
-
-── Text ─────────────────────────────────────────────────────────────
-textPrimary  #ffffff    Headlines, primary content
-textSub      #a0a0b0    Secondary / supporting text
-textMuted    #66667a    Hints, captions, disabled
-textOnGold   #0a0a0a    Text rendered on gold backgrounds
-
-── Borders ──────────────────────────────────────────────────────────
-border       rgba(255,255,255, 0.10)   Standard hairline dividers
-borderSubtle rgba(255,255,255, 0.06)   Barely-there separators
-
-── Status Badges ────────────────────────────────────────────────────
-free         rgba(34,197,94, 0.15)    bg  /  #4ade80  text
-premium      goldFaint               bg  /  gold     text + border
-comingSoon   rgba(255,255,255,0.06)   bg  /  textMuted text
-```
-
-### Decade Card Colors
-Cards have unique backgrounds by decade — dark cinematic hues that evoke each era:
-
-| Decade | Hex | Era |
-|--------|-----|-----|
-| 1920s | `#3D2B1F` | Warm sepia — silent era |
-| 1930s | `#1B3252` | Deep navy — noir / art deco |
-| 1940s | `#4A1522` | Dark burgundy — wartime |
-| 1950s | `#0C5E3E` | Deep teal — Technicolor |
-| 1960s | `#7A1E00` | Vermillion — New Wave |
-| 1970s | `#7A3C00` | Burnt sienna — New Hollywood |
-| 1980s | `#380066` | Deep violet — neon / blockbuster |
-| 1990s | `#003E5C` | Ocean blue — indie / Sundance |
-| 2000s | `#1B3D1B` | Forest green — CGI / digital |
-| 2010s | `#1B1B3D` | Midnight indigo — streaming |
-| 2020s | `#2D0A3D` | Deep plum — modern |
-
-Colors are linearly interpolated between adjacent decades for each individual year.
-
----
-
-## 6. Typography
-
-System font (SF Pro on iOS, Roboto on Android). No custom typeface — heavy weights + controlled letter-spacing achieve the premium feel.
-
-| Style | Size | Weight | Letter Spacing | Case | Default Color | Usage |
-|-------|------|--------|----------------|------|---------------|-------|
-| `hero` | 40 | 900 | — | — | textPrimary | Year on CardFront |
-| `display` | 28 | 900 | 0.3 | — | textPrimary | Major screen titles, paywall headline |
-| `title` | 22 | 900 | 0.3 | — | textPrimary | Section headers |
-| `subtitle` | 18 | 700 | 0.3 | — | textPrimary | Sub-headers |
-| `body` | 16 | 500 | — | — | textSub | Body copy |
-| `label` | 14 | 600 | 0.3 | — | textPrimary | Button labels, form labels |
-| `overline` | 11 | 700 | 2.0 | UPPERCASE | gold | Section labels, screen category tags |
-| `caption` | 12 | 500 | 0.3 | — | textMuted | Metadata, hints, timestamps |
-| `micro` | 9 | 700 | 1.5 | UPPERCASE | textMuted | Watermarks, badge labels |
-| `wordmark` | varies | 900 | 6 | UPPERCASE | gold | CINESCENES logotype only |
-
----
-
-## 7. Border Radius Scale
-
-```
-xs   = 6    Badges, small tags
-sm   = 10   Small interactive elements, icon buttons
-md   = 12   Inputs, minor cards
-btn  = 16   Primary action buttons
-card = 20   Cards, panels, bottom sheets, modals
-full = 999  Circles, pills
+Landing
+ ├── How to Play (Rules)
+ └── Let's Play
+      ├── Use Your Deck (physical cards)
+      │    └── Scanner → Trailer (standalone)
+      └── Go Digital
+           ├── Mode Select
+           │    ├── Standard (free)
+           │    ├── Insane Mode (premium — requires sign-in)
+           │    ├── Collections (coming soon)
+           │    └── Movie Trivia (coming soon)
+           ├── Sign In (if not authenticated, for premium modes)
+           └── Local Lobby
+                ├── Create game → wait for players → start
+                ├── Join game (enter room code) → wait for host
+                └── Browse open games → join a public game
+                     └── Game Screen (all turns)
+                          └── Win Screen
 ```
 
 ---
 
-## 8. Spacing Scale
+## 6. Screen-by-Screen Description
 
-```
-xs =  4    Tight internal spacing (icon ↔ label)
-sm =  8    Default internal gap
-md = 16    Standard section gap
-lg = 24    Large section separation
-xl = 32    Screen-level horizontal padding
-```
+### Screen 1 — Landing
+**Orientation**: Portrait
+**Purpose**: Entry point. First impression of the brand.
 
----
+**What's on screen:**
+- The Cinescenes logo: a clapperboard icon with the wordmark "CINESCENES" beneath it. This is the brand mark.
+- A primary call-to-action button: "Let's Play"
+- A secondary link: "How to Play"
 
-## 9. Icon System
-
-### Style spec
-- **Type**: Stroke / outline icons (not filled)
-- **Stroke weight**: 1.5px at 24dp canvas
-- **Corners**: Rounded cap + rounded join
-- **Size grid**: 16dp (inline), 20dp (UI standard), 24dp (prominent), 32dp (illustrated), 96dp (rules hero)
-- **Color default**: `textSub` (#a0a0b0)
-- **Color active / brand**: `gold` (#f5c518)
-- **Color destructive**: `danger` (#e63946)
-
-### Cinema vocabulary (preferred before generic equivalents)
-
-| Concept | Cinema Motif |
-|---------|-------------|
-| The game / draw | Clapperboard |
-| A movie | Film reel |
-| Watching | Projector beam |
-| Time / year | Film strip with tick marks |
-| Recognition | Spotlight circle |
-| Victory | Director's chair |
-| Challenge | Film reel torn in two |
-| Wrong / elimination | Film canister with X |
-| Coin / currency | Round token with star |
-| Voice input | Directional boom mic |
-| Report | Flag planted in film strip |
-| Cast to TV | Projector throwing beam |
-| Timeline | Horizontal film strip |
-| Next / advance | Clapperboard clap arrow |
-
-### Full icon inventory
-
-**UI Icons (functional — must be crisp at 20dp)**
-
-| ID | Current (code) | Replacement | Context |
-|----|---------------|-------------|---------|
-| `ic_coin` | 🪙 emoji | Round token with star or "C" cutout, gold | ScoreBar, rules screen |
-| `ic_mic` | 🎤 emoji | Directional boom mic, cinema style | Voice button — active |
-| `ic_mic_off` | — | Same mic with diagonal slash | Voice button — idle |
-| `ic_flag` | ⚑ text | Flag on a stick, thin stroke | Report trailer |
-| `ic_timeline` | nested views | Horizontal film strip, 3 frames | ScoreBar view-timeline |
-| `ic_back` | ← text | Thin chevron left | All back navigation |
-| `ic_close` | ✕ text | Thin X | Modal dismiss |
-| `ic_confirm` | ✓ text | Thin checkmark | Timeline slot confirm |
-| `ic_replay` | ↺ text | Circular arrow (clockwise) | Replay trailer |
-| `ic_cast` | MaterialCommunityIcons | Projector throwing beam right | Cast / TV mode |
-| `ic_chevron_right` | → text | Thin chevron right | Navigation CTAs |
-
-**Result / State Icons (illustrated — 24–32dp)**
-
-| ID | Current | Replacement | Context |
-|----|---------|-------------|---------|
-| `ic_result_correct` | 🎉 | Star burst or clapperboard with checkmark | Active player placed correctly |
-| `ic_result_challenge` | 🎯 | Spotlight hitting a target | Challenger placed correctly |
-| `ic_result_trash` | 🗑️ | Film canister with X | Nobody got it right |
-| `ic_trophy` | 🏆 | Director's chair or award silhouette | Win screen |
-
-**Rules Screen Illustrations (hero — 80–96dp, outline, gold)**
-
-| ID | Step |
-|----|------|
-| `ill_draw` | Draw a Card — clapperboard |
-| `ill_watch` | Watch the Clip — projector with beam |
-| `ill_know_it` | Know It? Say It — clapperboard mid-clap |
-| `ill_coin` | Earn Coins — coin / token |
-| `ill_starting` | Starting Card — single card with film strip corner |
-| `ill_place` | Place It Right — horizontal film strip (timeline) |
-| `ill_challenge` | Challenge! — two film reels facing each other |
-| `ill_reveal` | The Reveal — card mid-flip |
-| `ill_keep` | Keep or Lose — checkmark inside film reel |
-| `ill_win` | Race to Win — director's chair with spotlight |
-
-**Decorative Background Elements (all screens)**
-
-Custom SVG silhouettes placed absolutely, rotated randomly, at 5–8% opacity, `pointerEvents="none"`:
-- `deco_clapperboard` — clapperboard silhouette
-- `deco_film_reel` — film reel circle
-- `deco_star` — five-point cinema star
-- `deco_projector` — vintage projector silhouette
-- `deco_strip` — short film strip segment (3 frames)
+**Interactions:**
+- Tapping "Let's Play" navigates to the Play screen
+- Tapping "How to Play" navigates to the Rules screen
 
 ---
 
-## 10. Components
+### Screen 2 — Play (Mode Entry)
+**Orientation**: Portrait
+**Purpose**: Choose between physical card deck or fully digital play.
 
-### CinemaButton
-The universal button. 3 variants × 3 sizes. Spring-scale press animation (0.97 scale).
+**What's on screen:**
+- Two large mode options:
+  1. **"Use Your Deck"** — for players who own the physical card game. Leads to the camera scanner. Subtitle explains this is for scanning QR codes on physical cards.
+  2. **"Go Digital"** — for fully app-based play. Leads to the mode selection screen. Subtitle explains up to 8 players on the same Wi-Fi.
 
-| Variant | Background | Text color | Border |
-|---------|-----------|------------|--------|
-| `primary` | gold #f5c518 | textOnGold #0a0a0a | none |
-| `ghost` | transparent | textPrimary white | border rgba white 0.10 |
-| `danger` | danger #e63946 | white | none |
-
-| Size | Padding H×V | Font size |
-|------|------------|-----------|
-| `sm` | 16 × 8 | base 14 |
-| `md` | 24 × 12 | base 14 |
-| `lg` | 32 × 16 | base 14 |
-
-Disabled state: opacity 0.4.
+**Interactions:**
+- Tapping either option navigates to the corresponding flow
 
 ---
 
-### CardBack
-The face-down card. Used everywhere a movie is hidden.
-- Background: `#0d0820` (darker than bg — depth)
-- Outer gold frame: `rgba(245,197,24,0.50)`, inset ~9% of card width
-- Inner hairline frame: `rgba(245,197,24,0.22)`, inset 4px further
-- Centre emblem: `✦ CINE — SCENES ✦` stacked, gold at 88% opacity, weight 800, purely typographic
-- `outlined` variant: dashed gold border (used as timeline gap placeholder)
+### Screen 3 — Rules
+**Orientation**: Portrait
+**Purpose**: Teach the game to new players. 10 illustrated slides, swipeable.
 
-### CardFront
-The revealed card. The moment of truth.
-- Background: decade-interpolated color (see section 5)
-- Layout: director (italic, small, 75% opacity) → year (huge hero, full opacity) → title (italic, 90% opacity)
-- Radial glow overlay: `rgba(255,255,255,0.07)`
-- Card proportions: 80dp × 100dp (timeline), 72dp × 100dp (intro wheel), 52dp × 70dp (drawing phase mini)
+**Slides (in order):**
+1. **Draw a Card** — A card is drawn from the deck each turn. The movie on it is a mystery.
+2. **Watch the Clip** — The trailer plays with no title or year shown. Pay attention.
+3. **Know It? Say It!** — When you recognise the film, tap "I know it!" and enter the title and director.
+4. **Earn Coins** — You start with 5 coins. Use them to challenge other players. Guard them carefully.
+5. **Starting Card** — Before the first turn, each player receives one starting card face-up. This is your anchor — the film's year is shown so you know exactly where it sits on your timeline.
+6. **Place It Right** — After guessing, place the card in your timeline in the correct chronological position.
+7. **Challenge!** — Observers can spend a coin to challenge your placement. If they think you placed it wrong, they pick where they think it belongs.
+8. **The Reveal** — The card flips over. The year is shown. Everyone sees if the placement was correct.
+9. **Keep or Lose** — Correct placement: you keep the card. Wrong placement but a challenger was right: the challenger takes it. Nobody right: card is trashed.
+10. **Race to Win** — First player to collect 10 cards wins.
 
-### FlippingMovieCard
-Animated card flip. CardBack → CardFront with 3D rotateY.
-- Phase 1: back rotates 0→90° (hides back)
-- Phase 2: front rotates -90→0° (reveals front)
-- Duration: 600ms linear, useNativeDriver
-
----
-
-### Timeline
-Horizontal scrollable row of cards with gap slots.
-
-| Gap type | Visual |
-|----------|--------|
-| Spacer (non-interactive) | 20dp invisible |
-| Open gap (interactive) | 32dp × 100dp · circular + button, gold border |
-| Selected gap | 80dp × 100dp dashed card outline, checkmark inside |
-| Blocked gap (challenging) | 28dp × 100dp · ✕ in danger color |
-| My placed pick (pre-reveal) | `CardBack outlined` with "your pick" overline label |
-| Observer placed pick | `CardBack outlined` with player name overline label |
-| Reveal — flip | `FlippingMovieCard` with autoFlip |
-| Reveal — challenger insert | Spring scale-in animation from 0→1 |
-| Reveal — trash | Card flies up-right (700ms) → slot collapses (600ms) |
-| Challenger coin | 36dp circle, gold border, player initials |
+**Interactions:**
+- Swipe left/right between slides
+- Progress indicator shows current slide
+- Navigation arrows or swipe to advance
 
 ---
 
-### ScoreBar
-Fixed bottom bar on all game screens.
-- Background: surfaceHigh `#2a1f4a`, top hairline border
-- Horizontal scroll of player chips
-- Each chip: `{name} · {card count} · {coin count}`, gold text for counts
-- Active player chip: gold border
-- Right side: timeline button (film strip icon)
+### Screen 4 — Mode Select
+**Orientation**: Portrait
+**Purpose**: Choose which game mode to play.
+
+**What's on screen:**
+Four mode cards:
+
+1. **Standard** (FREE)
+   - Subtitle: 500+ curated movies · Trailer plays on every player's phone
+   - Free tier — available to all users
+
+2. **Insane Mode** (PREMIUM — labelled with a star badge)
+   - Subtitle: Every movie ever made · Trailer only on host's phone
+   - Premium tier — requires subscription
+   - Because Insane Mode draws from TMDb's full catalogue of 100,000+ films, trailers only play on the host's device (others would see a waiting screen)
+
+3. **Collections** (COMING SOON — disabled)
+   - Subtitle: Christmas · Horror · The 2010s…
+   - Themed packs of movies (not yet available)
+
+4. **Movie Trivia** (COMING SOON — disabled)
+   - Subtitle: Guess movies from trivia clues
+   - Different game mechanic — clues instead of trailers (not yet available)
+
+**Interactions:**
+- Tapping Standard → navigates to Local Lobby
+- Tapping Insane Mode → triggers sign-in if not authenticated; if authenticated and has premium → navigates to Local Lobby; if no premium → presents paywall
+- Coming Soon modes are non-interactive
+- A "Restore purchases" or authentication flow may appear if needed
+
+**Paywall (bottom sheet overlay — appears when tapping a premium mode without subscription):**
+The paywall presents three subscription options:
+- Monthly plan (auto-renewing)
+- Annual plan (auto-renewing, typically discounted)
+- Lifetime (one-time purchase)
+
+Each option shows the plan name, price, and billing period. Selecting a plan highlights it. A prominent "Get Premium" call-to-action confirms the purchase. Below: "Restore purchases" for existing subscribers, and a dismiss option.
 
 ---
 
-### ChallengeTimer
-SVG animated countdown ring.
-- Duration: 5 seconds
-- Ring color progression: `#e63946` (red) → `#f5a623` (amber) → `#555` (grey)
-- Stroke: 5px, round cap, starts at top (rotated -90°)
-- Background ring: `#2a2a3a`
-- Challenge / Pass buttons rendered inside the ring area
+### Screen 5 — Sign In
+**Orientation**: Portrait
+**Purpose**: Authenticate the user to enable premium features.
+
+**What's on screen:**
+- Brief explanation of why sign-in is required (to associate purchases with an account)
+- Platform-appropriate sign-in button:
+  - iOS: "Sign in with Apple"
+  - Android: "Sign in with Google"
+
+**Interactions:**
+- Tapping the sign-in button triggers native platform authentication
+- On success, the user is returned to the premium feature they were trying to access
+- A back/dismiss option is available
 
 ---
 
-### CinescenesLogo
-SVG clapperboard + CINESCENES wordmark.
-- Top bar: gold `#f5c518`, black diagonal stripes, hinge pins
-- Board body: dark `#0a0a14`, gold border, gold sprocket holes
-- Wordmark: weight 900, gold, letterSpacing 6, gold text-shadow glow
-- Props: `iconSize` (default 48), `showWordmark` (default true), `layout` (vertical | horizontal)
+### Screen 6 — Local Lobby
+**Orientation**: Portrait
+**Purpose**: Create or join a game session before play begins.
+
+The lobby has two sub-flows: **creating** a game and **joining** one.
+
+#### Creating a game
+
+**What's on screen:**
+- Display name input — the player's name as it appears to others
+- Game visibility toggle:
+  - **Private (invite only)**: only players with the room code can join
+  - **Public**: the game appears in the public lobby browser for anyone to find and join
+- The room code — a short alphanumeric code that joiners enter to find this session
+- A list of connected players (including the host)
+  - Each player shown by display name
+  - The host is marked with a badge
+- "Start Game" button (host only; enabled only when 2+ players are connected)
+
+**Interactions:**
+- Entering a name + setting visibility → creates the session
+- Sharing the room code lets other players join
+- As players join, they appear in the list in real time (polled every 2 seconds)
+- Only the host can start the game
+- The host can cancel and return to mode select
+
+#### Joining a game
+
+**What's on screen:**
+- Display name input
+- Room code input — enter the code shared by the host
+- "Join" button
+- "Browse open games" link (navigates to lobby browser for public games)
+
+After joining:
+- The player sees the same waiting room: list of all connected players, "Waiting for host to start…"
+- The start button is not visible (host only)
 
 ---
 
-### PaywallSheet
-Bottom sheet modal for RevenueCat subscription.
-- Overlay: `rgba(0,0,0,0.75)`
-- Sheet: surfaceHigh `#2a1f4a`, card radius 20, top handle bar
-- 3 plan options (monthly / annual / lifetime): radio button + label + price + optional badge
-- Selected plan: gold border + goldFaint background + filled gold radio dot
-- CTA: primary CinemaButton "GET PREMIUM" (full width, lg)
-- Footer: "Restore purchases" · "Not now" (caption links)
-- Decorative: 2 SVG icons top-corners at 6% opacity
+### Screen 7 — Lobby Browser
+**Orientation**: Portrait
+**Purpose**: Discover and join public games without a room code.
+
+**What's on screen:**
+- A list of currently open public games
+- Each entry shows: host's display name, number of players currently in the lobby
+- Auto-refreshes every 5 seconds
+- Empty state if no public games are open
+
+**Interactions:**
+- Tapping a game entry joins it directly (navigates to lobby in joined state)
+- Back button to return to lobby
 
 ---
 
-## 11. Screen Inventory
+### Screen 8 — Scanner (Physical Mode Only)
+**Orientation**: Landscape
+**Purpose**: Scan the QR code on the back of a physical movie card.
 
-| Screen | Route | Orientation | Purpose |
-|--------|-------|-------------|---------|
-| Landing | `/` | Portrait | Entry: logo + "Let's Play" + "How to Play" |
-| Play | `/play` | Portrait | Mode: physical deck vs. digital |
-| Mode Select | `/mode-select` | Portrait | Standard (free) vs Collections (premium) |
-| Sign In | `/sign-in` | Portrait | Apple (iOS) / Google (Android) auth |
-| Rules | `/rules` | Portrait | 10-slide swipeable tutorial |
-| Local Lobby | `/local-lobby` | Portrait | Create / join room; host starts game |
-| Scanner | `/scanner` | Landscape | Camera QR scan for physical cards |
-| Trailer | `/trailer` | Landscape | Physical card mode: watch trailer |
-| Game | `/game` | Landscape | Full game loop (multiple sub-states) |
+**What's on screen:**
+- Live camera viewfinder, full-screen
+- A scanning reticle or framing guide
+- Brief instruction label ("Scan the QR code on your card")
 
----
-
-## 12. Game Screen Sub-states
-
-The game screen renders different UI based on `turn.status` and the player's role.
-
-### Drawing phase
-After a turn ends, before the next trailer starts.
-
-| Viewer | Layout |
-|--------|--------|
-| Active player | Overline "Your turn" · Active player's own timeline · "Let's Guess" primary button |
-| Observer | Overline "{name}'s timeline" · Active player's timeline (main) · "Waiting for {name}…" label · Own mini-timeline at bottom (52×70dp cards, horizontal scroll) |
-
-ScoreBar pinned to bottom on all states.
-
-### Placing — trailer
-| Viewer | Layout |
-|--------|--------|
-| Active player | Full-screen trailer · "I know it!" floating button · Report button |
-| Observer | Waiting state — blurred/dark background |
-
-### Placing — guess
-Active player only (portrait orientation). Text inputs for movie title + director name. Voice input button (boom mic icon). Submit → timeline.
-
-### Placing — timeline
-| Viewer | Layout |
-|--------|--------|
-| Active player | Interactive timeline · floating CardBack (pre-placement) · gap selection + confirm |
-| Observer | Non-interactive timeline · active player's placed CardBack visible |
-
-### Challenging
-10-second window for non-active players. Sequential two-phase flow:
-
-**Phase 1 — Decision** (for each observer):
-- Not decided: ChallengeTimer ring (5s) + [Challenge] button + [Pass] button
-- Challenged: "You challenged! Waiting for others…"
-- Passed: "You passed"
-- Active player: "Waiting for everyone…"
-
-**Phase 2 — Sequential picking** (after all decided, at least one challenged):
-- Active player: "Challengers are picking…" · challenger coins accumulating on timeline
-- Waiting for another: "Waiting for {name}…"
-- My turn to pick: Interactive timeline · blocked gaps marked ✕ · [↩ Withdraw] if not first challenger
-- Already picked: "Coin placed. Waiting for others…"
-- Withdrew: "You withdrew."
-
-### Revealing — flip phase
-All players see the timeline with `FlippingMovieCard` at the placed position. Card autoFlips after 300ms.
-
-### Revealing — result phase
-Result strip appears with:
-- Winner name + result icon
-- "Card moves to {name}'s timeline" (if challenger won)
-- "{name} also had it right" (if coin refunded)
-- Bonus coin indicator (active player)
-- [Next →] button
-
-Result types:
-- `correct` — active player placed correctly · star burst icon
-- `challenge` — challenger placed correctly · spotlight icon
-- `trash` — nobody correct · film canister icon
+**Interactions:**
+- Camera continuously scans for a QR code
+- On successful scan, the app decodes the movie UUID and navigates to the Trailer screen for that specific film
+- No manual entry fallback
 
 ---
 
-## 13. Animation Language
+### Screen 9 — Trailer (Physical Mode Only)
+**Orientation**: Landscape
+**Purpose**: Watch the trailer for the physically scanned card.
 
-| Animation | Duration | Easing | Trigger |
-|-----------|----------|--------|---------|
-| Card flip (reveal) | 600ms | Linear (two-phase) | `status → revealing` |
-| Card flip (intro wheel) | 600ms | inOut(cubic) | Wheel stopped |
-| Intro wheel spin | 5500ms | inOut(cubic) | "Let's spin!" tap |
-| Highlight card glide | 700ms | out(cubic) | Wheel stopped |
-| Highlight card scale | 700ms | out(back 1.1) | With glide |
-| Challenger card insert | Spring (damping 14, stiffness 180) | — | Sequential phase |
-| Trash card fly-off | 700ms (300ms delay) | in(cubic) | Result = trash |
-| Slot collapse | 600ms | inOut(quad) | After trash fly-off |
-| Confetti burst (28 particles) | 850–1300ms staggered | out(cubic) | Correct placement |
-| ChallengeTimer ring | 5000ms | Linear | `status = challenging` |
-| Button press | Spring scale 0.97 | — | All CinemaButtons |
-| Screen transition | Fade | — | Expo Router |
+**What's on screen:**
+- The movie trailer plays, full-screen
+- No movie title or year is displayed
+- A cast/TV mode button: opens instructions for screen mirroring (AirPlay on iOS, Cast on Android) so the trailer can be shown on a TV instead of a phone screen
+- Playback controls may be available
+
+This screen stands alone — there is no multiplayer coordination here. Players huddle around the phone or a cast TV and use the physical cards to manage their own timelines.
 
 ---
 
-## 14. Redesign Vision — What "Bold" Means
+### Screen 10 — Game Screen
+**Orientation**: Landscape (locked)
+**Purpose**: The main game loop. All turn phases happen here.
 
-The current design is correct in direction but conservative in execution. The redesign should push harder on the cinematic premise while keeping all the dark/gold foundations.
+This is the most complex screen in the app. Its content changes dramatically based on the current turn phase and the player's role (active player or observer).
 
-### Key opportunities
-
-**1. Typography needs more contrast**
-The current UI uses similar weights/sizes throughout. A bold redesign would use much larger type — hero-level sizes on secondary screens, not just on cards. Think magazine editorial: one massive number or word that commands the screen, everything else secondary.
-
-**2. Cards should feel dimensional**
-CardFront currently uses flat color. Introduce subtle gradient overlays, a film grain texture at 4–6% opacity, and stronger inner-shadow at the bottom edge. The card should feel like it has weight and depth.
-
-**3. The timeline needs a visual identity**
-Currently functional but plain. Consider a film-strip aesthetic — sprocket holes at top and bottom edges, or a subtle horizontal track behind the cards. The timeline is the game — it deserves a stronger visual language.
-
-**4. Screens need a focal point**
-Landing screen is good. Game screen is crowded. Each screen should have one unmissable focal element (the year on the card, the challenge timer ring, the wheel). Everything else recedes.
-
-**5. Gold usage can be bolder**
-Currently gold appears as small accents. In a bold redesign, the primary action moment (the reveal, the result) should feel like a spotlight — a full gold flash, a gold glow emanating from the correct card, the screen briefly lighting up gold on a win.
-
-**6. The challenge moment is the emotional peak**
-The challenge window (5-second timer, Challenge vs. Pass) is the highest-stakes moment. It needs to feel urgent and cinematic — the timer ring could be larger, the background could pulse slightly, the social tension should be physically felt through the UI.
-
-### Things NOT to change
-- The dark purple-navy background
-- Gold as the primary accent — not blue, not white
-- Card proportions and the flip animation
-- The overall vocabulary (cards, timeline, coins)
+A persistent **Score Bar** is pinned to the bottom of the screen at all times during the game. It shows:
+- All players in a horizontally scrollable row
+- Each player: their display name, how many cards they have, how many coins they have
+- The active player's chip is visually distinguished
+- A button to view any player's full timeline
 
 ---
 
-## 15. Figma Setup
+## 7. Game Screen — All Sub-states in Detail
 
-### Variables to create
-Import `figma-tokens.json` (included in repo root) using the **Tokens Studio for Figma** plugin.
+### Sub-state A — Starting Card Intro (game start only)
 
-### Manual color styles
-`bg / surface / surfaceHigh / gold / goldFaint / goldGlow / danger / textPrimary / textSub / textMuted / textOnGold / border / borderSubtle`
+This state plays exactly once, at the very beginning of the game, before the first turn.
 
-### Text styles
-`hero / display / title / subtitle / body / label / overline / caption / micro / wordmark`
+**What happens:**
+Each player needs to receive their starting card. A **spinning wheel** presents all the starting cards face-down. The player taps "Let's Spin!" and the wheel spins, landing on one card. That card flips over to reveal the starting movie (year, title, and director all visible). This becomes the first card in the player's timeline.
 
-### Suggested component frames (in order)
-1. Color palette — all swatches + decade card colors
-2. Typography specimen — all 10 styles on dark bg
-3. Icon set — all icons at 24dp on surface bg, grouped by type
-4. Buttons — all variants × sizes × states
-5. Cards — CardBack + CardFront (all decade variants) + FlippingMovieCard states
-6. Timeline — 6 states documented
-7. ChallengeTimer — 0%, 50%, 100% states
-8. ScoreBar
-9. PaywallSheet — all plan states
-10. All screens (Landing → Play → Mode Select → Sign In → Rules → Lobby → Game all sub-states)
+**What's on screen:**
+- An animated spinning wheel showing multiple face-down cards arranged in a fan or carousel
+- "Let's Spin!" button
+- After spinning: the selected card glides to a prominent position and flips face-up
+- The revealed starting card shows: director name, year (large and prominent), movie title
+- Confirmation to accept the starting card and continue
 
-### Icon file
-Dedicated component file, all icons at 24dp on surface bg. Groups: UI / Results / Rules illustrations / Decorative. Export as SVG for implementation in `react-native-svg`.
+**Why it matters:**
+The starting card is the player's single reference point. It establishes one known year in their timeline. All future placements are made relative to existing cards, so the starting card is the foundation of the whole strategy.
+
+---
+
+### Sub-state B — Drawing Phase
+
+This is the "between turns" state. A turn has just ended (or the game just started) and the next trailer hasn't played yet.
+
+**Active player sees:**
+- A label indicating it's their turn
+- Their own timeline (all the cards they've collected so far)
+- A primary action button: "Let's Guess"
+- Score bar at bottom
+
+**Observers see:**
+- A label showing whose turn it is: "[Name]'s timeline"
+- The active player's full timeline (read-only)
+- A "Waiting for [name]…" message
+- Their own timeline displayed in a compact collapsible bar at the bottom of the screen, above the score bar:
+  - **Collapsed state**: A compact fan of small cards showing only year numbers. A tap anywhere on the bar expands it.
+  - **Expanded state**: Full-size cards in a horizontal scroll, showing director, year, and title. A "collapse" button is visible to close it back down.
+
+**Interactions:**
+- Active player taps "Let's Guess" → advances to trailer phase
+- Observers can expand/collapse their own timeline bar
+- Observers can tap the timeline button in the score bar to view any player's full timeline
+
+---
+
+### Sub-state C — Placing: Trailer Phase
+
+The active player is watching the mystery trailer.
+
+**Active player sees:**
+- Full-screen movie trailer (no title, no year shown anywhere)
+- A floating "I know it! →" button, initially disabled (in public games) then enabled after watching enough of the safe window. In private games, it's immediately enabled.
+- A small "report" button to flag the trailer if it's broken, age-restricted, or shows the title
+
+**Observers see:**
+- A waiting screen — the trailer is not playing on their device (in private/invite-only games)
+- In public games: the trailer plays on all devices simultaneously, the "I know it!" button is absent for observers (they cannot advance the turn)
+
+**What observers see during waiting (private games):**
+- A message: "[Name] is watching the trailer…"
+- No video, no audio
+- They are simply waiting
+
+**Interactions:**
+- Active player taps "I know it! →" → advances to Guess phase
+- Active player taps Report → submits a flag and the turn may be skipped or retried
+
+---
+
+### Sub-state D — Placing: Guess Phase
+
+The active player submits their guess for the movie.
+
+**What's on screen:**
+- A text field for the movie title
+- A text field for the director's name
+- A voice input button — tapping it activates speech recognition. The player speaks the title and it is transcribed into the title field
+- A "Submit" or confirm button
+
+**Context:**
+The player may already be confident or may be bluffing. Both fields are required before submission can proceed.
+
+**After submission:**
+Navigates to the Timeline Placement phase.
+
+---
+
+### Sub-state E — Placing: Timeline Phase
+
+The active player selects where in their timeline the mystery card belongs.
+
+**What the active player sees:**
+- Their full timeline displayed as a horizontal scroll
+- Between every pair of adjacent cards (and at each end), there is an interactive **gap slot** — a visual indicator that can be tapped to select that position
+- When a gap is tapped, it becomes "selected" — it expands and shows a face-down card outline in that position, indicating "I want to place the card here"
+- A confirm/checkmark button appears when a gap is selected
+- The card to be placed is face-down (its contents are hidden until the reveal)
+
+**Gap slot states:**
+- **Default / available**: A small interactive affordance between cards, inviting a tap
+- **Selected**: Expanded to card size, showing a face-down card outline with a visual indicator that this is the player's pick. A "confirm" checkmark is available.
+
+**What observers see:**
+- The active player's timeline with the face-down card already in its chosen gap (after the active player confirms)
+- The gap is marked with a label like "your pick" (to the active player) or "[name]'s pick" (to observers)
+- Non-interactive — observers cannot move the card
+
+**Interactions:**
+- Active player taps a gap → selects it
+- Active player taps confirm → locks the placement and advances to the challenge window
+
+---
+
+### Sub-state F — Challenging Phase
+
+After the active player confirms placement, the challenge window opens.
+
+#### Phase 1 — Decision (all observers simultaneously)
+
+**What each observer sees:**
+- The active player's timeline with the face-down card in its chosen position
+- A prominent countdown timer — 5 seconds, visually counting down (ring animation, progress bar, or other mechanism)
+- Two buttons: **"Challenge"** and **"Pass"**
+- Their current coin count is visible — they need at least 1 coin to challenge
+
+**After deciding:**
+- Observer who challenged: sees "You challenged! Waiting for others…"
+- Observer who passed: sees "You passed. Waiting for others…"
+- Observer with 0 coins: cannot challenge (button disabled or hidden)
+
+**What the active player sees:**
+- "Waiting for everyone…"
+- The timeline with their chosen placement visible
+
+**When the decision phase ends:**
+- The 5 seconds expire OR all observers have decided — whichever comes first
+- If nobody challenged: skip directly to the Reveal phase
+- If at least one challenged: proceed to Phase 2
+
+#### Phase 2 — Sequential Picking (challengers pick positions one by one)
+
+Challengers are resolved in the order they joined the game.
+
+**What each player sees depends on their status:**
+
+**Active player:**
+- "Challengers are picking…"
+- Their timeline with the chosen placement visible
+- As each challenger picks, their coin visually lands on the chosen gap
+- The active player cannot interact
+
+**Observer — waiting for their turn:**
+- "[Name] is picking their position…"
+- The timeline visible (read-only)
+- Can see previously placed challenger coins
+
+**Observer — it's their turn to pick:**
+- The timeline is interactive
+- The active player's chosen gap is **blocked** — visually marked with an X or similar — it cannot be picked
+- Gaps already claimed by earlier challengers are also blocked
+- Available gaps can be tapped
+- If this observer is not the first challenger, a "Withdraw" button is available — tapping it cancels their challenge and refunds their coin (they then see "You withdrew")
+- After picking: their coin appears in the chosen gap, status becomes "Coin placed. Waiting for others…"
+
+**Observer — already picked:**
+- "Coin placed. Waiting for others…"
+- Can see the timeline with all coins placed so far
+
+**Observer — withdrew:**
+- "You withdrew."
+- No further interaction
+
+---
+
+### Sub-state G — Revealing: Flip Phase
+
+All players see the same screen simultaneously.
+
+**What's on screen:**
+- The active player's timeline
+- The mystery card is in its placed position, still face-down
+- After a brief moment, the card **flips over** — a 3D rotation animation reveals the front face
+- The front face shows: director name (small), year (very large and prominent), movie title (large)
+
+This is the most dramatic moment of each turn. All players see the year revealed at the same time.
+
+---
+
+### Sub-state H — Revealing: Result Phase
+
+After the flip, the outcome is determined and announced.
+
+**What's on screen:**
+- The timeline with the now face-up card visible
+- A result strip or overlay announcing the outcome:
+
+**Outcome 1 — Active player correct:**
+- Announcement: "[Name] got it right!"
+- If any challenger also placed correctly: "[Name] earns a bonus coin" (the active player placed correctly while being challenged)
+- The card remains in the active player's timeline
+- For the active player: a confetti animation if they placed correctly
+
+**Outcome 2 — Challenger wins:**
+- Announcement: "[Name] was right! Card goes to [challenger's name]'s timeline"
+- The card visually moves from the active player's timeline to the challenger's
+- If multiple challengers were correct, the most accurate one (closest surrounding years) wins; others are announced as refunded
+- If the active player was also correct by a different measure, this is noted (e.g., "[Name] also had it right — coin refunded")
+- The winning challenger's coin is shown being returned
+
+**Outcome 3 — Trash:**
+- Announcement: "Nobody got it right"
+- The card flies off-screen in an animation — it rises and spins out of the frame
+- The slot collapses, closing the gap in the timeline
+- All challenger coins are lost
+
+**Common to all outcomes:**
+- A "Next →" button to proceed to the next turn (visible to all players, but only the active player — or any player once all have acknowledged — can advance, depending on implementation)
+- The score bar updates to reflect any new card counts and coin changes
+
+---
+
+### Sub-state I — Win Screen
+
+Triggered when a player reaches 10 cards.
+
+**What's on screen:**
+- The winner's name, prominently displayed
+- A trophy or victory graphic
+- Options to: play again (return to lobby) or go home (return to landing)
+
+---
+
+## 8. The Movie Cards
+
+Cards are the central object of the game. There are two faces:
+
+**Face down (CardBack):**
+The back of every card looks the same — a uniform design that reveals nothing about the movie. This is the mystery state. Used:
+- During the intro wheel (before spinning)
+- As the placeholder in the timeline during placement and the challenge window
+- As observers' "your pick" indicator
+- Everywhere the movie identity is hidden
+
+**Face up (CardFront):**
+Revealed only at the moment of the flip. Shows:
+- Director name (supporting, contextual)
+- Release year (dominant — the most important piece of information)
+- Movie title (prominent)
+- Each card has a visual identity based on its decade — the era of the film influences the card's appearance
+
+**The flip animation:**
+A 3D card-flip animation transitions from the back face to the front face. This is the moment of truth — designed to be dramatic and impossible to miss.
+
+---
+
+## 9. Game Modes in Detail
+
+### Standard Mode (free)
+- Pool of 500+ curated movies, each with a pre-screened safe trailer window
+- Trailer plays on every player's phone simultaneously
+- Available to all users without a subscription
+
+### Insane Mode (premium)
+- Draws from TMDb's full catalogue — every movie ever catalogued (100,000+)
+- Random movie selected each turn from the full database
+- Trailer plays only on the host's device (the player who created the game)
+- Other players see a waiting screen while the trailer plays
+- This is because: the movie pool is so vast that many films have no pre-screened safe window; the trailer must be reviewed live before play, so it makes more sense for one device to display it (typically cast to a TV for the group)
+- Premium subscription required
+
+### Collections (coming soon)
+- Themed packs: Christmas movies, horror, a specific decade, director retrospectives, etc.
+- Premium
+
+### Movie Trivia (coming soon)
+- Instead of trailers, players receive text-based clues (genre, award nominations, cast members) and must guess the movie from the clues
+- Different skill set — no need to recognise a trailer
+
+---
+
+## 10. Public vs. Private Games
+
+Every game session has a visibility setting chosen by the host when creating the game:
+
+**Private (invite only):**
+- Game does not appear in the lobby browser
+- Only players with the room code can join
+- Trailer plays only on the active player's device (others see a waiting screen for who is watching)
+- The typical mode for a group of friends playing together in the same room — the trailer is cast to a shared TV or viewed on one phone
+
+**Public:**
+- Game appears in the public lobby browser — anyone can find and join
+- Trailer plays on every player's device simultaneously
+- Designed for remote play, or for players who want to open their session to strangers
+
+---
+
+## 11. Supporting Systems
+
+### Voice Input
+During the Guess phase, the active player can use voice input instead of typing:
+- A microphone button activates speech recognition
+- The player speaks the movie title
+- The spoken words are transcribed into the title input field
+- Useful in a noisy party environment or when hands are otherwise occupied
+
+### Reporting a Trailer
+During the Trailer phase, a small report button is available. Tapping it flags the current trailer as problematic (broken link, age-restricted, shows title text, or otherwise unusable). The report is submitted silently; the movie is marked in the database for review and will not be dealt again.
+
+### Casting to TV
+Available in the physical card Trailer screen (and potentially in game):
+- A cast button opens a modal explaining how to mirror the phone screen to a TV
+- iOS: AirPlay to Apple TV or AirPlay-compatible TV
+- Android: Google Cast / Chromecast
+- This allows the group to watch the trailer on a shared screen rather than crowding around a phone
+
+### The Collapsible Timeline Bar (observers during drawing phase)
+Observers have their own growing timeline but during the drawing phase they are viewing the active player's timeline. Their own timeline is accessible via a compact bar at the bottom of the screen:
+- In collapsed state: a narrow bar showing small year-number-only cards arranged in a fan, indicating how many cards the observer has and their rough chronological spread
+- Tapping the bar expands it into a full horizontal scroll of complete cards (director, year, title all visible)
+- A collapse button returns it to the compact state
+- This allows observers to reference their own timeline without losing sight of the active player's
+
+---
+
+## 12. Complete Screen & State Inventory
+
+| Screen / State | Who sees it | When |
+|----------------|-------------|------|
+| Landing | Everyone | App open |
+| Rules | Everyone | Tapping "How to Play" |
+| Play (mode entry) | Everyone | Tapping "Let's Play" |
+| Mode Select | Everyone entering digital play | After "Go Digital" |
+| Sign In | Unauthenticated users | Attempting premium mode |
+| Paywall | Authenticated non-premium users | Attempting premium mode |
+| Local Lobby — creating | Game creator | After choosing a mode |
+| Local Lobby — waiting | All players after joining | Before host starts |
+| Lobby Browser | Anyone | "Browse open games" link |
+| Scanner | Physical deck players | "Use Your Deck" |
+| Trailer (standalone) | Physical deck players | After scanning a card |
+| Game — Starting Card Intro | All players | Game start, one-time |
+| Game — Drawing Phase (active) | Active player | Between turns |
+| Game — Drawing Phase (observer) | All observers | Between turns |
+| Game — Trailer Phase (active) | Active player | After "Let's Guess" |
+| Game — Trailer Phase (observer, private) | All observers in private games | During trailer playback |
+| Game — Trailer Phase (observer, public) | All observers in public games | Trailer plays on all devices |
+| Game — Guess Phase | Active player only | After "I know it!" |
+| Game — Timeline Placement (active) | Active player | After submitting guess |
+| Game — Timeline Placement (observer) | All observers | After active player places |
+| Game — Challenge: Decision (observer) | All observers | 5s window after placement |
+| Game — Challenge: Decision (active) | Active player | Same 5s window |
+| Game — Challenge: Picking (my turn) | Each challenger in sequence | Sequential picking phase |
+| Game — Challenge: Picking (waiting) | Non-current challengers + active player | Between each pick |
+| Game — Reveal: Flip Phase | All players | After all picks confirmed |
+| Game — Reveal: Result Phase | All players | After card flip |
+| Win Screen | All players | When someone reaches 10 cards |

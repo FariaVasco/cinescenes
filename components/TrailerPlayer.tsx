@@ -1,7 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { View, StyleSheet, ActivityIndicator, useWindowDimensions } from 'react-native';
 import YoutubePlayer from 'react-native-youtube-iframe';
-import { WebView } from 'react-native-webview';
 import { Movie } from '@/lib/database.types';
 
 export interface TrailerPlayerHandle {
@@ -67,14 +66,11 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
     const dynStartRef = useRef<number>(0);
 
     // Insane mode: safe_start is null until the window is dynamically calculated
-    const insaneMode = movie.safe_start === null && !movie.vimeo_id;
+    const insaneMode = movie.safe_start === null;
     const safeStart = movie.safe_start ?? 0;
     const safeEnd = movie.safe_end ?? (insaneMode ? 99999 : 60);
     const duration = insaneMode ? 30_000 : Math.max(safeEnd - safeStart, 10) * 1000;
     const youtubeInject = makeYouTubeInject(safeStart);
-
-    // Prefer Vimeo (no ads); fall back to YouTube
-    const useVimeo = !!movie.vimeo_id;
 
     function startEndTimer(ms: number = duration) {
       if (timerRef.current) clearTimeout(timerRef.current);
@@ -113,7 +109,7 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
         setPlaying(false);
         const replayStart = insaneMode ? dynStartRef.current : safeStart;
         setTimeout(() => {
-          if (!useVimeo) playerRef.current?.seekTo(replayStart, true);
+          playerRef.current?.seekTo(replayStart, true);
           setPlaying(true);
           // Fallback in case cs_content_ready doesn't fire on replay
           fallbackRef.current = setTimeout(() => {
@@ -195,28 +191,10 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
       };
     }, []);
 
-    // ── Vimeo embed URL ─────────────────────────────────────────────────────
-    // #t=Xs seeks to safeStart; autoplay=1 starts immediately.
-    const vimeoUrl = `https://player.vimeo.com/video/${movie.vimeo_id}`
-      + `?autoplay=1&muted=0&title=0&byline=0&portrait=0&controls=0`
-      + `#t=${safeStart}s`;
-
     return (
       <View style={styles.container}>
 
-        {useVimeo ? (
-          <WebView
-            source={{ uri: vimeoUrl }}
-            style={{ width, height }}
-            allowsInlineMediaPlayback
-            mediaPlaybackRequiresUserAction={false}
-            onLoadEnd={() => {
-              setLoading(false);
-              startEndTimer();
-            }}
-          />
-        ) : (
-          <YoutubePlayer
+        <YoutubePlayer
             ref={playerRef}
             height={height}
             width={width}
@@ -241,7 +219,6 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
               onMessage: handleWebViewMessage,
             }}
           />
-        )}
 
         {loading && (
           <View style={styles.loader}>
