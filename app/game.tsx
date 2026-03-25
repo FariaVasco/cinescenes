@@ -1028,11 +1028,9 @@ export default function GameScreen() {
 
   if (loading || !currentTurn) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <ActivityIndicator size="large" color="#f5c518" />
-        </View>
-      </SafeAreaView>
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: C.bg, justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#f5c518" />
+      </View>
     );
   }
 
@@ -1978,11 +1976,9 @@ function ScoreBar({ players, myId }: { players: Player[]; myId: string | null })
 
 function LoadingScreen() {
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#f5c518" />
-      </View>
-    </SafeAreaView>
+    <View style={[StyleSheet.absoluteFill, { backgroundColor: C.bg, justifyContent: 'center', alignItems: 'center' }]}>
+      <ActivityIndicator size="large" color="#f5c518" />
+    </View>
   );
 }
 

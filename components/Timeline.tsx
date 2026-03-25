@@ -63,57 +63,126 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
 
   // Card insertion animation — used when insertDelay is set
   const [insertVisible, setInsertVisible] = useState(false);
-  const insertScale = useRef(new Animated.Value(0.6)).current;
+  const [insertOverlay, setInsertOverlay] = useState<{ x: number; y: number } | null>(null);
+  const insertScale = useRef(new Animated.Value(0.85)).current;
   const insertOpacity = useRef(new Animated.Value(0)).current;
-  const insertTranslateY = useRef(new Animated.Value(-250)).current;
+  const insertTranslateY = useRef(new Animated.Value(-600)).current;
+  const insertSlotWidth = useRef(new Animated.Value(0)).current;
+  const insertSlotMargin = useRef(new Animated.Value(0)).current;
+  const insertSlotRef = useRef<View>(null);
 
   useEffect(() => {
-    if (!insertDelay || !revealingMovie) { setInsertVisible(false); return; }
+    if (!insertDelay || !revealingMovie) {
+      setInsertVisible(false);
+      setInsertOverlay(null);
+      insertScale.setValue(0.85);
+      insertOpacity.setValue(0);
+      insertTranslateY.setValue(-600);
+      insertSlotWidth.setValue(0);
+      insertSlotMargin.setValue(0);
+      return;
+    }
     setInsertVisible(false);
-    insertScale.setValue(0.6);
+    setInsertOverlay(null);
+    insertScale.setValue(0.85);
     insertOpacity.setValue(0);
-    insertTranslateY.setValue(-250);
+    insertTranslateY.setValue(-600);
+    insertSlotWidth.setValue(0);
+    insertSlotMargin.setValue(0);
     const t = setTimeout(() => {
-      setInsertVisible(true);
-      Animated.parallel([
-        Animated.spring(insertScale, { toValue: 1, damping: 14, stiffness: 180, useNativeDriver: true }),
-        Animated.spring(insertTranslateY, { toValue: 0, damping: 12, stiffness: 120, useNativeDriver: true }),
-        Animated.timing(insertOpacity, { toValue: 1, duration: 180, useNativeDriver: true }),
-      ]).start();
+      const runAnim = () => {
+        Animated.parallel([
+          // Slot opens to receive the card
+          Animated.spring(insertSlotWidth,  { toValue: 80, damping: 16, stiffness: 140, useNativeDriver: false }),
+          Animated.spring(insertSlotMargin, { toValue: 24, damping: 16, stiffness: 140, useNativeDriver: false }),
+          // Card flies in from above
+          Animated.spring(insertTranslateY, { toValue: 0, damping: 14, stiffness: 120, useNativeDriver: true }),
+          Animated.spring(insertScale,      { toValue: 1, damping: 14, stiffness: 180, useNativeDriver: true }),
+          Animated.timing(insertOpacity,    { toValue: 1, duration: 200, useNativeDriver: true }),
+        ]).start(() => {
+          setInsertVisible(true);
+          setInsertOverlay(null);
+        });
+      };
+      // Measure slot + wrapper so the overlay card starts off-screen above and lands in the slot
+      if (insertSlotRef.current && wrapperRef.current) {
+        let slotPos: { pageX: number; pageY: number } | null = null;
+        let wrapPos: { pageX: number; pageY: number } | null = null;
+        const tryStart = () => {
+          if (!slotPos || !wrapPos) return;
+          // +24: account for the marginHorizontal that will be applied when slot expands
+          setInsertOverlay({ x: slotPos.pageX - wrapPos.pageX + 24, y: slotPos.pageY - wrapPos.pageY });
+          // Start translateY far enough above the screen
+          insertTranslateY.setValue(-(slotPos.pageY + 100));
+          runAnim();
+        };
+        insertSlotRef.current.measure((_x, _y, _w, _h, pageX, pageY) => { slotPos = { pageX, pageY }; tryStart(); });
+        wrapperRef.current.measure((_x, _y, _w, _h, pageX, pageY) => { wrapPos = { pageX, pageY }; tryStart(); });
+      } else {
+        setInsertVisible(true);
+      }
     }, insertDelay);
     return () => clearTimeout(t);
   }, [!!insertDelay, revealingMovie?.id]);
 
   // Trash-out animation — fires trashAfter ms after the result is shown
   const [trashGone, setTrashGone] = useState(false);
+  const [trashOverlay, setTrashOverlay] = useState<{ x: number; y: number } | null>(null);
   const trashAnim = useRef(new Animated.Value(0)).current;
   const collapseAnim = useRef(new Animated.Value(0)).current;
+  const wrapperRef = useRef<View>(null);
+  const trashCardRef = useRef<View>(null);
+
+  // Pre-computed interpolations (stable references, reused in slot + overlay)
+  const trashTx  = trashAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 220] });
+  const trashTy  = trashAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -180] });
+  const trashRot = trashAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '50deg'] });
+  const trashOp  = trashAnim.interpolate({ inputRange: [0, 0.4, 1], outputRange: [1, 0.9, 0] });
+  const trashCollapseWidth  = collapseAnim.interpolate({ inputRange: [0, 1], outputRange: [80, 0] });
+  const trashCollapseMargin = collapseAnim.interpolate({ inputRange: [0, 1], outputRange: [24, 0] });
 
   useEffect(() => {
     if (!trashAfter || !revealingMovie) {
       setTrashGone(false);
+      setTrashOverlay(null);
       trashAnim.setValue(0);
       collapseAnim.setValue(0);
       return;
     }
     setTrashGone(false);
+    setTrashOverlay(null);
     trashAnim.setValue(0);
     collapseAnim.setValue(0);
     const t = setTimeout(() => {
-      // First fly the card away, then collapse the slot
-      Animated.timing(trashAnim, {
-        toValue: 1,
-        duration: 700,
-        easing: Easing.in(Easing.cubic),
-        useNativeDriver: true,
-      }).start(() => {
-        Animated.timing(collapseAnim, {
+      const runAnim = () => {
+        Animated.timing(trashAnim, {
           toValue: 1,
-          duration: 600,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: false,
-        }).start(() => setTrashGone(true));
-      });
+          duration: 700,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }).start(() => {
+          Animated.timing(collapseAnim, {
+            toValue: 1,
+            duration: 600,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: false,
+          }).start(() => { setTrashGone(true); setTrashOverlay(null); });
+        });
+      };
+      // Measure card + wrapper to position the overlay outside the ScrollView
+      if (trashCardRef.current && wrapperRef.current) {
+        let cardPos: { pageX: number; pageY: number } | null = null;
+        let wrapperPos: { pageX: number; pageY: number } | null = null;
+        const tryStart = () => {
+          if (!cardPos || !wrapperPos) return;
+          setTrashOverlay({ x: cardPos.pageX - wrapperPos!.pageX, y: cardPos.pageY - wrapperPos!.pageY });
+          runAnim();
+        };
+        trashCardRef.current.measure((_x, _y, _w, _h, pageX, pageY) => { cardPos = { pageX, pageY }; tryStart(); });
+        wrapperRef.current.measure((_x, _y, _w, _h, pageX, pageY) => { wrapperPos = { pageX, pageY }; tryStart(); });
+      } else {
+        runAnim();
+      }
     }, trashAfter);
     return () => clearTimeout(t);
   }, [!!trashAfter, revealingMovie?.id]);
@@ -152,43 +221,43 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
     if (placedInterval === index) {
       if (revealingMovie) {
         if (insertDelay) {
-          // Challenger insertion: show dashed slot first, then spring the card in
-          if (!insertVisible) {
+          // Challenger insertion: slot opens + card flies in from above (via overlay)
+          if (insertVisible) {
+            // Animation complete — card rests in slot at full size
             return (
-              <View key={`gap-${index}`} style={styles.insertGap}>
-                <View style={styles.cardPlaceholder} />
+              <View key={`gap-${index}`} style={{ marginHorizontal: 24 }}>
+                <CardFront movie={revealingMovie} width={80} height={100} />
               </View>
             );
           }
-          return (
-            <Animated.View
-              key={`gap-${index}`}
-              style={{ marginHorizontal: 24, opacity: insertOpacity,
-              transform: [{ scale: insertScale }, { translateY: insertTranslateY }] }}
-            >
-              <CardFront movie={revealingMovie} width={80} height={100} />
-            </Animated.View>
-          );
+          if (insertOverlay) {
+            // Slot is expanding to receive the card (card itself is in the overlay)
+            return (
+              <Animated.View
+                key={`gap-${index}`}
+                style={{ width: insertSlotWidth, marginHorizontal: insertSlotMargin }}
+              />
+            );
+          }
+          // Before animation: collapsed invisible slot (used for position measurement)
+          return <View key={`gap-${index}`} ref={insertSlotRef} style={{ width: 0, height: 100 }} />;
         }
         if (trashAfter) {
-          // Trash: card flies up-right, then slot collapses
+          // Trash: card flies up-right (via absolute overlay), then slot collapses
           if (trashGone) {
             return <View key={`gap-${index}`} style={styles.gapSpacer} />;
           }
-          const tx = trashAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 220] });
-          const ty = trashAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -180] });
-          const rot = trashAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '50deg'] });
-          const op = trashAnim.interpolate({ inputRange: [0, 0.4, 1], outputRange: [1, 0.9, 0] });
-          const collapseWidth = collapseAnim.interpolate({ inputRange: [0, 1], outputRange: [80, 0] });
-          const collapseMargin = collapseAnim.interpolate({ inputRange: [0, 1], outputRange: [24, 0] });
           return (
             <Animated.View
               key={`gap-${index}`}
-              style={{ width: collapseWidth, marginHorizontal: collapseMargin }}
+              style={{ width: trashCollapseWidth, marginHorizontal: trashCollapseMargin }}
             >
-              <Animated.View style={{ opacity: op, transform: [{ translateX: tx }, { translateY: ty }, { rotate: rot }] }}>
-                <CardFront movie={revealingMovie} width={80} height={100} />
-              </Animated.View>
+              {/* Card only shown here until the overlay takes over */}
+              {!trashOverlay && (
+                <View ref={trashCardRef}>
+                  <CardFront movie={revealingMovie} width={80} height={100} />
+                </View>
+              )}
             </Animated.View>
           );
         }
@@ -292,15 +361,47 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
   }
 
   return (
-    <ScrollView
-      ref={scrollRef}
-      horizontal
-      style={styles.scroll}
-      contentContainerStyle={styles.content}
-      showsHorizontalScrollIndicator={false}
-    >
-      {items}
-    </ScrollView>
+    <View ref={wrapperRef}>
+      <ScrollView
+        ref={scrollRef}
+        horizontal
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        showsHorizontalScrollIndicator={false}
+      >
+        {items}
+      </ScrollView>
+      {/* Insert overlay — card flies in from above without being clipped by the ScrollView */}
+      {insertOverlay && !insertVisible && revealingMovie && (
+        <Animated.View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            left: insertOverlay.x,
+            top: insertOverlay.y,
+            opacity: insertOpacity,
+            transform: [{ translateY: insertTranslateY }, { scale: insertScale }],
+          }}
+        >
+          <CardFront movie={revealingMovie} width={80} height={100} />
+        </Animated.View>
+      )}
+      {/* Trash overlay — rendered outside the ScrollView so it isn't clipped */}
+      {trashOverlay && !trashGone && revealingMovie && (
+        <Animated.View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            left: trashOverlay.x,
+            top: trashOverlay.y,
+            opacity: trashOp,
+            transform: [{ translateX: trashTx }, { translateY: trashTy }, { rotate: trashRot }],
+          }}
+        >
+          <CardFront movie={revealingMovie} width={80} height={100} />
+        </Animated.View>
+      )}
+    </View>
   );
 });
 
