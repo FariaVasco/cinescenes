@@ -61,23 +61,26 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
   const scrollRef = useRef<React.ElementRef<typeof ScrollView>>(null);
   const activeGapRef = useRef<View>(null);
 
-  // Card insertion animation — used when insertDelay is set
+  // Card insertion animation — reverse of the trash fly-off (starts at trash endpoint, reverses in)
   const [insertVisible, setInsertVisible] = useState(false);
   const [insertOverlay, setInsertOverlay] = useState<{ x: number; y: number } | null>(null);
-  const insertScale = useRef(new Animated.Value(0.85)).current;
   const insertOpacity = useRef(new Animated.Value(0)).current;
-  const insertTranslateY = useRef(new Animated.Value(-600)).current;
+  const insertTranslateX = useRef(new Animated.Value(220)).current;
+  const insertTranslateY = useRef(new Animated.Value(-180)).current;
+  const insertRotate = useRef(new Animated.Value(50)).current;
   const insertSlotWidth = useRef(new Animated.Value(0)).current;
   const insertSlotMargin = useRef(new Animated.Value(0)).current;
   const insertSlotRef = useRef<View>(null);
+  const insertRotateInterp = insertRotate.interpolate({ inputRange: [0, 50], outputRange: ['0deg', '50deg'] });
 
   useEffect(() => {
     if (!insertDelay || !revealingMovie) {
       setInsertVisible(false);
       setInsertOverlay(null);
-      insertScale.setValue(0.85);
       insertOpacity.setValue(0);
-      insertTranslateY.setValue(-600);
+      insertTranslateX.setValue(220);
+      insertTranslateY.setValue(-180);
+      insertRotate.setValue(50);
       insertSlotWidth.setValue(0);
       insertSlotMargin.setValue(0);
       return;
@@ -87,9 +90,10 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
     const isExtreme = placedInterval === 0 || placedInterval === timeline.length;
     setInsertVisible(false);
     setInsertOverlay(null);
-    insertScale.setValue(0.85);
     insertOpacity.setValue(0);
-    insertTranslateY.setValue(-600);
+    insertTranslateX.setValue(220);
+    insertTranslateY.setValue(-180);
+    insertRotate.setValue(50);
     if (isExtreme) {
       insertSlotWidth.setValue(80);
       insertSlotMargin.setValue(24);
@@ -99,12 +103,14 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
     }
     const t = setTimeout(() => {
       const runAnim = () => {
-        // Card entry speed mirrors the trash fly-off: 700ms Easing.out(cubic) (decelerate into slot)
+        // Reverse of trash: card starts at (translateX:220, translateY:-180, rotate:50deg) and
+        // returns to rest — same 700ms duration, Easing.out mirrors trash's Easing.in.
         // Slot expansion (non-extreme only) mirrors the trash slot collapse: 600ms Easing.inOut(quad)
         const anims: Animated.CompositeAnimation[] = [
+          Animated.timing(insertTranslateX, { toValue: 0, duration: 700, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
           Animated.timing(insertTranslateY, { toValue: 0, duration: 700, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-          Animated.timing(insertScale,      { toValue: 1, duration: 700, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-          Animated.timing(insertOpacity,    { toValue: 1, duration: 200, useNativeDriver: true }),
+          Animated.timing(insertRotate,     { toValue: 0, duration: 700, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+          Animated.timing(insertOpacity,    { toValue: 1, duration: 150, useNativeDriver: true }),
         ];
         if (!isExtreme) {
           anims.push(Animated.timing(insertSlotWidth,  { toValue: 80, duration: 600, easing: Easing.inOut(Easing.quad), useNativeDriver: false }));
@@ -123,7 +129,6 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
           if (!slotPos || !wrapPos) return;
           // +24: account for the marginHorizontal applied when the slot is at full size
           setInsertOverlay({ x: slotPos.pageX - wrapPos.pageX + 24, y: slotPos.pageY - wrapPos.pageY });
-          insertTranslateY.setValue(-(slotPos.pageY + 100));
           runAnim();
         };
         insertSlotRef.current.measure((_x, _y, _w, _h, pageX, pageY) => { slotPos = { pageX, pageY }; tryStart(); });
@@ -390,7 +395,11 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
             left: insertOverlay.x,
             top: insertOverlay.y,
             opacity: insertOpacity,
-            transform: [{ translateY: insertTranslateY }, { scale: insertScale }],
+            transform: [
+              { translateX: insertTranslateX },
+              { translateY: insertTranslateY },
+              { rotate: insertRotateInterp },
+            ],
           }}
         >
           <CardFront movie={revealingMovie} width={80} height={100} />
