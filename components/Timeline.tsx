@@ -545,7 +545,7 @@ const styles = StyleSheet.create({
     includeFontPadding: false,
   },
   activeGap: {
-    width: 80,
+    width: 32,
     height: 100,
     alignItems: 'center',
     justifyContent: 'center',
@@ -557,11 +557,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // Dashed card placeholder shown when a gap is selected
+  // Dashed slot indicator shown when a gap is selected — same width as gapTap so spacing never shifts
   cardPlaceholder: {
-    width: 80,
+    width: 28,
     height: 100,
-    borderRadius: R.md,
+    borderRadius: 4,
     borderWidth: 1.5,
     borderColor: 'rgba(245,197,24,0.6)',
     borderStyle: 'dashed',
@@ -570,9 +570,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(245,197,24,0.04)',
   },
   confirmCheckmark: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     backgroundColor: 'rgba(245,197,24,0.12)',
     borderWidth: 1.5,
     borderColor: 'rgba(245,197,24,0.65)',
@@ -581,8 +581,8 @@ const styles = StyleSheet.create({
   },
   confirmCheckmarkText: {
     color: 'rgba(245,197,24,0.9)',
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: '700',
-    lineHeight: 22,
+    lineHeight: 18,
   },
 });
