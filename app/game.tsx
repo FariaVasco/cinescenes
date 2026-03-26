@@ -737,7 +737,8 @@ export default function GameScreen() {
       setFlyStart({ x: cardPos.pageX, y: cardPos.pageY });
       setFlyVisible(true);
       cardAnimOpacity.setValue(0);
-      setCardPlaced(true);
+      // Fade the panel out visually but keep the layout (marginLeft: 120) so the
+      // measured gap position stays valid throughout the fly animation.
       Animated.timing(leftPanelFade, { toValue: 0, duration: 180, useNativeDriver: true }).start();
 
       await new Promise<void>((resolve) => {
@@ -761,6 +762,8 @@ export default function GameScreen() {
         ]).start(() => resolve());
       });
 
+      // Expand to full-width only after the card has landed — layout is now stable.
+      setCardPlaced(true);
       setFlyVisible(false);
     } else {
       // Fallback: card falls away
