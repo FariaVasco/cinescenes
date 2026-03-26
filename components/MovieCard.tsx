@@ -55,25 +55,43 @@ export function CardFront({ movie, width, height }: CardFrontProps) {
       {/* Subtle center glow overlay */}
       <View style={[StyleSheet.absoluteFill, s.frontGlow, { borderRadius: radius }]} pointerEvents="none" />
 
-      {/* Content */}
-      <View style={[s.frontBody, { paddingHorizontal: width * 0.1, paddingVertical: height * 0.1 }]}>
-        {movie.director ? (
+      {/* Fixed-proportion sections — each section always occupies the same slice of
+          the card regardless of text length. Font shrinks to fit via adjustsFontSizeToFit. */}
+      <View style={[s.frontBody, { paddingHorizontal: width * 0.1, paddingVertical: height * 0.08 }]}>
+        {/* Director — top slice, flex 2 */}
+        <View style={s.frontDirectorSection}>
           <Text
-            style={[s.frontDirector, { fontSize: Math.max(6, width * 0.09) }]}
+            style={[s.frontDirector, { fontSize: Math.max(6, width * 0.1) }]}
             numberOfLines={2}
+            adjustsFontSizeToFit
+            minimumFontScale={0.5}
           >
-            {movie.director}
+            {movie.director ?? ''}
           </Text>
-        ) : null}
-        <Text style={[s.frontYear, { fontSize: Math.max(12, width * 0.28) }]}>
-          {movie.year}
-        </Text>
-        <Text
-          style={[s.frontTitle, { fontSize: Math.max(7, width * 0.1) }]}
-          numberOfLines={3}
-        >
-          {movie.title}
-        </Text>
+        </View>
+
+        {/* Year — centre slice, flex 5 */}
+        <View style={s.frontYearSection}>
+          <Text
+            style={[s.frontYear, { fontSize: Math.max(12, width * 0.3) }]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+          >
+            {movie.year}
+          </Text>
+        </View>
+
+        {/* Title — bottom slice, flex 3 */}
+        <View style={s.frontTitleSection}>
+          <Text
+            style={[s.frontTitle, { fontSize: Math.max(7, width * 0.12) }]}
+            numberOfLines={2}
+            adjustsFontSizeToFit
+            minimumFontScale={0.5}
+          >
+            {movie.title}
+          </Text>
+        </View>
       </View>
     </View>
   );
@@ -174,8 +192,25 @@ const s = StyleSheet.create({
   frontBody: {
     flex: 1,
     width: '100%',
+  },
+  // Fixed-proportion section containers
+  frontDirectorSection: {
+    flex: 2,
+    width: '100%',
+    justifyContent: 'center',
     alignItems: 'center',
-    justifyContent: 'space-evenly',
+  },
+  frontYearSection: {
+    flex: 5,
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  frontTitleSection: {
+    flex: 3,
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   frontDirector: {
     alignSelf: 'stretch',

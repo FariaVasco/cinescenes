@@ -1257,9 +1257,11 @@ export default function GameScreen() {
             )}
           </View>
 
-          {/* ── Observer's own timeline ── */}
+          {/* ── Observer's own timeline — pinned to bottom of flex container ── */}
           {!amActive && myTimeline.length > 0 && (
-            <CollapsibleMyTimeline timeline={myTimeline} cards={myTimelineCards} />
+            <View style={{ marginTop: 'auto' }}>
+              <CollapsibleMyTimeline timeline={myTimeline} cards={myTimelineCards} />
+            </View>
           )}
         </View>
 
@@ -2939,6 +2941,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
+    minHeight: 100,
     backgroundColor: C.bg,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: C.borderSubtle,
@@ -2946,6 +2949,7 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 20,
     gap: 12,
+    justifyContent: 'center',
   },
   challengeBottomActions: {
     flexDirection: 'row',
