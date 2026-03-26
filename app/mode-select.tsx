@@ -159,7 +159,7 @@ export default function ModeSelectScreen() {
               <Text style={styles.freeBadgeText}>FREE</Text>
             </View>
           </View>
-          <Text style={styles.modeSub}>500+ curated movies · Trailer on every phone</Text>
+          <Text style={styles.modeSub}>500+ curated movies · Safe trailers, no spoilers</Text>
         </TouchableOpacity>
 
         {/* Insane Mode */}
@@ -170,8 +170,8 @@ export default function ModeSelectScreen() {
               <Text style={styles.premiumBadgeText}>★ PREMIUM</Text>
             </View>
           </View>
-          <Text style={styles.modeSub}>Every movie ever made · Trailer on host's phone only</Text>
-          <Text style={styles.modeDisclaimer}>Trailers are unverified — may contain mature content</Text>
+          <Text style={styles.modeSub}>Every movie ever made · Unverified trailers</Text>
+          <Text style={styles.modeDisclaimer}>Clips may reveal the title, year, or director — use your judgement</Text>
         </TouchableOpacity>
 
         {/* Collections — coming soon */}
