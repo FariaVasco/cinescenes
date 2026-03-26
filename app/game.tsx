@@ -1877,7 +1877,7 @@ export default function GameScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.gameArea}>
-          <Animated.View style={[styles.timelineArea, { opacity: timelineFade }]}>
+          <Animated.View style={[styles.timelineAreaFull, { opacity: timelineFade }]}>
             <Timeline
               timeline={displayTimeline}
               currentCardMovie={m}
@@ -1893,13 +1893,16 @@ export default function GameScreen() {
               trashAfter={(isTrash || (!!winningChallenger && !showChallengerTimeline)) && revealPhase === 'result' ? 1200 : undefined}
             />
           </Animated.View>
-          <Animated.View style={[styles.leftOverlay, { opacity: timelineFade }]}>
-            {showChallengerTimeline && winnerPlayer && (
+          {showChallengerTimeline && winnerPlayer && (
+            <Animated.View
+              pointerEvents="none"
+              style={[styles.revealTimelineOwnerBadge, { opacity: timelineFade }]}
+            >
               <Text style={styles.revealTimelineOwner}>
                 {winnerPlayer.display_name}'s timeline
               </Text>
-            )}
-          </Animated.View>
+            </Animated.View>
+          )}
           {/* Challenger name overlay — shown during the cross-fade between timelines */}
           {revealPhase === 'result' && winningChallenger && !activeCorrect && (
             <Animated.View
@@ -2826,7 +2829,6 @@ const styles = StyleSheet.create({
   timelineAreaFull: {
     flex: 1,
     justifyContent: 'center',
-    paddingBottom: 148,
   },
   leftOverlay: {
     position: 'absolute',
@@ -2956,6 +2958,13 @@ const styles = StyleSheet.create({
   revealNowBtnText: { color: C.textOnGold, fontSize: FS.sm, fontWeight: '900' },
 
   // ── Revealing phase ──
+  revealTimelineOwnerBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
   revealTimelineOwner: {
     color: C.gold,
     fontSize: 11,
