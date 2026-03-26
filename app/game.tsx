@@ -1332,8 +1332,10 @@ export default function GameScreen() {
                 <Text style={[styles.phaseLabel, styles.placingLabel]}>
                   {amActive ? 'Where does it go?' : `Waiting for ${activePlayer?.display_name}…`}
                 </Text>
-                {amActive && selectedInterval === null && (
-                  <Text style={styles.tapHint}>Tap + to pick a spot</Text>
+                {amActive && (
+                  <Text style={styles.tapHint}>
+                    {selectedInterval === null ? 'Tap + to pick a spot' : 'Tap ✓ to confirm'}
+                  </Text>
                 )}
                 <Animated.View
                   ref={floatingCardRef}
