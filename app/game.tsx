@@ -96,6 +96,8 @@ export default function GameScreen() {
   const timelineFade = useRef(new Animated.Value(1)).current;
   const challengerTransitionOpacity = useRef(new Animated.Value(0)).current;
   const challengePanelY = useRef(new Animated.Value(200)).current;
+  const leftPanelFade = useRef(new Animated.Value(1)).current;
+  const [cardPlaced, setCardPlaced] = useState(false);
   const [flyVisible, setFlyVisible] = useState(false);
   const [flyStart, setFlyStart] = useState({ x: 0, y: 0 });
   const floatingCardRef = useRef<any>(null);
@@ -298,6 +300,8 @@ export default function GameScreen() {
   // so it's ready (or nearly ready) by the time handleNextTurn is called.
   useEffect(() => {
     prefetchedInsaneMovieRef.current = null;
+    setCardPlaced(false);
+    leftPanelFade.setValue(1);
   }, [currentTurn?.id]);
 
   useEffect(() => {
@@ -733,6 +737,8 @@ export default function GameScreen() {
       setFlyStart({ x: cardPos.pageX, y: cardPos.pageY });
       setFlyVisible(true);
       cardAnimOpacity.setValue(0);
+      setCardPlaced(true);
+      Animated.timing(leftPanelFade, { toValue: 0, duration: 180, useNativeDriver: true }).start();
 
       await new Promise<void>((resolve) => {
         Animated.parallel([
@@ -758,6 +764,8 @@ export default function GameScreen() {
       setFlyVisible(false);
     } else {
       // Fallback: card falls away
+      setCardPlaced(true);
+      Animated.timing(leftPanelFade, { toValue: 0, duration: 180, useNativeDriver: true }).start();
       await new Promise<void>((resolve) => {
         Animated.parallel([
           Animated.timing(cardAnimY, { toValue: 260, duration: 380, useNativeDriver: true }),
@@ -1303,7 +1311,7 @@ export default function GameScreen() {
       return (
         <SafeAreaView style={styles.container}>
           <View style={styles.gameArea}>
-            <View style={styles.timelineArea}>
+            <View style={cardPlaced ? styles.timelineAreaFull : styles.timelineArea}>
               <Timeline
                 ref={timelineRef}
                 timeline={timeline}
@@ -1316,26 +1324,28 @@ export default function GameScreen() {
                 hideFloatingCard
               />
             </View>
-            <View style={styles.leftOverlay}>
-              <Text style={[styles.phaseLabel, styles.placingLabel]}>
-                {amActive ? 'Where does it go?' : `Waiting for ${activePlayer?.display_name}…`}
-              </Text>
-              {amActive && selectedInterval === null && (
-                <Text style={styles.tapHint}>Tap + to pick a spot</Text>
-              )}
-              <Animated.View
-                ref={floatingCardRef}
-                style={[
-                  styles.floatingCard,
-                  {
-                    transform: [{ translateY: cardAnimY }, { scale: cardAnimScale }],
-                    opacity: cardAnimOpacity,
-                  },
-                ]}
-              >
-                <CardBack width={80} height={CARD_H} />
+            {!cardPlaced && (
+              <Animated.View style={[styles.leftOverlay, { opacity: leftPanelFade }]}>
+                <Text style={[styles.phaseLabel, styles.placingLabel]}>
+                  {amActive ? 'Where does it go?' : `Waiting for ${activePlayer?.display_name}…`}
+                </Text>
+                {amActive && selectedInterval === null && (
+                  <Text style={styles.tapHint}>Tap + to pick a spot</Text>
+                )}
+                <Animated.View
+                  ref={floatingCardRef}
+                  style={[
+                    styles.floatingCard,
+                    {
+                      transform: [{ translateY: cardAnimY }, { scale: cardAnimScale }],
+                      opacity: cardAnimOpacity,
+                    },
+                  ]}
+                >
+                  <CardBack width={80} height={CARD_H} />
+                </Animated.View>
               </Animated.View>
-            </View>
+            )}
           </View>
 
           {!amActive && myTimeline.length > 0 && (
