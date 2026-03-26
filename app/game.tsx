@@ -1268,7 +1268,7 @@ export default function GameScreen() {
       return (
         <SafeAreaView style={styles.container}>
           <View style={styles.gameArea}>
-            <View style={styles.timelineAreaFull}>
+            <Animated.View style={styles.timelineAreaFull}>
               <Timeline
                 timeline={timeline}
                 currentCardMovie={movie}
@@ -1279,10 +1279,10 @@ export default function GameScreen() {
                 placedMovies={placedMovies}
                 hideFloatingCard
               />
-            </View>
+            </Animated.View>
             <View style={styles.placingBottomPanel}>
               <View style={styles.placingBottomRow}>
-                <CardBack width={52} height={68} />
+                <CardBack width={80} height={100} />
                 <Text style={[styles.phaseLabel, styles.placingLabel]}>
                   Waiting for {activePlayer?.display_name}…
                 </Text>
@@ -1303,7 +1303,7 @@ export default function GameScreen() {
       return (
         <SafeAreaView style={styles.container}>
           <View style={styles.gameArea}>
-            <View style={styles.timelineAreaFull}>
+            <Animated.View style={styles.timelineAreaFull}>
               <Timeline
                 ref={timelineRef}
                 timeline={timeline}
@@ -1315,7 +1315,7 @@ export default function GameScreen() {
                 placedMovies={placedMovies}
                 hideFloatingCard
               />
-            </View>
+            </Animated.View>
             <Animated.View style={[styles.placingBottomPanel, { opacity: leftPanelFade }]}>
               {amActive ? (
                 <View style={styles.placingBottomRow}>
@@ -1326,7 +1326,7 @@ export default function GameScreen() {
                       opacity: cardAnimOpacity,
                     }]}
                   >
-                    <CardBack width={52} height={68} />
+                    <CardBack width={80} height={100} />
                   </Animated.View>
                   <View style={styles.placingBottomHint}>
                     <Text style={[styles.phaseLabel, styles.placingLabel]}>Where does it go?</Text>
@@ -1358,7 +1358,7 @@ export default function GameScreen() {
                   opacity: flyAnimOpacity,
                 }}
               >
-                <CardBack width={52} height={68} />
+                <CardBack width={80} height={100} />
               </Animated.View>
             </View>
           )}
@@ -1683,7 +1683,7 @@ export default function GameScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.gameArea}>
-          <View style={styles.timelineAreaFull}>
+          <Animated.View style={styles.timelineAreaFull}>
             <Timeline
               timeline={timeline}
               currentCardMovie={movie}
@@ -1698,7 +1698,7 @@ export default function GameScreen() {
               blockedIntervals={isPickingInterval ? blockedIntervals : undefined}
               hideFloatingCard
             />
-          </View>
+          </Animated.View>
 
           <Animated.View style={[styles.challengeBottomPanel, { transform: [{ translateY: challengePanelY }] }]}>
             {/* Decision phase — not yet decided */}
@@ -2819,7 +2819,7 @@ const styles = StyleSheet.create({
   timelineAreaFull: {
     flex: 1,
     justifyContent: 'center',
-    paddingBottom: 96,
+    paddingBottom: 132,
   },
   placingBottomPanel: {
     position: 'absolute',
