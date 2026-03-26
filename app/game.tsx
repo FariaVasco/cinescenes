@@ -107,6 +107,7 @@ export default function GameScreen() {
   const challengeDecisionMade = useRef(false);
   const [revealPhase, setRevealPhase] = useState<'flip' | 'result'>('flip');
   const [showChallengerTimeline, setShowChallengerTimeline] = useState(false);
+  const [showMyTimelineSheet, setShowMyTimelineSheet] = useState(false);
   const [movieGuess, setMovieGuess] = useState('');
   const [directorGuess, setDirectorGuess] = useState('');
   const [revealLocked, setRevealLocked] = useState(true);
@@ -244,8 +245,15 @@ export default function GameScreen() {
   // recalculates layout (causing visible glitching) and disrupts speech recognition.
   useEffect(() => {
     const amActive = myPlayerId === currentTurn?.active_player_id;
+    const amHost = players.length > 0 && players[0].id === myPlayerId;
     if (trailerEnded && !readyToPlace && amActive) {
       stopPolling();
+    } else if (trailerEnded && !readyToPlace && !amActive && amHost
+        && game?.visibility !== 'public'
+        && currentTurn?.placed_interval === null) {
+      // Host's trailer ended but it's not their turn in a private game.
+      // Write placed_interval=-1 so the active player's poll unblocks them.
+      db.from('turns').update({ placed_interval: -1 }).eq('id', currentTurn!.id);
     } else if (!loading) {
       // Poll faster during placing so observers react quickly when the active player
       // clicks "I know it!" — the placed_interval=-1 signal shows up within ~750 ms
@@ -254,7 +262,7 @@ export default function GameScreen() {
       startPolling(isObserverWatchingTrailer ? 750 : POLL_MS);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trailerEnded, readyToPlace, myPlayerId, currentTurn?.active_player_id, currentTurn?.status, loading]);
+  }, [trailerEnded, readyToPlace, myPlayerId, currentTurn?.active_player_id, currentTurn?.status, currentTurn?.placed_interval, loading]);
 
   // Skip-trailer gate: for public games, the active player must watch at least half
   // the safe window before "I know it!" becomes tappable.
@@ -471,9 +479,9 @@ export default function GameScreen() {
           }
         }
 
-        // Observer: active player tapped "I know it!" — exit the trailer view
-        if (!turnChanged && placedIntervalChanged && latestTurn.placed_interval === -1
-            && myPlayerId !== latestTurn.active_player_id) {
+        // placed_interval=-1 signals "I know it!" — exit the trailer view for everyone
+        // (active player in private games may receive this signal from the host)
+        if (!turnChanged && placedIntervalChanged && latestTurn.placed_interval === -1) {
           setTrailerEnded(true);
         }
 
@@ -1079,6 +1087,8 @@ export default function GameScreen() {
   const activePlayer = getActivePlayer();
   const amActive = isActivePlayer();
   const timeline = getActivePlayerTimeline();
+  // Host = first player by created_at (matches local-lobby ordering)
+  const amHost = players.length > 0 && players[0].id === myPlayerId;
 
   // My own timeline (for "my timeline" modal and drawing phase display)
   const myTimeline = (players.find(p => p.id === myPlayerId)?.timeline ?? []).slice().sort((a, b) => a - b);
@@ -1253,7 +1263,8 @@ export default function GameScreen() {
           )}
         </View>
 
-        <ScoreBar players={players} myId={myPlayerId} />
+        <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} />
+        {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} />}
         {leaveModal}
       </SafeAreaView>
     );
@@ -1289,10 +1300,8 @@ export default function GameScreen() {
               </View>
             </View>
           </View>
-          {myTimeline.length > 0 && (
-            <CollapsibleMyTimeline timeline={myTimeline} cards={myTimelineCards} />
-          )}
-          <ScoreBar players={players} myId={myPlayerId} />
+          <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} />
+          {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} />}
           {leaveModal}
         </SafeAreaView>
       );
@@ -1343,10 +1352,7 @@ export default function GameScreen() {
             </Animated.View>
           </View>
 
-          {!amActive && myTimeline.length > 0 && (
-            <CollapsibleMyTimeline timeline={myTimeline} cards={myTimelineCards} />
-          )}
-          <ScoreBar players={players} myId={myPlayerId} />
+          <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} />
           {flyVisible && (
             <View style={StyleSheet.absoluteFill} pointerEvents="none">
               <Animated.View
@@ -1362,6 +1368,7 @@ export default function GameScreen() {
               </Animated.View>
             </View>
           )}
+          {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} />}
           {leaveModal}
         </SafeAreaView>
       );
@@ -1481,15 +1488,17 @@ export default function GameScreen() {
       );
     }
 
-    // ── Observers in private games: show waiting screen instead of trailer ──
-    if (!amActive && game?.visibility !== 'public') {
+    // ── Non-host observers in private games: show waiting screen ──
+    // (Active player always falls through to the trailer block so they get controls)
+    if (!amHost && !amActive && game?.visibility !== 'public') {
+      const hostPlayer = players[0];
       return (
         <View style={styles.endedOverlay}>
           <SafeAreaView style={styles.endedInner} edges={['top', 'bottom']}>
             <View style={styles.endedCenter}>
               <Text style={styles.endedTitle}>🎬</Text>
               <Text style={styles.endedWaiting}>
-                {activePlayer?.display_name} is watching the trailer…
+                {hostPlayer?.display_name} is watching the trailer…
               </Text>
             </View>
           </SafeAreaView>
@@ -1498,29 +1507,36 @@ export default function GameScreen() {
       );
     }
 
-    // ── Trailer playing ──
+    // In private games, only the host's phone plays the actual video.
+    const showVideo = amHost || game?.visibility === 'public';
+
+    // ── Trailer screen ──
     return (
       <View style={styles.trailerContainer}>
-        <TrailerPlayer
-          key={`${currentTurn.id}-${trailerKey}`}
-          ref={trailerRef}
-          movie={movie}
-          onEnded={() => { setTrailerEnded(true); setUserPaused(false); }}
-        />
-
-        {/* Touch blocker — prevents YouTube from showing title on tap (all players) */}
-        {!userPaused && (
-          <TouchableOpacity
-            style={StyleSheet.absoluteFillObject}
-            activeOpacity={1}
-            onPress={() => {
-              if (amActive) { trailerRef.current?.pause(); setUserPaused(true); }
-            }}
-          />
+        {/* Video: host's phone only in private games; all phones in public games */}
+        {showVideo && (
+          <>
+            <TrailerPlayer
+              key={`${currentTurn.id}-${trailerKey}`}
+              ref={trailerRef}
+              movie={movie}
+              onEnded={() => { setTrailerEnded(true); setUserPaused(false); }}
+            />
+            {/* Touch blocker — prevents YouTube from showing title on tap */}
+            {!userPaused && (
+              <TouchableOpacity
+                style={StyleSheet.absoluteFillObject}
+                activeOpacity={1}
+                onPress={() => {
+                  if (amActive) { trailerRef.current?.pause(); setUserPaused(true); }
+                }}
+              />
+            )}
+          </>
         )}
 
-        {/* Controls: Report + I know it! — active player only */}
-        {amActive && (
+        {/* Controls: active player watching video (host / public) — corner overlay */}
+        {amActive && showVideo && (
           <SafeAreaView style={styles.trailerControls} edges={['top', 'bottom', 'right']} pointerEvents="box-none">
             <View />
             <View style={styles.cornerActions}>
@@ -1533,7 +1549,6 @@ export default function GameScreen() {
                 onPress={async () => {
                   trailerRef.current?.stop();
                   setUserPaused(false);
-                  // Signal observers first (awaited so they can poll it before we advance)
                   if (currentTurn) {
                     const optimistic = { ...currentTurn, placed_interval: -1 };
                     currentTurnRef.current = optimistic;
@@ -1549,8 +1564,41 @@ export default function GameScreen() {
           </SafeAreaView>
         )}
 
-        {/* Observer label */}
-        {!amActive && (
+        {/* Controls: active player not watching video (private game, not host) — centered */}
+        {amActive && !showVideo && (
+          <SafeAreaView style={styles.activeNoVideoOverlay} edges={['top', 'bottom', 'left', 'right']} pointerEvents="box-none">
+            {/* Report — top right, secondary utility action */}
+            <View style={styles.activeNoVideoTopBar}>
+              <View />
+              <TouchableOpacity style={styles.reportButton} onPress={() => setShowReportDialog(true)}>
+                <Text style={styles.reportButtonText}>⚑ Report</Text>
+              </TouchableOpacity>
+            </View>
+            {/* Primary CTA — centered */}
+            <View style={styles.activeNoVideoCenter}>
+              <Text style={styles.watchingBadgeText}>🎬 Trailer is on {players[0]?.display_name}'s screen</Text>
+              <TouchableOpacity
+                style={[styles.knowItBtn, !canSkipTrailer && styles.skipButtonDisabled]}
+                disabled={!canSkipTrailer}
+                onPress={async () => {
+                  if (currentTurn) {
+                    const optimistic = { ...currentTurn, placed_interval: -1 };
+                    currentTurnRef.current = optimistic;
+                    setLocalTurn(optimistic);
+                    await db.from('turns').update({ placed_interval: -1 }).eq('id', currentTurn.id);
+                  }
+                  setTrailerEnded(true);
+                }}
+              >
+                <Text style={styles.knowItBtnText}>I know it! →</Text>
+              </TouchableOpacity>
+            </View>
+            <View />
+          </SafeAreaView>
+        )}
+
+        {/* Observer label — only shown when video is actually visible */}
+        {!amActive && showVideo && (
           <SafeAreaView style={styles.trailerControls} edges={['top']} pointerEvents="none">
             <View style={styles.watchingBadge}>
               <Text style={styles.watchingBadgeText}>👀 {activePlayer?.display_name} is playing</Text>
@@ -1559,8 +1607,8 @@ export default function GameScreen() {
           </SafeAreaView>
         )}
 
-        {/* Pause overlay — active player only */}
-        {amActive && userPaused && (
+        {/* Pause overlay — active player only, video must be playing */}
+        {amActive && userPaused && showVideo && (
           <TouchableOpacity
             style={styles.pauseOverlay}
             activeOpacity={1}
@@ -1706,26 +1754,24 @@ export default function GameScreen() {
               <>
                 <ChallengeTimer seconds={10} onExpire={handlePass} barMode />
                 <View style={styles.challengeBottomActions}>
+                  <TouchableOpacity onPress={handlePass} activeOpacity={0.7} style={styles.passBtn}>
+                    <Text style={styles.passBtnLabel}>Pass</Text>
+                  </TouchableOpacity>
                   {canChallenge ? (
-                    <>
-                      <TouchableOpacity
-                        style={[styles.challengeBigBtn, !hasCoins && styles.challengeBigBtnDisabled]}
-                        onPress={hasCoins ? handleChallenge : undefined}
-                        activeOpacity={hasCoins ? 0.8 : 1}
-                      >
-                        <Text style={styles.challengeBigBtnText}>
-                          {hasCoins ? '⚡  Challenge' : 'No coins left'}
-                        </Text>
-                        {hasCoins && <Text style={styles.challengeBigBtnSub}>costs 1 coin</Text>}
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={handlePass} activeOpacity={0.7} style={styles.passTextBtn}>
-                        <Text style={styles.passTextBtnText}>Pass</Text>
-                      </TouchableOpacity>
-                    </>
-                  ) : (
-                    <TouchableOpacity onPress={handlePass} activeOpacity={0.7} style={styles.passTextBtn}>
-                      <Text style={styles.passTextBtnText}>All spots taken — Pass</Text>
+                    <TouchableOpacity
+                      style={[styles.challengeBtn, !hasCoins && styles.challengeBtnDisabled]}
+                      onPress={hasCoins ? handleChallenge : undefined}
+                      activeOpacity={hasCoins ? 0.8 : 1}
+                    >
+                      <Text style={styles.challengeBtnText}>
+                        {hasCoins ? '⚡  Challenge' : 'No coins'}
+                      </Text>
+                      {hasCoins && <Text style={styles.challengeBtnSub}>1 coin</Text>}
                     </TouchableOpacity>
+                  ) : (
+                    <View style={[styles.challengeBtn, styles.challengeBtnDisabled]}>
+                      <Text style={styles.challengeBtnText}>All spots taken</Text>
+                    </View>
                   )}
                 </View>
               </>
@@ -1776,7 +1822,8 @@ export default function GameScreen() {
           </Animated.View>
         </View>
 
-        <ScoreBar players={players} myId={myPlayerId} />
+        <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} />
+        {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} />}
         {leaveModal}
       </SafeAreaView>
     );
@@ -1872,7 +1919,7 @@ export default function GameScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.gameArea}>
-          <Animated.View style={[styles.timelineAreaFull, { opacity: timelineFade }]}>
+          <Animated.View style={[styles.timelineAreaFull, styles.timelineAreaReveal, { opacity: timelineFade }]}>
             <Timeline
               timeline={displayTimeline}
               currentCardMovie={m}
@@ -1942,11 +1989,9 @@ export default function GameScreen() {
             </View>
           )}
         </View>
-        {!amActive && myTimeline.length > 0 && (
-          <CollapsibleMyTimeline timeline={myTimeline} cards={myTimelineCards} />
-        )}
-        <ScoreBar players={players} myId={myPlayerId} />
+        <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} />
         {winnerId === myPlayerId && revealPhase === 'result' && <ConfettiBurst />}
+        {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} />}
         {leaveModal}
       </SafeAreaView>
     );
@@ -1960,50 +2005,81 @@ function CollapsibleMyTimeline({ timeline, cards }: {
   cards: (Movie | undefined)[];
 }) {
   const [expanded, setExpanded] = useState(false);
-  const CARD_W = 52, CARD_H = 68;
-  const OVERLAP = 34;
+  const CARD_W = 52, CARD_H = 68, OVERLAP = 22;
 
-  const renderCard = (year: number, i: number, full: boolean) => {
-    const mv = cards[i];
-    if (full && mv) return <CardFront key={i} movie={mv} width={CARD_W} height={CARD_H} />;
+  if (expanded) {
     return (
-      <View key={i} style={styles.collapsedYearCard}>
-        <Text style={styles.collapsedYearText}>{year}</Text>
-      </View>
+      <TouchableOpacity onPress={() => setExpanded(false)} activeOpacity={1}
+        style={styles.collapsibleBar}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.collapsibleExpandedContent}>
+          {timeline.map((year, i) => {
+            const mv = cards[i];
+            return mv
+              ? <CardFront key={i} movie={mv} width={CARD_W} height={CARD_H} />
+              : <View key={i} style={[styles.collapsedYearCard, { width: CARD_W, height: CARD_H }]}>
+                  <Text style={styles.collapsedYearText}>{year}</Text>
+                </View>;
+          })}
+        </ScrollView>
+      </TouchableOpacity>
     );
-  };
+  }
 
   return (
-    <View style={styles.collapsibleBar}>
-      {expanded ? (
-        <>
-          <Text style={styles.collapsibleBarLabel}>Your timeline</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.collapsibleExpandedContent}>
-            {timeline.map((year, i) => renderCard(year, i, true))}
-          </ScrollView>
-          <TouchableOpacity onPress={() => setExpanded(false)} style={styles.collapsibleCollapseBtn}>
-            <Text style={styles.collapsibleCollapseBtnText}>▲ collapse</Text>
-          </TouchableOpacity>
-        </>
-      ) : (
-        <TouchableOpacity onPress={() => setExpanded(true)} activeOpacity={0.75}
-          style={styles.collapsibleFanTouchable}>
-          <Text style={styles.collapsibleBarLabel}>Your timeline ▼</Text>
-          <View style={styles.collapsibleFanWrap}>
-            {timeline.map((year, i) => (
-              <View key={i} style={[styles.collapsibleFanCard, i > 0 && { marginLeft: -OVERLAP }]}>
-                {renderCard(year, i, false)}
-              </View>
-            ))}
-          </View>
+    <TouchableOpacity onPress={() => setExpanded(true)} activeOpacity={0.85}
+      style={styles.collapsibleBar}>
+      <View style={styles.collapsibleFanWrap}>
+        {timeline.map((year, i) => {
+          const mv = cards[i];
+          return (
+            <View key={i} style={[styles.collapsibleFanCard, i > 0 && { marginLeft: -OVERLAP }]}>
+              {mv
+                ? <CardFront movie={mv} width={CARD_W} height={CARD_H} />
+                : <View style={[styles.collapsedYearCard, { width: CARD_W, height: CARD_H }]}>
+                    <Text style={styles.collapsedYearText}>{year}</Text>
+                  </View>
+              }
+            </View>
+          );
+        })}
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+function MyTimelineSheet({ timeline, cards, onClose }: {
+  timeline: number[];
+  cards: (Movie | undefined)[];
+  onClose: () => void;
+}) {
+  const CARD_W = 80, CARD_H = 100;
+  return (
+    <View style={[StyleSheet.absoluteFill, styles.timelineSheetOverlay]} pointerEvents="box-none">
+      <TouchableOpacity style={StyleSheet.absoluteFill} onPress={onClose} activeOpacity={1} />
+      <View style={styles.timelineSheetPanel}>
+        <View style={styles.timelineSheetHandle} />
+        <Text style={styles.timelineSheetTitle}>Your Timeline</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.timelineSheetScroll}>
+          {timeline.map((year, i) => {
+            const mv = cards[i];
+            return mv
+              ? <CardFront key={i} movie={mv} width={CARD_W} height={CARD_H} />
+              : <View key={i} style={[styles.collapsedYearCard, { width: CARD_W, height: CARD_H }]}>
+                  <Text style={[styles.collapsedYearText, { fontSize: 20 }]}>{year}</Text>
+                </View>;
+          })}
+        </ScrollView>
+        <TouchableOpacity onPress={onClose} style={styles.timelineSheetClose}>
+          <Text style={styles.timelineSheetCloseText}>Close ✕</Text>
         </TouchableOpacity>
-      )}
+      </View>
     </View>
   );
 }
 
-function ScoreBar({ players, myId }: { players: Player[]; myId: string | null }) {
+function ScoreBar({ players, myId, onOpenTimeline }: { players: Player[]; myId: string | null; onOpenTimeline?: () => void }) {
   return (
     <View style={styles.scoreBarRow}>
       <ScrollView
@@ -2020,6 +2096,11 @@ function ScoreBar({ players, myId }: { players: Player[]; myId: string | null })
           </View>
         ))}
       </ScrollView>
+      {onOpenTimeline && (
+        <TouchableOpacity onPress={onOpenTimeline} style={styles.scoreBarTimelineBtn} activeOpacity={0.75}>
+          <Text style={styles.scoreBarTimelineBtnText}>🎞</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -2821,6 +2902,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingBottom: 132,
   },
+  timelineAreaReveal: {
+    paddingBottom: 90,
+  },
   placingBottomPanel: {
     position: 'absolute',
     bottom: 0,
@@ -2864,38 +2948,55 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   challengeBottomActions: {
+    flexDirection: 'row',
     gap: 10,
-    alignItems: 'center',
+    alignItems: 'stretch',
   },
-  challengeBigBtn: {
-    width: '100%',
+  passBtn: {
+    flex: 1,
     borderRadius: R.btn,
-    paddingVertical: 16,
+    paddingVertical: 12,
     alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  passBtnLabel: {
+    color: C.textSub,
+    fontSize: FS.sm,
+    fontWeight: '600',
+  },
+  challengeBtn: {
+    flex: 2,
+    borderRadius: R.btn,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#e63946',
     shadowColor: '#e63946',
-    shadowOpacity: 0.55,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 8,
+    shadowOpacity: 0.45,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 6,
   },
-  challengeBigBtnDisabled: {
-    backgroundColor: 'rgba(230,57,70,0.25)',
+  challengeBtnDisabled: {
+    backgroundColor: 'rgba(230,57,70,0.2)',
     shadowOpacity: 0,
     elevation: 0,
   },
-  challengeBigBtnText: {
+  challengeBtnText: {
     color: '#fff',
-    fontSize: FS.md,
+    fontSize: FS.sm,
     fontWeight: '900',
     letterSpacing: 0.3,
   },
-  challengeBigBtnSub: {
+  challengeBtnSub: {
     color: 'rgba(255,255,255,0.6)',
     fontSize: FS.xs,
     fontWeight: '600',
-    marginTop: 3,
+    marginTop: 2,
   },
+  // Keep these for the pass button in seq/withdraw
   passTextBtn: {
     paddingVertical: 8,
     alignItems: 'center',
@@ -3059,6 +3160,40 @@ const styles = StyleSheet.create({
   },
   skipButtonText: { color: C.textOnGold, fontSize: FS.md, fontWeight: '800', letterSpacing: 0.4 },
   skipButtonDisabled: { opacity: 0.4 },
+  // Active player in private game — no video, centered layout
+  activeNoVideoOverlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    justifyContent: 'space-between',
+    padding: 16,
+  },
+  activeNoVideoTopBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  activeNoVideoCenter: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 32,
+  },
+  knowItBtn: {
+    paddingHorizontal: 48,
+    paddingVertical: 18,
+    borderRadius: R.card,
+    backgroundColor: C.gold,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  knowItBtnText: {
+    color: C.textOnGold,
+    fontSize: FS.xl,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
   pauseOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center',
@@ -3348,50 +3483,25 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   collapsibleBar: {
-    paddingTop: 6,
-    paddingBottom: 2,
-    paddingHorizontal: 16,
     alignItems: 'center',
-  },
-  collapsibleBarLabel: {
-    textAlign: 'center',
-    color: 'rgba(255,255,255,0.3)',
-    fontSize: FS.micro,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-    marginBottom: 6,
-  },
-  collapsibleFanTouchable: {
-    alignItems: 'center',
-    width: '100%',
-  },
-  collapsibleCollapseBtn: {
     paddingVertical: 6,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-  },
-  collapsibleCollapseBtnText: {
-    color: 'rgba(255,255,255,0.35)',
-    fontSize: FS.micro,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
+    paddingHorizontal: 8,
+    backgroundColor: 'rgba(0,0,0,0.25)',
   },
   collapsibleFanWrap: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  collapsibleFanCard: {},
+  collapsibleFanCard: { zIndex: 1 },
   collapsibleExpandedContent: {
-    gap: 8,
+    flexGrow: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    gap: 8,
+    paddingHorizontal: 12,
   },
   collapsedYearCard: {
-    width: 52,
-    height: 68,
     backgroundColor: C.surface,
     borderRadius: R.md,
     borderWidth: 1,
@@ -3403,5 +3513,59 @@ const styles = StyleSheet.create({
     color: C.gold,
     fontSize: FS.sm,
     fontWeight: '800',
+  },
+  // Timeline sheet (absoluteFill overlay)
+  timelineSheetOverlay: {
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  timelineSheetPanel: {
+    backgroundColor: C.surfaceHigh,
+    borderTopLeftRadius: R.card,
+    borderTopRightRadius: R.card,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 16,
+    gap: 10,
+  },
+  timelineSheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: C.border,
+    alignSelf: 'center',
+  },
+  timelineSheetTitle: {
+    color: C.textPrimary,
+    fontSize: FS.base,
+    fontWeight: '800',
+    textAlign: 'center',
+    letterSpacing: 0.3,
+  },
+  timelineSheetScroll: {
+    gap: 8,
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  timelineSheetClose: {
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  timelineSheetCloseText: {
+    color: C.textSub,
+    fontSize: FS.sm,
+    fontWeight: '600',
+  },
+  // ScoreBar timeline icon button
+  scoreBarTimelineBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: C.borderSubtle,
+  },
+  scoreBarTimelineBtnText: {
+    fontSize: 18,
   },
 });

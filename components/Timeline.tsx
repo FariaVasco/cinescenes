@@ -85,50 +85,36 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
       insertSlotMargin.setValue(0);
       return;
     }
-    // Slot 0 (before all cards) or last slot (after all cards) — open space already exists,
-    // no need to push the timeline apart. Pre-set to full size immediately.
-    const isExtreme = placedInterval === 0 || placedInterval === timeline.length;
     setInsertVisible(false);
     setInsertOverlay(null);
     insertOpacity.setValue(0);
     insertTranslateX.setValue(220);
     insertTranslateY.setValue(-180);
     insertRotate.setValue(50);
-    if (isExtreme) {
-      insertSlotWidth.setValue(80);
-      insertSlotMargin.setValue(24);
-    } else {
-      insertSlotWidth.setValue(0);
-      insertSlotMargin.setValue(0);
-    }
+    // Pre-expand slot to full size immediately so the layout settles before we measure.
+    // This ensures the overlay card's anchor is the slot's true final position regardless
+    // of how many cards are in the timeline.
+    insertSlotWidth.setValue(80);
+    insertSlotMargin.setValue(24);
     const t = setTimeout(() => {
       const runAnim = () => {
-        // Reverse of trash: card starts at (translateX:220, translateY:-180, rotate:50deg) and
-        // returns to rest — same 700ms duration, Easing.out mirrors trash's Easing.in.
-        // Slot expansion (non-extreme only) mirrors the trash slot collapse: 600ms Easing.inOut(quad)
-        const anims: Animated.CompositeAnimation[] = [
+        Animated.parallel([
           Animated.timing(insertTranslateX, { toValue: 0, duration: 700, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
           Animated.timing(insertTranslateY, { toValue: 0, duration: 700, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
           Animated.timing(insertRotate,     { toValue: 0, duration: 700, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
           Animated.timing(insertOpacity,    { toValue: 1, duration: 150, useNativeDriver: true }),
-        ];
-        if (!isExtreme) {
-          anims.push(Animated.timing(insertSlotWidth,  { toValue: 80, duration: 600, easing: Easing.inOut(Easing.quad), useNativeDriver: false }));
-          anims.push(Animated.timing(insertSlotMargin, { toValue: 24, duration: 600, easing: Easing.inOut(Easing.quad), useNativeDriver: false }));
-        }
-        Animated.parallel(anims).start(() => {
+        ]).start(() => {
           setInsertVisible(true);
           setInsertOverlay(null);
         });
       };
-      // Measure slot + wrapper so the overlay card starts off-screen above and lands in the slot
+      // Measure slot + wrapper after slot is already at full size so the anchor is exact.
       if (insertSlotRef.current && wrapperRef.current) {
         let slotPos: { pageX: number; pageY: number } | null = null;
         let wrapPos: { pageX: number; pageY: number } | null = null;
         const tryStart = () => {
           if (!slotPos || !wrapPos) return;
-          // +24: account for the marginHorizontal applied when the slot is at full size
-          setInsertOverlay({ x: slotPos.pageX - wrapPos.pageX + 24, y: slotPos.pageY - wrapPos.pageY });
+          setInsertOverlay({ x: slotPos.pageX - wrapPos.pageX, y: slotPos.pageY - wrapPos.pageY });
           runAnim();
         };
         insertSlotRef.current.measure((_x, _y, _w, _h, pageX, pageY) => { slotPos = { pageX, pageY }; tryStart(); });
@@ -246,16 +232,11 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
             );
           }
           if (insertOverlay) {
-            // Slot is expanding to receive the card (card itself is in the overlay)
-            return (
-              <Animated.View
-                key={`gap-${index}`}
-                style={{ width: insertSlotWidth, marginHorizontal: insertSlotMargin }}
-              />
-            );
+            // Slot already at full size (card is in the overlay flying in)
+            return <View key={`gap-${index}`} style={{ width: 80, height: 100, marginHorizontal: 24 }} />;
           }
-          // Before animation: collapsed invisible slot (used for position measurement)
-          return <View key={`gap-${index}`} ref={insertSlotRef} style={{ width: 0, height: 100 }} />;
+          // Before animation: slot pre-expanded to full size for accurate position measurement
+          return <View key={`gap-${index}`} ref={insertSlotRef} style={{ width: 80, height: 100, marginHorizontal: 24 }} />;
         }
         if (trashAfter) {
           // Trash: card flies up-right (via absolute overlay), then slot collapses
@@ -296,9 +277,8 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
     if (coin) {
       return (
         <View key={`gap-${index}`} style={styles.coinWrap} onStartShouldSetResponder={() => true}>
-          <Text style={styles.coinLabel}>{coin.label}</Text>
           <View style={styles.coinCircle}>
-            <Text style={styles.coinInitials}>{coin.label.slice(0, 2).toUpperCase()}</Text>
+            <Text style={styles.coinInitials}>🪙</Text>
           </View>
         </View>
       );

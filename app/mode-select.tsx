@@ -171,6 +171,7 @@ export default function ModeSelectScreen() {
             </View>
           </View>
           <Text style={styles.modeSub}>Every movie ever made · Trailer on host's phone only</Text>
+          <Text style={styles.modeDisclaimer}>Trailers are unverified — may contain mature content</Text>
         </TouchableOpacity>
 
         {/* Collections — coming soon */}
@@ -291,6 +292,7 @@ const styles = StyleSheet.create({
   modeName: { ...T.subtitle, color: C.textPrimary, flex: 1 },
   modeNameDisabled: { color: C.textSub },
   modeSub: { ...T.caption },
+  modeDisclaimer: { ...T.micro, color: C.textSub, opacity: 0.6 },
 
   freeBadge: {
     backgroundColor: 'rgba(34,197,94,0.15)',
