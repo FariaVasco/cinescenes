@@ -97,6 +97,7 @@ export default function GameScreen() {
   const challengerTransitionOpacity = useRef(new Animated.Value(0)).current;
   const challengePanelY = useRef(new Animated.Value(200)).current;
   const leftPanelFade = useRef(new Animated.Value(1)).current;
+  const placingTimelineFade = useRef(new Animated.Value(1)).current;
   const [cardPlaced, setCardPlaced] = useState(false);
   const [flyVisible, setFlyVisible] = useState(false);
   const [flyStart, setFlyStart] = useState({ x: 0, y: 0 });
@@ -235,7 +236,7 @@ export default function GameScreen() {
     if (currentTurn?.status !== 'challenging') { setRevealLocked(true); return; }
     setRevealLocked(true);
     challengePanelY.setValue(200);
-    Animated.spring(challengePanelY, { toValue: 0, damping: 22, stiffness: 220, useNativeDriver: true }).start();
+    Animated.spring(challengePanelY, { toValue: 0, damping: 30, stiffness: 160, useNativeDriver: true }).start();
     const t = setTimeout(() => setRevealLocked(false), 5500);
     return () => clearTimeout(t);
   }, [currentTurn?.id, currentTurn?.status]);
@@ -302,6 +303,7 @@ export default function GameScreen() {
     prefetchedInsaneMovieRef.current = null;
     setCardPlaced(false);
     leftPanelFade.setValue(1);
+    placingTimelineFade.setValue(1);
   }, [currentTurn?.id]);
 
   useEffect(() => {
@@ -745,26 +747,30 @@ export default function GameScreen() {
         Animated.parallel([
           Animated.timing(flyAnimX, {
             toValue: gapPos.pageX - cardPos.pageX,
-            duration: 650,
+            duration: 800,
             easing: Easing.out(Easing.cubic),
             useNativeDriver: true,
           }),
           Animated.timing(flyAnimY, {
             toValue: gapPos.pageY - cardPos.pageY,
-            duration: 650,
+            duration: 800,
             easing: Easing.out(Easing.cubic),
             useNativeDriver: true,
           }),
           Animated.sequence([
-            Animated.delay(580),
-            Animated.timing(flyAnimOpacity, { toValue: 0, duration: 70, useNativeDriver: true }),
+            Animated.delay(720),
+            Animated.timing(flyAnimOpacity, { toValue: 0, duration: 80, useNativeDriver: true }),
           ]),
         ]).start(() => resolve());
       });
 
-      // Expand to full-width only after the card has landed — layout is now stable.
+      // Fade out, snap layout (invisible), fade back in — hides the 120px margin jump.
+      await new Promise<void>((resolve) => {
+        Animated.timing(placingTimelineFade, { toValue: 0, duration: 80, useNativeDriver: true }).start(() => resolve());
+      });
       setCardPlaced(true);
       setFlyVisible(false);
+      Animated.timing(placingTimelineFade, { toValue: 1, duration: 320, useNativeDriver: true }).start();
     } else {
       // Fallback: card falls away
       setCardPlaced(true);
@@ -1314,7 +1320,7 @@ export default function GameScreen() {
       return (
         <SafeAreaView style={styles.container}>
           <View style={styles.gameArea}>
-            <View style={cardPlaced ? styles.timelineAreaFull : styles.timelineArea}>
+            <Animated.View style={[cardPlaced ? styles.timelineAreaFull : styles.timelineArea, { opacity: placingTimelineFade }]}>
               <Timeline
                 ref={timelineRef}
                 timeline={timeline}
@@ -1326,7 +1332,7 @@ export default function GameScreen() {
                 placedMovies={placedMovies}
                 hideFloatingCard
               />
-            </View>
+            </Animated.View>
             {!cardPlaced && (
               <Animated.View style={[styles.leftOverlay, { opacity: leftPanelFade }]}>
                 <Text style={[styles.phaseLabel, styles.placingLabel]}>
