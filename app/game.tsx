@@ -2820,7 +2820,7 @@ const styles = StyleSheet.create({
   primaryBtn: { backgroundColor: C.gold, borderRadius: R.btn, paddingHorizontal: 32, paddingVertical: 14 },
   primaryBtnText: { color: C.textOnGold, fontSize: FS.md, fontWeight: '900' },
   phaseLabel: { color: C.textSub, fontSize: FS.base, fontWeight: '600', textAlign: 'center' },
-  tapHint: { color: C.textMuted, fontSize: FS.sm, textAlign: 'center', marginTop: 4 },
+  tapHint: { color: C.textMuted, fontSize: FS.sm, textAlign: 'center', marginTop: 4, minHeight: 32 },
 
   gameArea: {
     flex: 1,
