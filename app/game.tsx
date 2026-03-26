@@ -95,6 +95,7 @@ export default function GameScreen() {
   const flyAnimOpacity = useRef(new Animated.Value(1)).current;
   const timelineFade = useRef(new Animated.Value(1)).current;
   const challengerTransitionOpacity = useRef(new Animated.Value(0)).current;
+  const challengePanelY = useRef(new Animated.Value(200)).current;
   const [flyVisible, setFlyVisible] = useState(false);
   const [flyStart, setFlyStart] = useState({ x: 0, y: 0 });
   const floatingCardRef = useRef<any>(null);
@@ -231,6 +232,8 @@ export default function GameScreen() {
   useEffect(() => {
     if (currentTurn?.status !== 'challenging') { setRevealLocked(true); return; }
     setRevealLocked(true);
+    challengePanelY.setValue(200);
+    Animated.spring(challengePanelY, { toValue: 0, damping: 22, stiffness: 220, useNativeDriver: true }).start();
     const t = setTimeout(() => setRevealLocked(false), 5500);
     return () => clearTimeout(t);
   }, [currentTurn?.id, currentTurn?.status]);
@@ -1675,7 +1678,7 @@ export default function GameScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.gameArea}>
-          <View style={styles.timelineArea}>
+          <View style={styles.timelineAreaFull}>
             <Timeline
               timeline={timeline}
               currentCardMovie={movie}
@@ -1691,68 +1694,81 @@ export default function GameScreen() {
               hideFloatingCard
             />
           </View>
-          <View style={styles.leftOverlay}>
-            <View style={styles.challengeStatusArea}>
-              <Text style={styles.challengeOverlayIcon}>{statusEmoji}</Text>
-              <Text style={styles.challengeOverlayText}>{statusMsg}</Text>
-            </View>
-            {isPickingInterval && (
-              <Text style={styles.challengePickTitle}>Tap + to place your coin</Text>
-            )}
+
+          <Animated.View style={[styles.challengeBottomPanel, { transform: [{ translateY: challengePanelY }] }]}>
             {/* Decision phase — not yet decided */}
             {!amActive && !alreadyDecided && !inSeqPhase && (
-              <View style={styles.challengeActionsArea}>
+              <>
                 <ChallengeTimer seconds={10} onExpire={handlePass} barMode />
-                {canChallenge ? (
-                  <>
-                    <TouchableOpacity
-                      style={[styles.challengePillV, !hasCoins && { opacity: 0.35 }]}
-                      onPress={hasCoins ? handleChallenge : undefined}
-                      activeOpacity={hasCoins ? 0.75 : 1}
-                    >
-                      <Text style={styles.challengePillText}>{hasCoins ? 'Challenge' : 'No coins'}</Text>
+                <View style={styles.challengeBottomActions}>
+                  {canChallenge ? (
+                    <>
+                      <TouchableOpacity
+                        style={[styles.challengeBigBtn, !hasCoins && styles.challengeBigBtnDisabled]}
+                        onPress={hasCoins ? handleChallenge : undefined}
+                        activeOpacity={hasCoins ? 0.8 : 1}
+                      >
+                        <Text style={styles.challengeBigBtnText}>
+                          {hasCoins ? '⚡  Challenge' : 'No coins left'}
+                        </Text>
+                        {hasCoins && <Text style={styles.challengeBigBtnSub}>costs 1 coin</Text>}
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={handlePass} activeOpacity={0.7} style={styles.passTextBtn}>
+                        <Text style={styles.passTextBtnText}>Pass</Text>
+                      </TouchableOpacity>
+                    </>
+                  ) : (
+                    <TouchableOpacity onPress={handlePass} activeOpacity={0.7} style={styles.passTextBtn}>
+                      <Text style={styles.passTextBtnText}>All spots taken — Pass</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={styles.passPillV} onPress={handlePass} activeOpacity={0.75}>
-                      <Text style={styles.passPillText}>Pass</Text>
-                    </TouchableOpacity>
-                  </>
-                ) : (
-                  <TouchableOpacity style={styles.passPillV} onPress={handlePass} activeOpacity={0.75}>
-                    <Text style={styles.passPillText}>All spots taken</Text>
+                  )}
+                </View>
+              </>
+            )}
+            {/* Decision phase — challenged, waiting for others */}
+            {!amActive && !inSeqPhase && myChallenge?.interval_index === -1 && (
+              <View style={styles.challengeStatusStrip}>
+                <Text style={styles.challengeStatusStripText}>⚡ You challenged!  Waiting for others…</Text>
+              </View>
+            )}
+            {/* Sequential phase — picking interval */}
+            {isPickingInterval && (
+              <View style={styles.challengeStatusStrip}>
+                <Text style={styles.challengeStatusStripText}>↑  Tap a gap to place your coin</Text>
+                {!amFirstChallenger && (
+                  <TouchableOpacity onPress={handleWithdrawChallenge} activeOpacity={0.7} style={styles.passTextBtn}>
+                    <Text style={styles.passTextBtnText}>↩  Withdraw</Text>
                   </TouchableOpacity>
                 )}
               </View>
             )}
-            {/* Decision phase — challenged, waiting for others */}
-            {!amActive && !inSeqPhase && myChallenge?.interval_index === -1 && (
-              <Text style={styles.challengeOverlayText}>You challenged!{'\n'}Waiting for others…</Text>
-            )}
-            {/* Sequential phase — withdraw button (2nd+ challengers only) */}
-            {isPickingInterval && !amFirstChallenger && (
-              <TouchableOpacity style={styles.passPillV} onPress={handleWithdrawChallenge} activeOpacity={0.75}>
-                <Text style={styles.passPillText}>↩ Withdraw</Text>
-              </TouchableOpacity>
-            )}
             {/* Sequential phase — already picked */}
             {!amActive && inSeqPhase && myChallenge !== null && myChallenge.interval_index >= 0 && !isPickingInterval && (
-              <Text style={styles.challengeOverlayText}>Coin placed.{'\n'}Waiting for others…</Text>
+              <View style={styles.challengeStatusStrip}>
+                <Text style={styles.challengeStatusStripText}>Coin placed.  Waiting for others…</Text>
+              </View>
             )}
             {/* Sequential phase — withdrawn */}
             {!amActive && myChallenge?.interval_index === -3 && (
-              <Text style={styles.challengeOverlayText}>You withdrew.</Text>
+              <View style={styles.challengeStatusStrip}>
+                <Text style={styles.challengeStatusStripText}>You withdrew.</Text>
+              </View>
             )}
+            {/* Active player reveal button */}
             {amActive && (
-              <TouchableOpacity
-                style={[styles.revealNowBtn, !canRevealNow && { opacity: 0.35 }]}
-                onPress={canRevealNow ? handleReveal : undefined}
-                activeOpacity={canRevealNow ? 0.85 : 1}
-              >
-                <Text style={styles.revealNowBtnText}>
-                  {revealLocked ? 'Waiting…' : pendingChallengers ? 'Deciding…' : 'Reveal →'}
-                </Text>
-              </TouchableOpacity>
+              <View style={styles.challengeBottomActions}>
+                <TouchableOpacity
+                  style={[styles.revealNowBtn, !canRevealNow && { opacity: 0.35 }]}
+                  onPress={canRevealNow ? handleReveal : undefined}
+                  activeOpacity={canRevealNow ? 0.85 : 1}
+                >
+                  <Text style={styles.revealNowBtnText}>
+                    {revealLocked ? 'Waiting…' : pendingChallengers ? 'Deciding…' : 'Reveal →'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             )}
-          </View>
+          </Animated.View>
         </View>
 
         <ScoreBar players={players} myId={myPlayerId} />
@@ -2797,6 +2813,11 @@ const styles = StyleSheet.create({
     marginLeft: 120,
     justifyContent: 'center',
   },
+  timelineAreaFull: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingBottom: 148,
+  },
   leftOverlay: {
     position: 'absolute',
     left: 0,
@@ -2811,6 +2832,72 @@ const styles = StyleSheet.create({
     borderRightWidth: StyleSheet.hairlineWidth,
     borderRightColor: C.borderSubtle,
     backgroundColor: C.bg,
+  },
+  challengeBottomPanel: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: C.bg,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: C.borderSubtle,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 20,
+    gap: 12,
+  },
+  challengeBottomActions: {
+    gap: 10,
+    alignItems: 'center',
+  },
+  challengeBigBtn: {
+    width: '100%',
+    borderRadius: R.btn,
+    paddingVertical: 16,
+    alignItems: 'center',
+    backgroundColor: '#e63946',
+    shadowColor: '#e63946',
+    shadowOpacity: 0.55,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+  },
+  challengeBigBtnDisabled: {
+    backgroundColor: 'rgba(230,57,70,0.25)',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  challengeBigBtnText: {
+    color: '#fff',
+    fontSize: FS.md,
+    fontWeight: '900',
+    letterSpacing: 0.3,
+  },
+  challengeBigBtnSub: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: FS.xs,
+    fontWeight: '600',
+    marginTop: 3,
+  },
+  passTextBtn: {
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  passTextBtnText: {
+    color: C.textSub,
+    fontSize: FS.sm,
+    fontWeight: '600',
+  },
+  challengeStatusStrip: {
+    paddingVertical: 18,
+    alignItems: 'center',
+    gap: 8,
+  },
+  challengeStatusStripText: {
+    color: C.textSub,
+    fontSize: FS.sm,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   placingLabel: {
     textAlign: 'center',
@@ -2843,58 +2930,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
 
-  challengeStatusArea: {
-    alignItems: 'center',
-    gap: 6,
-  },
-  challengeActionsArea: {
-    width: '100%',
-    gap: 20,
-  },
-  challengeOverlayIcon: { fontSize: 24 },
-  challengeOverlayText: {
-    color: C.textSub,
-    fontSize: FS.xs,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  challengePillV: {
-    width: '100%',
-    borderRadius: R.btn,
-    paddingVertical: 14,
-    alignItems: 'center',
-    backgroundColor: 'rgba(230,57,70,0.15)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(230,57,70,0.5)',
-  },
-  challengePillText: {
-    color: '#e63946',
-    fontSize: FS.sm,
-    fontWeight: '700',
-  },
-  passPillV: {
-    width: '100%',
-    borderRadius: R.btn,
-    paddingVertical: 14,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
-    backgroundColor: 'rgba(255,255,255,0.05)',
-  },
-  passPillText: {
-    color: C.textSub,
-    fontSize: FS.sm,
-    fontWeight: '600',
-  },
-  challengePickTitle: {
-    color: C.textMuted,
-    fontSize: FS.xs,
-    fontWeight: '600',
-    textAlign: 'center',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-    paddingBottom: 4,
-  },
   passBtnText: { color: C.textSub, fontSize: FS.sm, fontWeight: '600' },
   revealNowBtn: {
     width: '100%',
