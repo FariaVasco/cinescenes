@@ -62,9 +62,9 @@ export function CardFront({ movie, width, height }: CardFrontProps) {
         <View style={s.frontDirectorSection}>
           <Text
             style={[s.frontDirector, { fontSize: Math.max(6, width * 0.1) }]}
-            numberOfLines={2}
+            numberOfLines={1}
             adjustsFontSizeToFit
-            minimumFontScale={0.5}
+            minimumFontScale={0.4}
           >
             {movie.director ?? ''}
           </Text>
@@ -87,7 +87,7 @@ export function CardFront({ movie, width, height }: CardFrontProps) {
             style={[s.frontTitle, { fontSize: Math.max(7, width * 0.12) }]}
             numberOfLines={2}
             adjustsFontSizeToFit
-            minimumFontScale={0.5}
+            minimumFontScale={0.4}
           >
             {movie.title}
           </Text>
