@@ -2830,10 +2830,12 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 120,
     justifyContent: 'center',
+    paddingBottom: 72,
   },
   timelineAreaFull: {
     flex: 1,
     justifyContent: 'center',
+    paddingBottom: 72,
   },
   leftOverlay: {
     position: 'absolute',
