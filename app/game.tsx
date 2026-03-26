@@ -2483,15 +2483,17 @@ function GameIntroScreen({
         pointerEvents={started ? 'auto' : 'none'}
       >
         <View style={{ flex: 1 }}>
-          <SafeAreaView style={introStyles.inner} edges={['top', 'bottom']}>
-
+          {/* Header floats at top — kept out of normal flow so it doesn't push the wheel off-centre */}
+          <SafeAreaView edges={['top']} style={{ alignItems: 'center' }}>
             <View style={introStyles.header}>
               <Text style={introStyles.headline}>Your starting card</Text>
               <Text style={introStyles.subtext}>Draw from the deck, {playerName}</Text>
             </View>
+          </SafeAreaView>
 
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-            <View style={{ height: WHEEL_RADIUS * 2 + CARD_H, alignSelf: 'stretch' }}>
+          {/* Wheel — centred against the full screen height */}
+          <View style={[StyleSheet.absoluteFillObject, { justifyContent: 'center', alignItems: 'center' }]}>
+          <View style={{ height: WHEEL_RADIUS * 2 + CARD_H, alignSelf: 'stretch' }}>
               {/* Pointer arrow */}
               <Animated.View style={[introStyles.pointerRow, {
                 top: CARD_H / 2 + WHEEL_RADIUS - 14,
@@ -2562,8 +2564,10 @@ function GameIntroScreen({
                 })}
               </Animated.View>
             </View>
-            </View>
+          </View>
 
+          {/* Footer floats at bottom — absolute so it doesn't shrink the wheel's centring space */}
+          <SafeAreaView edges={['bottom']} style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}>
             <Animated.View style={[introStyles.footer, { opacity: tapHintOpacity }]}>
               {startingMovie && (
                 <View style={introStyles.miniTimeline}>
@@ -2578,7 +2582,6 @@ function GameIntroScreen({
               </TouchableOpacity>
               <Text style={introStyles.countdownText}>Auto-starting in {countdown}s</Text>
             </Animated.View>
-
           </SafeAreaView>
         </View>
       </Animated.View>
