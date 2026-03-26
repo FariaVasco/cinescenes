@@ -97,8 +97,6 @@ export default function GameScreen() {
   const challengerTransitionOpacity = useRef(new Animated.Value(0)).current;
   const challengePanelY = useRef(new Animated.Value(200)).current;
   const leftPanelFade = useRef(new Animated.Value(1)).current;
-  const placingTimelineFade = useRef(new Animated.Value(1)).current;
-  const [cardPlaced, setCardPlaced] = useState(false);
   const [flyVisible, setFlyVisible] = useState(false);
   const [flyStart, setFlyStart] = useState({ x: 0, y: 0 });
   const floatingCardRef = useRef<any>(null);
@@ -301,9 +299,7 @@ export default function GameScreen() {
   // so it's ready (or nearly ready) by the time handleNextTurn is called.
   useEffect(() => {
     prefetchedInsaneMovieRef.current = null;
-    setCardPlaced(false);
     leftPanelFade.setValue(1);
-    placingTimelineFade.setValue(1);
   }, [currentTurn?.id]);
 
   useEffect(() => {
@@ -764,27 +760,10 @@ export default function GameScreen() {
         ]).start(() => resolve());
       });
 
-      // Fade out, snap layout (invisible), fade back in — hides the 120px margin jump.
-      await new Promise<void>((resolve) => {
-        Animated.timing(placingTimelineFade, { toValue: 0, duration: 80, useNativeDriver: true }).start(() => resolve());
-      });
-      setCardPlaced(true);
       setFlyVisible(false);
-      Animated.timing(placingTimelineFade, { toValue: 1, duration: 320, useNativeDriver: true }).start();
     } else {
-      // Fallback: card falls away
-      setCardPlaced(true);
-      Animated.timing(leftPanelFade, { toValue: 0, duration: 180, useNativeDriver: true }).start();
-      await new Promise<void>((resolve) => {
-        Animated.parallel([
-          Animated.timing(cardAnimY, { toValue: 260, duration: 380, useNativeDriver: true }),
-          Animated.timing(cardAnimScale, { toValue: 0.3, duration: 380, useNativeDriver: true }),
-          Animated.timing(cardAnimOpacity, { toValue: 0, duration: 300, useNativeDriver: true }),
-        ]).start(() => resolve());
-      });
-      cardAnimY.setValue(0);
-      cardAnimScale.setValue(1);
-      cardAnimOpacity.setValue(1);
+      // Fallback: panel fades out
+      Animated.timing(leftPanelFade, { toValue: 0, duration: 300, useNativeDriver: true }).start();
     }
 
     challengeWindowStart.current = Date.now();
@@ -1289,7 +1268,7 @@ export default function GameScreen() {
       return (
         <SafeAreaView style={styles.container}>
           <View style={styles.gameArea}>
-            <View style={styles.timelineArea}>
+            <View style={styles.timelineAreaFull}>
               <Timeline
                 timeline={timeline}
                 currentCardMovie={movie}
@@ -1301,9 +1280,13 @@ export default function GameScreen() {
                 hideFloatingCard
               />
             </View>
-            <View style={styles.leftOverlay}>
-              <Text style={[styles.phaseLabel, styles.placingLabel]}>Waiting for {activePlayer?.display_name}…</Text>
-              <CardBack width={80} height={CARD_H} />
+            <View style={styles.placingBottomPanel}>
+              <View style={styles.placingBottomRow}>
+                <CardBack width={52} height={68} />
+                <Text style={[styles.phaseLabel, styles.placingLabel]}>
+                  Waiting for {activePlayer?.display_name}…
+                </Text>
+              </View>
             </View>
           </View>
           {myTimeline.length > 0 && (
@@ -1320,7 +1303,7 @@ export default function GameScreen() {
       return (
         <SafeAreaView style={styles.container}>
           <View style={styles.gameArea}>
-            <Animated.View style={[cardPlaced ? styles.timelineAreaFull : styles.timelineArea, { opacity: placingTimelineFade }]}>
+            <View style={styles.timelineAreaFull}>
               <Timeline
                 ref={timelineRef}
                 timeline={timeline}
@@ -1332,31 +1315,32 @@ export default function GameScreen() {
                 placedMovies={placedMovies}
                 hideFloatingCard
               />
-            </Animated.View>
-            {!cardPlaced && (
-              <Animated.View style={[styles.leftOverlay, { opacity: leftPanelFade }]}>
-                <Text style={[styles.phaseLabel, styles.placingLabel]}>
-                  {amActive ? 'Where does it go?' : `Waiting for ${activePlayer?.display_name}…`}
-                </Text>
-                {amActive && (
-                  <Text style={styles.tapHint}>
-                    {selectedInterval === null ? 'Tap + to pick a spot' : 'Tap ✓ to confirm'}
-                  </Text>
-                )}
-                <Animated.View
-                  ref={floatingCardRef}
-                  style={[
-                    styles.floatingCard,
-                    {
+            </View>
+            <Animated.View style={[styles.placingBottomPanel, { opacity: leftPanelFade }]}>
+              {amActive ? (
+                <View style={styles.placingBottomRow}>
+                  <Animated.View
+                    ref={floatingCardRef}
+                    style={[styles.placingBottomCard, {
                       transform: [{ translateY: cardAnimY }, { scale: cardAnimScale }],
                       opacity: cardAnimOpacity,
-                    },
-                  ]}
-                >
-                  <CardBack width={80} height={CARD_H} />
-                </Animated.View>
-              </Animated.View>
-            )}
+                    }]}
+                  >
+                    <CardBack width={52} height={68} />
+                  </Animated.View>
+                  <View style={styles.placingBottomHint}>
+                    <Text style={[styles.phaseLabel, styles.placingLabel]}>Where does it go?</Text>
+                    <Text style={styles.tapHint}>
+                      {selectedInterval === null ? 'Tap + to pick a spot' : 'Tap ✓ to confirm'}
+                    </Text>
+                  </View>
+                </View>
+              ) : (
+                <Text style={[styles.phaseLabel, styles.placingLabel]}>
+                  {`Waiting for ${activePlayer?.display_name}…`}
+                </Text>
+              )}
+            </Animated.View>
           </View>
 
           {!amActive && myTimeline.length > 0 && (
@@ -1374,7 +1358,7 @@ export default function GameScreen() {
                   opacity: flyAnimOpacity,
                 }}
               >
-                <CardBack width={80} height={CARD_H} />
+                <CardBack width={52} height={68} />
               </Animated.View>
             </View>
           )}
@@ -2832,31 +2816,39 @@ const styles = StyleSheet.create({
     flex: 1,
     position: 'relative',
   },
-  timelineArea: {
-    flex: 1,
-    marginLeft: 120,
-    justifyContent: 'center',
-    paddingBottom: 72,
-  },
   timelineAreaFull: {
     flex: 1,
     justifyContent: 'center',
-    paddingBottom: 72,
+    paddingBottom: 96,
   },
-  leftOverlay: {
+  placingBottomPanel: {
     position: 'absolute',
-    left: 0,
-    top: 0,
     bottom: 0,
-    width: 120,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 12,
-    borderRightWidth: StyleSheet.hairlineWidth,
-    borderRightColor: C.borderSubtle,
+    left: 0,
+    right: 0,
     backgroundColor: C.bg,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: C.borderSubtle,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 12,
+    justifyContent: 'center',
+  },
+  placingBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  placingBottomCard: {
+    shadowColor: C.gold,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  placingBottomHint: {
+    flex: 1,
+    gap: 4,
   },
   challengeBottomPanel: {
     position: 'absolute',
@@ -2926,17 +2918,6 @@ const styles = StyleSheet.create({
   },
   placingLabel: {
     textAlign: 'center',
-  },
-  floatingCardWrapper: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  floatingCard: {
-    shadowColor: C.gold,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 8,
   },
   watchingBadge: {
     alignSelf: 'flex-start',
