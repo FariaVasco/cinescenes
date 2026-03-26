@@ -1755,9 +1755,6 @@ export default function GameScreen() {
           </View>
         </View>
 
-        {!amActive && myTimeline.length > 0 && (
-          <CollapsibleMyTimeline timeline={myTimeline} cards={myTimelineCards} />
-        )}
         <ScoreBar players={players} myId={myPlayerId} />
         {leaveModal}
       </SafeAreaView>
