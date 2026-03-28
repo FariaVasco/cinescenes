@@ -32,6 +32,18 @@ async function tmdbGet(path: string): Promise<any> {
   }
 }
 
+/**
+ * Search TMDb for a person by name and return the top result's name.
+ * Used to canonicalise a Whisper-mangled director name (e.g. "Guilherme del Toro" → "Guillermo del Toro").
+ * Returns null if no result or API unavailable.
+ */
+export async function searchDirector(query: string): Promise<string | null> {
+  if (!TMDB_KEY || !query.trim()) return null;
+  const data = await tmdbGet(`/search/person?query=${encodeURIComponent(query)}&include_adult=false`);
+  const name: string | undefined = data?.results?.[0]?.name;
+  return name ?? null;
+}
+
 /** Returns true if the YouTube video is HD (720p+). Falls back to true on any error. */
 async function isYouTubeHD(videoId: string): Promise<boolean> {
   if (!YT_KEY) return true;

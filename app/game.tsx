@@ -20,7 +20,7 @@ import { transcribeAudio } from '@/lib/whisper';
 import { C, R, FS } from '@/constants/theme';
 import { scanTranscript, phoneticMatch, fuzzyMatch, computeCorrectInterval, computeValidIntervals } from '@/lib/game-logic';
 import { llmExtractGuess } from '@/lib/llm-voice';
-import { fetchRandomInsaneMovie } from '@/lib/tmdb-insane';
+import { fetchRandomInsaneMovie, searchDirector } from '@/lib/tmdb-insane';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Snackbar } from 'react-native-paper';
 import { useRouter } from 'expo-router';
@@ -857,9 +857,11 @@ export default function GameScreen() {
           titleValue = phoneticMatch(extracted.title, movie.title) ? movie.title : extracted.title;
         }
         if (!directorValue && extracted.director) {
-          directorValue = phoneticMatch(extracted.director, movie.director ?? '')
-            ? (movie.director ?? '')
-            : extracted.director;
+          if (phoneticMatch(extracted.director, movie.director ?? '')) {
+            directorValue = movie.director ?? '';
+          } else {
+            directorValue = (await searchDirector(extracted.director)) ?? extracted.director;
+          }
         }
       }
 
