@@ -37,6 +37,17 @@ function transcriptContains(transcript: string, phrase: string): boolean {
   return false;
 }
 
+// Relaxed phonetic match — uses floor(maxLen/4) edit distance, suitable for
+// comparing STT-mangled text against canonical names (e.g. "guillermud al toro" ≈ "Guillermo del Toro").
+export function phoneticMatch(a: string, b: string): boolean {
+  const na = normalize(a), nb = normalize(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  const maxLen = Math.max(na.length, nb.length);
+  if (maxLen < 4) return false;
+  return levenshtein(na, nb) <= Math.floor(maxLen / 4);
+}
+
 // ── Fuzzy matching ─────────────────────────────────────────────────────────
 
 // Normalize for fuzzy comparison: lowercase, strip leading article, strip punctuation.

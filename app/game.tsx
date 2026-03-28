@@ -17,8 +17,8 @@ import {
 } from 'react-native';
 import { SpeechModule, speechAvailable, useSpeechRecognitionEvent } from '@/lib/speech-recognition';
 import { C, R, FS } from '@/constants/theme';
-import { scanTranscript, fuzzyMatch, computeCorrectInterval, computeValidIntervals } from '@/lib/game-logic';
-import { llmMatchField } from '@/lib/llm-voice';
+import { scanTranscript, phoneticMatch, fuzzyMatch, computeCorrectInterval, computeValidIntervals } from '@/lib/game-logic';
+import { llmExtractGuess } from '@/lib/llm-voice';
 import { fetchRandomInsaneMovie } from '@/lib/tmdb-insane';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Snackbar } from 'react-native-paper';
@@ -373,34 +373,41 @@ export default function GameScreen() {
       return;
     }
 
-    // Async: scan + LLM fallback for any field not found locally
+    // Async: local scan first (cheap), then LLM extraction for any missing field
     (async () => {
       const scan = scanTranscript(transcript, movie);
-      let titleFound = scan.title !== null;
-      let directorFound = scan.director !== null;
 
-      // Call LLM in parallel for each field the local scan missed
-      const llmCalls: Promise<void>[] = [];
-      if (!titleFound) {
-        llmCalls.push(
-          llmMatchField(transcript, 'title', movie.title).then((yes) => { if (yes) titleFound = true; })
-        );
+      // Local scan matched the canonical DB value — use it directly
+      let titleValue: string | null = scan.title;
+      let directorValue: string | null = scan.director;
+
+      // For fields the local scan missed, extract verbatim with LLM then phonetically
+      // compare the extracted text against the known canonical values.
+      if (!titleValue || !directorValue) {
+        const extracted = await llmExtractGuess(transcript);
+        if (!titleValue && extracted.title) {
+          // If extracted text is close enough to the real title, use canonical value;
+          // otherwise keep verbatim so the user can see what was captured.
+          titleValue = phoneticMatch(extracted.title, movie.title) ? movie.title : extracted.title;
+        }
+        if (!directorValue && extracted.director) {
+          directorValue = phoneticMatch(extracted.director, movie.director ?? '')
+            ? (movie.director ?? '')
+            : extracted.director;
+        }
       }
-      if (!directorFound) {
-        llmCalls.push(
-          llmMatchField(transcript, 'director', movie.director ?? '').then((yes) => { if (yes) directorFound = true; })
-        );
+
+      if (titleValue) setMovieGuess(titleValue);
+      if (directorValue) setDirectorGuess(directorValue);
+
+      if (!titleValue && !directorValue) {
+        voiceStateRef.current = 'error';
+        setVoiceError("Couldn't recognise the movie or director — try again or type below.");
+        setVoiceState('error');
+      } else {
+        voiceStateRef.current = 'idle';
+        setVoiceState('idle');
       }
-      if (llmCalls.length > 0) await Promise.all(llmCalls);
-
-      if (titleFound) setMovieGuess(movie.title);
-      if (directorFound) setDirectorGuess(movie.director ?? '');
-
-      // If neither field matched at all, dump the raw transcript so the user can correct it
-      if (!titleFound && !directorFound) setMovieGuess(transcript);
-
-      voiceStateRef.current = 'idle';
-      setVoiceState('idle');
     })();
   });
 
