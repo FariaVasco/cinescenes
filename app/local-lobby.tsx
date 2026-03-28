@@ -600,7 +600,7 @@ export default function LocalLobbyScreen() {
                 onPress={() => setVisibility('invite_only')}
               >
                 <Text style={[styles.visibilityOptionText, visibility === 'invite_only' && styles.visibilityOptionTextActive]}>
-                  Invite Only
+                  Play with Friends
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -608,7 +608,7 @@ export default function LocalLobbyScreen() {
                 onPress={() => setVisibility('public')}
               >
                 <Text style={[styles.visibilityOptionText, visibility === 'public' && styles.visibilityOptionTextActive]}>
-                  Public
+                  Play with Strangers
                 </Text>
               </TouchableOpacity>
             </View>
