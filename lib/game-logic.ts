@@ -9,6 +9,34 @@ export function parseTranscript(transcript: string): { movie: string; director: 
   return null;
 }
 
+// Scan a transcript for a known movie title and director via sliding window + fuzzy.
+// Returns which fields were found (canonical DB values).
+export function scanTranscript(
+  transcript: string,
+  movie: { title: string; director: string },
+): { title: string | null; director: string | null } {
+  return {
+    title: transcriptContains(transcript, movie.title) ? movie.title : null,
+    director: transcriptContains(transcript, movie.director) ? movie.director : null,
+  };
+}
+
+function transcriptContains(transcript: string, phrase: string): boolean {
+  const tWords = normalize(transcript).split(' ').filter(Boolean);
+  const pWords = normalize(phrase).split(' ').filter(Boolean);
+  if (pWords.length === 0) return false;
+  // Try windows from full phrase down to just the last word (suffix / last-name match)
+  for (let len = pWords.length; len >= 1; len--) {
+    const target = pWords.slice(pWords.length - len).join(' ');
+    if (target.length < 3) continue;
+    for (let i = 0; i <= tWords.length - len; i++) {
+      const window = tWords.slice(i, i + len).join(' ');
+      if (levenshtein(window, target) <= Math.floor(target.length / 6)) return true;
+    }
+  }
+  return false;
+}
+
 // ── Fuzzy matching ─────────────────────────────────────────────────────────
 
 // Normalize for fuzzy comparison: lowercase, strip leading article, strip punctuation.

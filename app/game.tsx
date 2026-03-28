@@ -17,7 +17,8 @@ import {
 } from 'react-native';
 import { SpeechModule, speechAvailable, useSpeechRecognitionEvent } from '@/lib/speech-recognition';
 import { C, R, FS } from '@/constants/theme';
-import { parseTranscript, fuzzyMatch, computeCorrectInterval, computeValidIntervals } from '@/lib/game-logic';
+import { scanTranscript, fuzzyMatch, computeCorrectInterval, computeValidIntervals } from '@/lib/game-logic';
+import { llmMatchField } from '@/lib/llm-voice';
 import { fetchRandomInsaneMovie } from '@/lib/tmdb-insane';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Snackbar } from 'react-native-paper';
@@ -360,16 +361,47 @@ export default function GameScreen() {
       event.transcript ??
       '';
     if (!transcript || voiceStateRef.current !== 'listening') return;
-    voiceStateRef.current = 'idle';
-    setVoiceState('idle');
-    const parsed = parseTranscript(transcript);
-    if (parsed) {
-      setMovieGuess(parsed.movie);
-      setDirectorGuess(parsed.director);
-    } else {
-      // No "by" found — put everything in the movie field, let user fill director
+    voiceStateRef.current = 'processing';
+    setVoiceState('processing');
+
+    const movie = getMovie();
+    if (!movie) {
+      // No movie context — fall back to simple text fill
+      voiceStateRef.current = 'idle';
+      setVoiceState('idle');
       setMovieGuess(transcript);
+      return;
     }
+
+    // Async: scan + LLM fallback for any field not found locally
+    (async () => {
+      const scan = scanTranscript(transcript, movie);
+      let titleFound = scan.title !== null;
+      let directorFound = scan.director !== null;
+
+      // Call LLM in parallel for each field the local scan missed
+      const llmCalls: Promise<void>[] = [];
+      if (!titleFound) {
+        llmCalls.push(
+          llmMatchField(transcript, 'title', movie.title).then((yes) => { if (yes) titleFound = true; })
+        );
+      }
+      if (!directorFound) {
+        llmCalls.push(
+          llmMatchField(transcript, 'director', movie.director ?? '').then((yes) => { if (yes) directorFound = true; })
+        );
+      }
+      if (llmCalls.length > 0) await Promise.all(llmCalls);
+
+      if (titleFound) setMovieGuess(movie.title);
+      if (directorFound) setDirectorGuess(movie.director ?? '');
+
+      // If neither field matched at all, dump the raw transcript so the user can correct it
+      if (!titleFound && !directorFound) setMovieGuess(transcript);
+
+      voiceStateRef.current = 'idle';
+      setVoiceState('idle');
+    })();
   });
 
   useSpeechRecognitionEvent('error', (event) => {
@@ -1439,13 +1471,18 @@ export default function GameScreen() {
                   voiceState === 'idle' ? (
                     <TouchableOpacity style={styles.voiceMicBtn} onPress={startVoice} activeOpacity={0.75}>
                       <Text style={styles.voiceMicIcon}>🎤</Text>
-                      <Text style={styles.voiceMicText}>Say "[movie] by [director]"</Text>
+                      <Text style={styles.voiceMicText}>Say the movie and director</Text>
                     </TouchableOpacity>
                   ) : voiceState === 'listening' ? (
                     <TouchableOpacity style={[styles.voiceMicBtn, styles.voiceMicBtnListening]} onPress={stopVoice} activeOpacity={0.75}>
                       <Text style={styles.voiceMicIcon}>🎤</Text>
                       <Text style={styles.voiceMicText}>Listening… tap to stop</Text>
                     </TouchableOpacity>
+                  ) : voiceState === 'processing' ? (
+                    <View style={styles.voiceMicBtn}>
+                      <ActivityIndicator color={C.gold} size="small" />
+                      <Text style={styles.voiceMicText}>Processing…</Text>
+                    </View>
                   ) : (
                     <View style={styles.voiceErrorBox}>
                       <Text style={styles.voiceErrorText}>{voiceError}</Text>
