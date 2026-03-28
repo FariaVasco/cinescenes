@@ -45,7 +45,12 @@ export function phoneticMatch(a: string, b: string): boolean {
   if (na === nb) return true;
   const maxLen = Math.max(na.length, nb.length);
   if (maxLen < 4) return false;
-  return levenshtein(na, nb) <= Math.floor(maxLen / 4);
+  if (levenshtein(na, nb) <= Math.floor(maxLen / 4)) return true;
+  // Strip spaces and retry — catches STT splitting compound words
+  // e.g. "Many Ball" → "manyball" ≈ "moneyball" (2 edits, threshold 2)
+  const nas = na.replace(/\s+/g, ''), nbs = nb.replace(/\s+/g, '');
+  const maxLenS = Math.max(nas.length, nbs.length);
+  return levenshtein(nas, nbs) <= Math.floor(maxLenS / 4);
 }
 
 // ── Fuzzy matching ─────────────────────────────────────────────────────────
