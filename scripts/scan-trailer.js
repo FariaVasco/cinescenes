@@ -548,7 +548,7 @@ async function updateDatabase(movieTitle, movieYear, movieDirector, youtubeId, s
   // Try updating an existing row first
   const { data: updated, error: updateError } = await supabase
     .from('movies')
-    .update({ youtube_id: youtubeId, safe_start: safeStart, safe_end: safeEnd, active: true, scan_status: 'validated' })
+    .update({ youtube_id: youtubeId, safe_start: safeStart, safe_end: safeEnd, scan_status: 'validated' })
     .ilike('title', movieTitle)
     .eq('year', movieYear)
     .select('id, title, year');
@@ -561,7 +561,7 @@ async function updateDatabase(movieTitle, movieYear, movieDirector, youtubeId, s
   const { data: inserted, error: insertError } = await supabase
     .from('movies')
     .insert({ title: movieTitle, year: movieYear, director: movieDirector ?? null,
-              youtube_id: youtubeId, safe_start: safeStart, safe_end: safeEnd, active: true, scan_status: 'validated' })
+              youtube_id: youtubeId, safe_start: safeStart, safe_end: safeEnd, scan_status: 'validated' })
     .select('id, title, year');
 
   if (insertError) throw new Error(`Supabase insert failed: ${insertError.message}`);

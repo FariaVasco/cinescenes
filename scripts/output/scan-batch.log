@@ -187,3 +187,982 @@
 [2026-03-08T22:13:37.340Z]   ⏳  Waiting 3s before next movie…
 [2026-03-08T22:13:40.341Z] 
 [3/10]  "No Time to Die" (2021)
+[2026-03-09T21:01:20.592Z] 
+────────────────────────────────────────────────────────────
+[2026-03-09T21:01:20.596Z] 🎬  Batch scan starting — 8 movie(s) to process
+[2026-03-09T21:01:20.596Z] ────────────────────────────────────────────────────────────
+[2026-03-09T21:01:20.596Z] 
+[1/8]  "No Time to Die" (2021)
+[2026-03-09T21:08:47.088Z]   ✅  [1/8]  "No Time to Die" (2021)  →  done
+[2026-03-09T21:08:47.091Z]   ⏳  Waiting 3s before next movie…
+[2026-03-09T21:08:50.094Z] 
+[2/8]  "King Richard" (2021)
+[2026-03-09T21:17:13.401Z]   ✅  [2/8]  "King Richard" (2021)  →  done
+[2026-03-09T21:17:13.403Z]   ⏳  Waiting 3s before next movie…
+[2026-03-09T21:17:16.406Z] 
+[3/8]  "The Worst Person in the World" (2021)
+[2026-03-09T21:42:16.449Z]   ⏱  [3/8]  "The Worst Person in the World" (2021)  →  timed out after 10 min — skipping
+[2026-03-09T21:42:16.757Z]   ⏳  Waiting 3s before next movie…
+[2026-03-09T21:42:19.757Z] 
+[4/8]  "Dune" (2021)
+[2026-03-09T22:07:19.730Z]   ⏱  [4/8]  "Dune" (2021)  →  timed out after 10 min — skipping
+[2026-03-09T22:07:19.758Z]   ⏳  Waiting 3s before next movie…
+[2026-03-09T22:07:22.760Z] 
+[5/8]  "L'evenement" (2021)
+[2026-03-09T22:32:22.832Z]   ⏱  [5/8]  "L'evenement" (2021)  →  timed out after 10 min — skipping
+[2026-03-09T22:32:23.843Z]   ⏳  Waiting 3s before next movie…
+[2026-03-09T22:32:26.845Z] 
+[6/8]  "The Power of the Dog" (2021)
+[2026-03-09T22:52:55.255Z]   ✅  [6/8]  "The Power of the Dog" (2021)  →  done
+[2026-03-09T22:52:55.260Z]   ⏳  Waiting 3s before next movie…
+[2026-03-09T22:52:58.262Z] 
+[7/8]  "Drive My Car (ドライブ・マイ・カー)" (2021)
+[2026-03-09T22:54:43.117Z]   ✅  [7/8]  "Drive My Car (ドライブ・マイ・カー)" (2021)  →  done
+[2026-03-09T22:54:43.119Z]   ⏳  Waiting 3s before next movie…
+[2026-03-09T22:54:46.120Z] 
+[8/8]  "Titane" (2021)
+[2026-03-09T22:56:57.821Z]   ✅  [8/8]  "Titane" (2021)  →  done
+[2026-03-09T22:56:57.822Z] 
+────────────────────────────────────────────────────────────
+[2026-03-09T22:56:57.823Z] 📊  Batch complete
+[2026-03-09T22:56:57.823Z]     ✅  Success:  5
+[2026-03-09T22:56:57.823Z]     ⏱  Timed out: 3
+[2026-03-09T22:56:57.825Z]     Log: /Users/vascolencastre/cinescenes/scripts/output/scan-batch.log
+[2026-03-09T22:56:57.825Z] ────────────────────────────────────────────────────────────
+
+[2026-03-10T08:02:49.125Z] 
+────────────────────────────────────────────────────────────
+[2026-03-10T08:02:49.129Z] 🎬  Batch scan starting — 10 movie(s) to process
+[2026-03-10T08:02:49.129Z] ────────────────────────────────────────────────────────────
+[2026-03-10T08:02:49.130Z] 
+[1/10]  "Top Gun: Maverick" (2022)
+[2026-03-10T10:10:19.935Z]   ✅  [1/10]  "Top Gun: Maverick" (2022)  →  done
+[2026-03-10T10:10:19.937Z]   ⏳  Waiting 3s before next movie…
+[2026-03-10T10:10:22.943Z] 
+[2/10]  "Doctor Strange in the Multiverse of Madness" (2022)
+[2026-03-10T17:18:11.094Z]   ✅  [2/10]  "Doctor Strange in the Multiverse of Madness" (2022)  →  done
+[2026-03-10T17:18:11.102Z]   ⏳  Waiting 3s before next movie…
+[2026-03-10T17:18:14.109Z] 
+[3/10]  "Triangle of Sadness" (2022)
+[2026-03-10T18:01:58.723Z]   ⏱  [3/10]  "Triangle of Sadness" (2022)  →  timed out after 10 min — skipping
+[2026-03-10T18:02:00.082Z]   ⏳  Waiting 3s before next movie…
+[2026-03-10T18:02:03.083Z] 
+[4/10]  "The Batman" (2022)
+[2026-03-10T18:33:56.109Z]   ⏱  [4/10]  "The Batman" (2022)  →  timed out after 10 min — skipping
+[2026-03-10T18:33:56.147Z]   ⏳  Waiting 3s before next movie…
+[2026-03-10T18:33:59.148Z] 
+[5/10]  "Everything Everywhere All at Once" (2022)
+[2026-03-10T18:58:59.143Z]   ⏱  [5/10]  "Everything Everywhere All at Once" (2022)  →  timed out after 10 min — skipping
+[2026-03-10T18:58:59.941Z]   ⏳  Waiting 3s before next movie…
+[2026-03-10T18:59:02.943Z] 
+[6/10]  "The Fabelmans" (2022)
+[2026-03-10T19:01:55.599Z]   ✅  [6/10]  "The Fabelmans" (2022)  →  done
+[2026-03-10T19:01:55.599Z]   ⏳  Waiting 3s before next movie…
+[2026-03-10T19:01:58.602Z] 
+[7/10]  "Tár" (2022)
+[2026-03-10T19:04:50.701Z]   ✅  [7/10]  "Tár" (2022)  →  done
+[2026-03-10T19:04:50.702Z]   ⏳  Waiting 3s before next movie…
+[2026-03-10T19:04:53.704Z] 
+[8/10]  "The Banshees of Inisherin" (2022)
+[2026-03-10T19:07:00.311Z]   ✅  [8/10]  "The Banshees of Inisherin" (2022)  →  done
+[2026-03-10T19:07:00.311Z]   ⏳  Waiting 3s before next movie…
+[2026-03-10T19:07:03.319Z] 
+[9/10]  "Decision to Leave (헤어질 결심)" (2022)
+[2026-03-10T19:28:39.606Z]   ✅  [9/10]  "Decision to Leave (헤어질 결심)" (2022)  →  done
+[2026-03-10T19:28:39.609Z]   ⏳  Waiting 3s before next movie…
+[2026-03-10T19:28:42.610Z] 
+[10/10]  "Pinocchio" (2022)
+[2026-03-10T19:28:43.408Z]   ❌  [10/10]  "Pinocchio" (2022)  →  exited with code 1
+[2026-03-10T19:28:43.563Z] 
+────────────────────────────────────────────────────────────
+[2026-03-10T19:28:43.564Z] 📊  Batch complete
+[2026-03-10T19:28:43.564Z]     ✅  Success:  6
+[2026-03-10T19:28:43.564Z]     ❌  Failed:   1  (safe_start set to -1 — rerun with --retry-failed)
+[2026-03-10T19:28:43.564Z]     ⏱  Timed out: 3
+[2026-03-10T19:28:43.564Z]     Log: /Users/vascolencastre/cinescenes/scripts/output/scan-batch.log
+[2026-03-10T19:28:43.564Z] ────────────────────────────────────────────────────────────
+
+[2026-03-11T11:15:44.102Z] 
+────────────────────────────────────────────────────────────
+[2026-03-11T11:15:44.106Z] 🎬  Batch scan starting — 11 movie(s) to process
+[2026-03-11T11:15:44.107Z] ────────────────────────────────────────────────────────────
+[2026-03-11T11:15:44.108Z] 
+[1/11]  "The Lighthouse" (2019)
+[2026-03-11T11:18:04.786Z]   ❌  [1/11]  "The Lighthouse" (2019)  →  exited with code 2
+[2026-03-11T11:18:04.963Z]   ⏳  Waiting 3s before next movie…
+[2026-03-11T11:18:07.965Z] 
+[2/11]  "The Lion King" (2019)
+[2026-03-11T11:20:51.998Z]   ❌  [2/11]  "The Lion King" (2019)  →  exited with code 2
+[2026-03-11T11:20:52.148Z]   ⏳  Waiting 3s before next movie…
+[2026-03-11T11:20:55.150Z] 
+[3/11]  "Marriage Story" (2019)
+[2026-03-11T11:28:22.594Z]   ✅  [3/11]  "Marriage Story" (2019)  →  done
+[2026-03-11T11:28:22.595Z]   ⏳  Waiting 3s before next movie…
+[2026-03-11T11:28:25.598Z] 
+[4/11]  "The Irishman" (2019)
+[2026-03-11T11:45:15.103Z]   ❌  [4/11]  "The Irishman" (2019)  →  exited with code 2
+[2026-03-11T11:45:15.909Z]   ⏳  Waiting 3s before next movie…
+[2026-03-11T11:45:18.911Z] 
+[5/11]  "Joker" (2019)
+[2026-03-11T21:35:25.149Z] 
+────────────────────────────────────────────────────────────
+[2026-03-11T21:35:25.172Z] 🎬  Batch scan starting — 10 movie(s) to process
+[2026-03-11T21:35:25.173Z] ────────────────────────────────────────────────────────────
+[2026-03-11T21:35:25.174Z] 
+[1/10]  "Avengers: Infinity War" (2018)
+[2026-03-11T22:00:25.194Z]   ⏱  [1/10]  "Avengers: Infinity War" (2018)  →  timed out after 10 min — skipping
+[2026-03-11T22:00:25.225Z]   ⏳  Waiting 3s before next movie…
+[2026-03-11T22:00:28.225Z] 
+[2/10]  "Black Panther" (2018)
+[2026-03-11T23:42:28.205Z]   ⏱  [2/10]  "Black Panther" (2018)  →  timed out after 10 min — skipping
+[2026-03-11T23:42:29.124Z]   ⏳  Waiting 3s before next movie…
+[2026-03-11T23:42:32.126Z] 
+[3/10]  "Isle of Dogs" (2018)
+[2026-03-12T07:37:04.266Z]   ⏱  [3/10]  "Isle of Dogs" (2018)  →  timed out after 10 min — skipping
+[2026-03-12T07:37:04.296Z]   ⏳  Waiting 3s before next movie…
+[2026-03-12T07:37:07.297Z] 
+[4/10]  "Operation Finale" (2018)
+[2026-03-12T17:56:29.624Z]   ⏱  [4/10]  "Operation Finale" (2018)  →  timed out after 10 min — skipping
+[2026-03-12T17:56:29.841Z]   ⏳  Waiting 3s before next movie…
+[2026-03-12T17:56:32.843Z] 
+[5/10]  "Bohemian Rhapsody" (2018)
+[2026-03-12T19:07:35.762Z]   ⏱  [5/10]  "Bohemian Rhapsody" (2018)  →  timed out after 10 min — skipping
+[2026-03-12T19:07:35.803Z]   ⏳  Waiting 3s before next movie…
+[2026-03-12T19:07:38.806Z] 
+[6/10]  "A Star Is Born" (2018)
+[2026-03-12T21:35:19.705Z]   ⏱  [6/10]  "A Star Is Born" (2018)  →  timed out after 10 min — skipping
+[2026-03-12T21:35:20.806Z]   ⏳  Waiting 3s before next movie…
+[2026-03-12T21:35:23.809Z] 
+[7/10]  "Green Book" (2018)
+[2026-03-12T22:18:44.641Z]   ⏱  [7/10]  "Green Book" (2018)  →  timed out after 10 min — skipping
+[2026-03-12T22:18:44.686Z]   ⏳  Waiting 3s before next movie…
+[2026-03-12T22:18:47.688Z] 
+[8/10]  "BlacKkKlansman" (2018)
+[2026-03-12T22:43:47.698Z]   ⏱  [8/10]  "BlacKkKlansman" (2018)  →  timed out after 10 min — skipping
+[2026-03-12T22:43:47.854Z]   ⏳  Waiting 3s before next movie…
+[2026-03-12T22:43:50.854Z] 
+[9/10]  "Roma" (2018)
+[2026-03-13T04:27:25.132Z]   ⏱  [9/10]  "Roma" (2018)  →  timed out after 10 min — skipping
+[2026-03-13T04:27:25.163Z]   ⏳  Waiting 3s before next movie…
+[2026-03-13T04:27:28.170Z] 
+[10/10]  "Shoplifters" (2018)
+[2026-03-13T18:48:41.221Z]   ✅  [10/10]  "Shoplifters" (2018)  →  done
+[2026-03-13T18:48:41.229Z] 
+────────────────────────────────────────────────────────────
+[2026-03-13T18:48:41.229Z] 📊  Batch complete
+[2026-03-13T18:48:41.229Z]     ✅  Success:  1
+[2026-03-13T18:48:41.229Z]     ⏱  Timed out: 9
+[2026-03-13T18:48:41.229Z]     Log: /Users/vascolencastre/cinescenes/scripts/output/scan-batch.log
+[2026-03-13T18:48:41.229Z] ────────────────────────────────────────────────────────────
+
+[2026-03-18T23:00:38.071Z] 
+────────────────────────────────────────────────────────────
+[2026-03-18T23:05:22.664Z] 
+────────────────────────────────────────────────────────────
+[2026-03-18T23:07:57.877Z] 
+────────────────────────────────────────────────────────────
+[2026-03-18T23:07:57.879Z] 🎬  Batch scan starting — 12 movie(s) to process
+[2026-03-18T23:07:57.881Z] ────────────────────────────────────────────────────────────
+[2026-03-18T23:07:57.881Z] 
+[1/12]  "The Artist" (2011)
+[2026-03-18T23:14:15.414Z]   ✅  [1/12]  "The Artist" (2011)  →  done
+[2026-03-18T23:14:15.417Z]   ⏳  Waiting 3s before next movie…
+[2026-03-18T23:14:18.418Z] 
+[2/12]  "The Tree of Life" (2011)
+[2026-03-18T23:39:18.506Z]   ⏱  [2/12]  "The Tree of Life" (2011)  →  timed out after 10 min — skipping
+[2026-03-18T23:39:18.554Z]   ⏳  Waiting 3s before next movie…
+[2026-03-18T23:39:21.554Z] 
+[3/12]  "Moneyball" (2011)
+[2026-03-18T23:42:08.747Z] 
+────────────────────────────────────────────────────────────
+[2026-03-18T23:44:16.163Z] 
+────────────────────────────────────────────────────────────
+[2026-03-18T23:44:16.165Z] 🎬  Batch scan starting — 10 movie(s) to process
+[2026-03-18T23:44:16.167Z] ────────────────────────────────────────────────────────────
+[2026-03-18T23:44:16.167Z] 
+[1/10]  "Moneyball" (2011)
+[2026-03-19T01:43:25.331Z]   ⏱  [1/10]  "Moneyball" (2011)  →  timed out after 10 min — skipping
+[2026-03-19T01:43:25.456Z]   ⏳  Waiting 3s before next movie…
+[2026-03-19T01:43:28.459Z] 
+[2/10]  "War Horse" (2011)
+[2026-03-19T04:25:33.976Z]   ⏱  [2/10]  "War Horse" (2011)  →  timed out after 10 min — skipping
+[2026-03-19T04:25:35.294Z]   ⏳  Waiting 3s before next movie…
+[2026-03-19T04:25:38.296Z] 
+[3/10]  "Drive" (2011)
+[2026-03-19T07:56:03.713Z]   ⏱  [3/10]  "Drive" (2011)  →  timed out after 10 min — skipping
+[2026-03-19T07:56:03.743Z]   ⏳  Waiting 3s before next movie…
+[2026-03-19T07:56:06.745Z] 
+[4/10]  "Hugo" (2011)
+[2026-03-19T09:01:16.970Z]   ⏱  [4/10]  "Hugo" (2011)  →  timed out after 10 min — skipping
+[2026-03-19T09:01:18.106Z]   ⏳  Waiting 3s before next movie…
+[2026-03-19T09:01:21.109Z] 
+[5/10]  "Midnight in Paris" (2011)
+[2026-03-19T09:26:21.119Z]   ⏱  [5/10]  "Midnight in Paris" (2011)  →  timed out after 10 min — skipping
+[2026-03-19T09:26:21.140Z]   ⏳  Waiting 3s before next movie…
+[2026-03-19T09:26:24.141Z] 
+[6/10]  "A Separation" (2011)
+[2026-03-19T10:53:23.562Z]   ⏱  [6/10]  "A Separation" (2011)  →  timed out after 10 min — skipping
+[2026-03-19T10:53:24.611Z]   ⏳  Waiting 3s before next movie…
+[2026-03-19T10:53:27.613Z] 
+[7/10]  "The Intouchables" (2011)
+[2026-03-19T12:10:03.780Z] 
+────────────────────────────────────────────────────────────
+[2026-03-19T12:13:13.485Z] 
+────────────────────────────────────────────────────────────
+[2026-03-19T12:19:05.374Z] 
+────────────────────────────────────────────────────────────
+[2026-03-19T12:30:42.754Z] 
+────────────────────────────────────────────────────────────
+[2026-03-19T20:44:12.006Z] 
+────────────────────────────────────────────────────────────
+[2026-03-19T20:44:12.016Z] 🎬  Batch scan starting — 3 movie(s) to process
+[2026-03-19T20:44:12.018Z]     DRY RUN — no scans will run
+[2026-03-19T20:44:12.018Z] ────────────────────────────────────────────────────────────
+[2026-03-19T20:44:12.018Z]   [1/3]  "War Horse" (2011)  →  would scan  (tmdb_id=none)
+[2026-03-19T20:44:12.019Z]   [2/3]  "Hugo" (2011)  →  would scan  (tmdb_id=none)
+[2026-03-19T20:44:12.019Z]   [3/3]  "A Separation" (2011)  →  would scan  (tmdb_id=none)
+[2026-03-19T20:44:12.019Z] 
+────────────────────────────────────────────────────────────
+[2026-03-19T20:44:12.019Z] 📊  Batch complete
+[2026-03-19T20:44:12.019Z]     ✅  Success:  0
+[2026-03-19T20:44:12.019Z]     Log: /Users/vascolencastre/cinescenes/scripts/output/scan-batch.log
+[2026-03-19T20:44:12.019Z] ────────────────────────────────────────────────────────────
+
+[2026-03-19T20:44:52.566Z] 
+────────────────────────────────────────────────────────────
+[2026-03-19T20:44:52.568Z] 🎬  Batch scan starting — 8 movie(s) to process
+[2026-03-19T20:44:52.570Z]     DRY RUN — no scans will run
+[2026-03-19T20:44:52.570Z] ────────────────────────────────────────────────────────────
+[2026-03-19T20:44:52.570Z]   [1/8]  "War Horse" (2011)  →  would scan  (tmdb_id=none)
+[2026-03-19T20:44:52.570Z]   [2/8]  "Hugo" (2011)  →  would scan  (tmdb_id=none)
+[2026-03-19T20:44:52.571Z]   [3/8]  "Midnight in Paris" (2011)  →  would scan  (tmdb_id=none)
+[2026-03-19T20:44:52.571Z]   [4/8]  "A Separation" (2011)  →  would scan  (tmdb_id=none)
+[2026-03-19T20:44:52.571Z]   [5/8]  "The Intouchables" (2011)  →  would scan  (tmdb_id=none)
+[2026-03-19T20:44:52.571Z]   [6/8]  "The Girl with the Dragon Tattoo" (2011)  →  would scan  (tmdb_id=none)
+[2026-03-19T20:44:52.571Z]   [7/8]  "Carnage" (2011)  →  would scan  (tmdb_id=none)
+[2026-03-19T20:44:52.571Z]   [8/8]  "Shame" (2011)  →  would scan  (tmdb_id=none)
+[2026-03-19T20:44:52.571Z] 
+────────────────────────────────────────────────────────────
+[2026-03-19T20:44:52.571Z] 📊  Batch complete
+[2026-03-19T20:44:52.571Z]     ✅  Success:  0
+[2026-03-19T20:44:52.571Z]     Log: /Users/vascolencastre/cinescenes/scripts/output/scan-batch.log
+[2026-03-19T20:44:52.571Z] ────────────────────────────────────────────────────────────
+
+[2026-03-19T20:45:08.517Z] 
+────────────────────────────────────────────────────────────
+[2026-03-19T20:45:08.520Z] 🎬  Batch scan starting — 8 movie(s) to process
+[2026-03-19T20:45:08.520Z] ────────────────────────────────────────────────────────────
+[2026-03-19T20:45:08.520Z] 
+[1/8]  "War Horse" (2011)
+[2026-03-19T20:46:48.466Z]   ✅  [1/8]  "War Horse" (2011)  →  done
+[2026-03-19T20:46:48.467Z]   ⏳  Waiting 3s before next movie…
+[2026-03-19T20:46:51.468Z] 
+[2/8]  "Hugo" (2011)
+[2026-03-19T20:49:48.326Z]   ✅  [2/8]  "Hugo" (2011)  →  done
+[2026-03-19T20:49:48.327Z]   ⏳  Waiting 3s before next movie…
+[2026-03-19T20:49:51.329Z] 
+[3/8]  "Midnight in Paris" (2011)
+[2026-03-19T21:07:52.765Z]   ❌  [3/8]  "Midnight in Paris" (2011)  →  exited with code 2
+[2026-03-19T21:07:53.473Z]   ⏳  Waiting 3s before next movie…
+[2026-03-19T21:07:56.475Z] 
+[4/8]  "A Separation" (2011)
+[2026-03-19T21:35:14.924Z]   ⏱  [4/8]  "A Separation" (2011)  →  timed out after 10 min — skipping
+[2026-03-19T21:35:14.959Z]   ⏳  Waiting 3s before next movie…
+[2026-03-19T21:35:17.960Z] 
+[5/8]  "The Intouchables" (2011)
+[2026-03-19T22:00:18.015Z]   ⏱  [5/8]  "The Intouchables" (2011)  →  timed out after 10 min — skipping
+[2026-03-19T22:00:18.249Z]   ⏳  Waiting 3s before next movie…
+[2026-03-19T22:00:21.251Z] 
+[6/8]  "The Girl with the Dragon Tattoo" (2011)
+[2026-03-19T22:25:21.284Z]   ⏱  [6/8]  "The Girl with the Dragon Tattoo" (2011)  →  timed out after 10 min — skipping
+[2026-03-19T22:25:21.315Z]   ⏳  Waiting 3s before next movie…
+[2026-03-19T22:25:24.317Z] 
+[7/8]  "Carnage" (2011)
+[2026-03-19T22:54:47.497Z]   ⏱  [7/8]  "Carnage" (2011)  →  timed out after 10 min — skipping
+[2026-03-19T22:54:47.711Z]   ⏳  Waiting 3s before next movie…
+[2026-03-19T22:54:50.712Z] 
+[8/8]  "Shame" (2011)
+[2026-03-19T23:19:50.774Z]   ⏱  [8/8]  "Shame" (2011)  →  timed out after 10 min — skipping
+[2026-03-19T23:19:50.811Z] 
+────────────────────────────────────────────────────────────
+[2026-03-19T23:19:50.812Z] 📊  Batch complete
+[2026-03-19T23:19:50.813Z]     ✅  Success:  2
+[2026-03-19T23:19:50.813Z]     ❌  Failed:   1  (safe_start set to -1 — rerun with --retry-failed)
+[2026-03-19T23:19:50.814Z]     ⏱  Timed out: 5
+[2026-03-19T23:19:50.814Z]     Log: /Users/vascolencastre/cinescenes/scripts/output/scan-batch.log
+[2026-03-19T23:19:50.814Z] ────────────────────────────────────────────────────────────
+
+[2026-03-20T17:30:00.687Z] 
+────────────────────────────────────────────────────────────
+[2026-03-20T17:30:00.691Z] 🎬  Batch scan starting — 5 movie(s) to process
+[2026-03-20T17:30:00.692Z] ────────────────────────────────────────────────────────────
+[2026-03-20T17:30:00.692Z] 
+[1/5]  "A Separation" (2011)
+[2026-03-20T17:34:42.971Z]   ✅  [1/5]  "A Separation" (2011)  →  done
+[2026-03-20T17:34:42.973Z]   ⏳  Waiting 3s before next movie…
+[2026-03-20T17:34:45.974Z] 
+[2/5]  "The Intouchables" (2011)
+[2026-03-20T22:40:51.113Z]   ⏱  [2/5]  "The Intouchables" (2011)  →  timed out after 10 min — skipping
+[2026-03-20T22:40:51.159Z]   ⏳  Waiting 3s before next movie…
+[2026-03-20T22:40:54.034Z] 
+[3/5]  "The Girl with the Dragon Tattoo" (2011)
+[2026-03-21T04:35:49.656Z]   ✅  [3/5]  "The Girl with the Dragon Tattoo" (2011)  →  done
+[2026-03-21T04:35:49.661Z]   ⏳  Waiting 3s before next movie…
+[2026-03-21T04:35:52.669Z] 
+[4/5]  "Carnage" (2011)
+[2026-03-21T09:40:32.978Z]   ✅  [4/5]  "Carnage" (2011)  →  done
+[2026-03-21T09:40:32.983Z]   ⏳  Waiting 3s before next movie…
+[2026-03-21T10:41:05.759Z] 
+[5/5]  "Shame" (2011)
+[2026-03-21T10:41:06.921Z]   ❌  [5/5]  "Shame" (2011)  →  exited with code 1
+[2026-03-21T10:41:06.960Z] 
+────────────────────────────────────────────────────────────
+[2026-03-21T10:41:06.960Z] 📊  Batch complete
+[2026-03-21T10:41:06.960Z]     ✅  Success:  3
+[2026-03-21T10:41:06.960Z]     ❌  Failed:   1  (safe_start set to -1 — rerun with --retry-failed)
+[2026-03-21T10:41:06.960Z]     ⏱  Timed out: 1
+[2026-03-21T10:41:06.960Z]     Log: /Users/vascolencastre/cinescenes/scripts/output/scan-batch.log
+[2026-03-21T10:41:06.960Z] ────────────────────────────────────────────────────────────
+
+[2026-03-21T18:08:53.649Z] 
+────────────────────────────────────────────────────────────
+[2026-03-21T18:08:53.660Z] 🎬  Batch scan starting — 2 movie(s) to process
+[2026-03-21T18:08:53.661Z] ────────────────────────────────────────────────────────────
+[2026-03-21T18:08:53.661Z] 
+[1/2]  "The Intouchables" (2011)
+[2026-03-21T18:12:22.928Z]   ❌  [1/2]  "The Intouchables" (2011)  →  exited with code 2
+[2026-03-21T18:12:23.194Z]   ⏳  Waiting 3s before next movie…
+[2026-03-21T18:12:26.195Z] 
+[2/2]  "Shame" (2011)
+[2026-03-21T18:15:52.538Z]   ✅  [2/2]  "Shame" (2011)  →  done
+[2026-03-21T18:15:52.541Z] 
+────────────────────────────────────────────────────────────
+[2026-03-21T18:15:52.542Z] 📊  Batch complete
+[2026-03-21T18:15:52.542Z]     ✅  Success:  1
+[2026-03-21T18:15:52.542Z]     ❌  Failed:   1  (safe_start set to -1 — rerun with --retry-failed)
+[2026-03-21T18:15:52.542Z]     Log: /Users/vascolencastre/cinescenes/scripts/output/scan-batch.log
+[2026-03-21T18:15:52.542Z] ────────────────────────────────────────────────────────────
+
+[2026-03-21T18:36:56.484Z] 
+────────────────────────────────────────────────────────────
+[2026-03-21T18:36:56.488Z] 🎬  Batch scan starting — 10 movie(s) to process
+[2026-03-21T18:36:56.489Z] ────────────────────────────────────────────────────────────
+[2026-03-21T18:36:56.489Z] 
+[1/10]  "The Social Network" (2010)
+[2026-03-21T18:38:38.955Z]   ✅  [1/10]  "The Social Network" (2010)  →  done
+[2026-03-21T18:38:38.955Z]   ⏳  Waiting 3s before next movie…
+[2026-03-21T18:38:41.956Z] 
+[2/10]  "Black Swan" (2010)
+[2026-03-21T18:41:52.720Z]   ✅  [2/10]  "Black Swan" (2010)  →  done
+[2026-03-21T18:41:52.720Z]   ⏳  Waiting 3s before next movie…
+[2026-03-21T18:41:55.721Z] 
+[3/10]  "The King's Speech" (2010)
+[2026-03-21T22:24:04.911Z]   ✅  [3/10]  "The King's Speech" (2010)  →  done
+[2026-03-21T22:24:04.919Z]   ⏳  Waiting 3s before next movie…
+[2026-03-21T22:24:07.922Z] 
+[4/10]  "True Grit" (2010)
+[2026-03-21T22:27:19.269Z]   ✅  [4/10]  "True Grit" (2010)  →  done
+[2026-03-21T22:27:19.271Z]   ⏳  Waiting 3s before next movie…
+[2026-03-21T22:27:22.273Z] 
+[5/10]  "127 Hours" (2010)
+[2026-03-21T22:31:04.968Z]   ✅  [5/10]  "127 Hours" (2010)  →  done
+[2026-03-21T22:31:04.969Z]   ⏳  Waiting 3s before next movie…
+[2026-03-21T22:31:07.970Z] 
+[6/10]  "Winter's Bone" (2010)
+[2026-03-21T22:35:45.256Z]   ✅  [6/10]  "Winter's Bone" (2010)  →  done
+[2026-03-21T22:35:45.257Z]   ⏳  Waiting 3s before next movie…
+[2026-03-21T22:35:48.258Z] 
+[7/10]  "Toy Story 3" (2010)
+[2026-03-21T22:37:29.683Z]   ✅  [7/10]  "Toy Story 3" (2010)  →  done
+[2026-03-21T22:37:29.684Z]   ⏳  Waiting 3s before next movie…
+[2026-03-21T22:37:32.686Z] 
+[8/10]  "The Fighter" (2010)
+[2026-03-21T22:40:31.286Z]   ✅  [8/10]  "The Fighter" (2010)  →  done
+[2026-03-21T22:40:31.288Z]   ⏳  Waiting 3s before next movie…
+[2026-03-21T22:40:34.290Z] 
+[9/10]  "I Am Love" (2010)
+[2026-03-21T22:42:16.043Z]   ✅  [9/10]  "I Am Love" (2010)  →  done
+[2026-03-21T22:42:16.043Z]   ⏳  Waiting 3s before next movie…
+[2026-03-21T22:42:19.045Z] 
+[10/10]  "Of Gods and Men" (2010)
+[2026-03-21T22:46:19.507Z]   ✅  [10/10]  "Of Gods and Men" (2010)  →  done
+[2026-03-21T22:46:19.508Z] 
+────────────────────────────────────────────────────────────
+[2026-03-21T22:46:19.508Z] 📊  Batch complete
+[2026-03-21T22:46:19.508Z]     ✅  Success:  10
+[2026-03-21T22:46:19.508Z]     Log: /Users/vascolencastre/cinescenes/scripts/output/scan-batch.log
+[2026-03-21T22:46:19.508Z] ────────────────────────────────────────────────────────────
+
+[2026-03-22T00:38:16.046Z] 
+────────────────────────────────────────────────────────────
+[2026-03-22T00:38:16.050Z] 🎬  Batch scan starting — 12 movie(s) to process
+[2026-03-22T00:38:16.051Z] ────────────────────────────────────────────────────────────
+[2026-03-22T00:38:16.051Z] 
+[1/12]  "The Hurt Locker" (2009)
+[2026-03-22T00:41:23.465Z]   ✅  [1/12]  "The Hurt Locker" (2009)  →  done
+[2026-03-22T00:41:23.473Z]   ⏳  Waiting 3s before next movie…
+[2026-03-22T00:41:26.477Z] 
+[2/12]  "Inglourious Basterds" (2009)
+[2026-03-22T00:43:19.774Z]   ✅  [2/12]  "Inglourious Basterds" (2009)  →  done
+[2026-03-22T00:43:19.785Z]   ⏳  Waiting 3s before next movie…
+[2026-03-22T00:43:22.787Z] 
+[3/12]  "Moon" (2009)
+[2026-03-22T00:48:48.142Z]   ❌  [3/12]  "Moon" (2009)  →  exited with code 2
+[2026-03-22T00:48:48.517Z]   ⏳  Waiting 3s before next movie…
+[2026-03-22T00:48:51.521Z] 
+[4/12]  "Avatar" (2009)
+[2026-03-22T00:50:47.856Z]   ✅  [4/12]  "Avatar" (2009)  →  done
+[2026-03-22T00:50:47.862Z]   ⏳  Waiting 3s before next movie…
+[2026-03-22T00:50:50.866Z] 
+[5/12]  "An Education" (2009)
+[2026-03-22T09:31:39.511Z] 
+────────────────────────────────────────────────────────────
+[2026-03-22T09:31:39.518Z] 🎬  Batch scan starting — 9 movie(s) to process
+[2026-03-22T09:31:39.520Z] ────────────────────────────────────────────────────────────
+[2026-03-22T09:31:39.520Z] 
+[1/9]  "The Hurt Locker" (2009)
+[2026-03-22T09:34:49.720Z]   ✅  [1/9]  "The Hurt Locker" (2009)  →  done
+[2026-03-22T09:34:49.724Z]   ⏳  Waiting 3s before next movie…
+[2026-03-22T09:34:52.725Z] 
+[2/9]  "An Education" (2009)
+[2026-03-22T09:38:09.630Z]   ✅  [2/9]  "An Education" (2009)  →  done
+[2026-03-22T09:38:09.633Z]   ⏳  Waiting 3s before next movie…
+[2026-03-22T09:38:12.635Z] 
+[3/9]  "Precious" (2009)
+[2026-03-22T09:40:38.880Z]   ✅  [3/9]  "Precious" (2009)  →  done
+[2026-03-22T09:40:38.880Z]   ⏳  Waiting 3s before next movie…
+[2026-03-22T09:40:41.882Z] 
+[4/9]  "The Road" (2009)
+[2026-03-22T09:42:35.002Z]   ❌  [4/9]  "The Road" (2009)  →  exited with code 2
+[2026-03-22T09:42:35.232Z]   ⏳  Waiting 3s before next movie…
+[2026-03-22T09:42:38.233Z] 
+[5/9]  "A Serious Man" (2009)
+[2026-03-22T09:44:44.124Z]   ✅  [5/9]  "A Serious Man" (2009)  →  done
+[2026-03-22T09:44:44.124Z]   ⏳  Waiting 3s before next movie…
+[2026-03-22T09:44:47.125Z] 
+[6/9]  "A Prophet" (2009)
+[2026-03-22T10:09:47.166Z]   ⏱  [6/9]  "A Prophet" (2009)  →  timed out after 10 min — skipping
+[2026-03-22T10:09:47.664Z]   ⏳  Waiting 3s before next movie…
+[2026-03-22T10:09:50.665Z] 
+[7/9]  "The White Ribbon" (2009)
+[2026-03-22T10:34:50.692Z]   ⏱  [7/9]  "The White Ribbon" (2009)  →  timed out after 10 min — skipping
+[2026-03-22T10:34:50.722Z]   ⏳  Waiting 3s before next movie…
+[2026-03-22T10:34:53.724Z] 
+[8/9]  "District 9" (2009)
+[2026-03-22T10:59:53.733Z]   ⏱  [8/9]  "District 9" (2009)  →  timed out after 10 min — skipping
+[2026-03-22T10:59:54.810Z]   ⏳  Waiting 3s before next movie…
+[2026-03-22T10:59:57.811Z] 
+[9/9]  "Up" (2009)
+[2026-03-22T11:00:02.452Z]   ❌  [9/9]  "Up" (2009)  →  exited with code 1
+[2026-03-22T11:00:02.528Z] 
+────────────────────────────────────────────────────────────
+[2026-03-22T11:00:02.528Z] 📊  Batch complete
+[2026-03-22T11:00:02.528Z]     ✅  Success:  4
+[2026-03-22T11:00:02.528Z]     ❌  Failed:   2  (safe_start set to -1 — rerun with --retry-failed)
+[2026-03-22T11:00:02.528Z]     ⏱  Timed out: 3
+[2026-03-22T11:00:02.528Z]     Log: /Users/vascolencastre/cinescenes/scripts/output/scan-batch.log
+[2026-03-22T11:00:02.528Z] ────────────────────────────────────────────────────────────
+
+[2026-03-22T23:48:37.560Z] 
+────────────────────────────────────────────────────────────
+[2026-03-22T23:48:37.565Z] 🎬  Batch scan starting — 7 movie(s) to process
+[2026-03-22T23:48:37.565Z] ────────────────────────────────────────────────────────────
+[2026-03-22T23:48:37.565Z] 
+[1/7]  "The Hangover" (2009)
+[2026-03-22T23:50:29.878Z]   ✅  [1/7]  "The Hangover" (2009)  →  done
+[2026-03-22T23:50:29.884Z]   ⏳  Waiting 3s before next movie…
+[2026-03-22T23:50:32.887Z] 
+[2/7]  "Moon" (2009)
+[2026-03-22T23:53:44.083Z]   ✅  [2/7]  "Moon" (2009)  →  done
+[2026-03-22T23:53:44.092Z]   ⏳  Waiting 3s before next movie…
+[2026-03-22T23:53:47.095Z] 
+[3/7]  "A Prophet" (2009)
+[2026-03-22T23:55:32.872Z]   ✅  [3/7]  "A Prophet" (2009)  →  done
+[2026-03-22T23:55:32.876Z]   ⏳  Waiting 3s before next movie…
+[2026-03-22T23:55:35.879Z] 
+[4/7]  "The White Ribbon" (2009)
+[2026-03-22T23:58:49.433Z]   ❌  [4/7]  "The White Ribbon" (2009)  →  exited with code 2
+[2026-03-22T23:58:49.867Z]   ⏳  Waiting 3s before next movie…
+[2026-03-22T23:58:52.868Z] 
+[5/7]  "District 9" (2009)
+[2026-03-23T00:00:43.092Z]   ✅  [5/7]  "District 9" (2009)  →  done
+[2026-03-23T00:00:43.094Z]   ⏳  Waiting 3s before next movie…
+[2026-03-23T00:00:46.098Z] 
+[6/7]  "500 Days of Summer" (2009)
+[2026-03-23T00:00:57.142Z]   ❌  [6/7]  "500 Days of Summer" (2009)  →  exited with code 2
+[2026-03-23T00:00:57.312Z]   ⏳  Waiting 3s before next movie…
+[2026-03-23T00:01:00.313Z] 
+[7/7]  "Up" (2009)
+[2026-03-23T00:01:04.493Z]   ❌  [7/7]  "Up" (2009)  →  exited with code 1
+[2026-03-23T00:01:04.566Z] 
+────────────────────────────────────────────────────────────
+[2026-03-23T00:01:04.567Z] 📊  Batch complete
+[2026-03-23T00:01:04.567Z]     ✅  Success:  4
+[2026-03-23T00:01:04.567Z]     ❌  Failed:   3  (safe_start set to -1 — rerun with --retry-failed)
+[2026-03-23T00:01:04.567Z]     Log: /Users/vascolencastre/cinescenes/scripts/output/scan-batch.log
+[2026-03-23T00:01:04.567Z] ────────────────────────────────────────────────────────────
+
+[2026-03-23T17:46:35.053Z] 
+────────────────────────────────────────────────────────────
+[2026-03-23T17:46:35.068Z] 🎬  Batch scan starting — 11 movie(s) to process
+[2026-03-23T17:46:35.071Z]     DRY RUN — no scans will run
+[2026-03-23T17:46:35.071Z] ────────────────────────────────────────────────────────────
+[2026-03-23T17:46:35.071Z]   [1/11]  "The Class" (2008)  →  would scan  (tmdb_id=none)
+[2026-03-23T17:46:35.071Z]   [2/11]  "The Curious Case of Benjamin Button" (2008)  →  would scan  (tmdb_id=none)
+[2026-03-23T17:46:35.072Z]   [3/11]  "Slumdog Millionaire" (2008)  →  would scan  (tmdb_id=none)
+[2026-03-23T17:46:35.072Z]   [4/11]  "WALL-E" (2008)  →  would scan  (tmdb_id=none)
+[2026-03-23T17:46:35.072Z]   [5/11]  "Revolutionary Road" (2008)  →  would scan  (tmdb_id=none)
+[2026-03-23T17:46:35.072Z]   [6/11]  "Milk" (2008)  →  would scan  (tmdb_id=none)
+[2026-03-23T17:46:35.072Z]   [7/11]  "Let the Right One In" (2008)  →  would scan  (tmdb_id=none)
+[2026-03-23T17:46:35.072Z]   [8/11]  "Gran Torino" (2008)  →  would scan  (tmdb_id=none)
+[2026-03-23T17:46:35.072Z]   [9/11]  "Frost/Nixon" (2008)  →  would scan  (tmdb_id=none)
+[2026-03-23T17:46:35.072Z]   [10/11]  "Changeling" (2008)  →  would scan  (tmdb_id=none)
+[2026-03-23T17:46:35.072Z]   [11/11]  "Die Welle" (2008)  →  would scan  (tmdb_id=none)
+[2026-03-23T17:46:35.072Z] 
+────────────────────────────────────────────────────────────
+[2026-03-23T17:46:35.072Z] 📊  Batch complete
+[2026-03-23T17:46:35.072Z]     ✅  Success:  0
+[2026-03-23T17:46:35.073Z]     Log: /Users/vascolencastre/cinescenes/scripts/output/scan-batch.log
+[2026-03-23T17:46:35.073Z] ────────────────────────────────────────────────────────────
+
+[2026-03-23T17:50:42.651Z] 
+────────────────────────────────────────────────────────────
+[2026-03-23T17:50:42.654Z] 🎬  Batch scan starting — 11 movie(s) to process
+[2026-03-23T17:50:42.655Z] ────────────────────────────────────────────────────────────
+[2026-03-23T17:50:42.655Z] 
+[1/11]  "The Class" (2008)
+[2026-03-23T17:53:10.445Z]   ✅  [1/11]  "The Class" (2008)  →  done
+[2026-03-23T17:53:10.446Z]   ⏳  Waiting 3s before next movie…
+[2026-03-23T17:53:13.446Z] 
+[2/11]  "The Curious Case of Benjamin Button" (2008)
+[2026-03-23T17:54:41.821Z]   ✅  [2/11]  "The Curious Case of Benjamin Button" (2008)  →  done
+[2026-03-23T17:54:41.823Z]   ⏳  Waiting 3s before next movie…
+[2026-03-23T17:54:44.825Z] 
+[3/11]  "Slumdog Millionaire" (2008)
+[2026-03-23T17:58:10.395Z]   ✅  [3/11]  "Slumdog Millionaire" (2008)  →  done
+[2026-03-23T17:58:10.398Z]   ⏳  Waiting 3s before next movie…
+[2026-03-23T17:58:13.399Z] 
+[4/11]  "WALL-E" (2008)
+[2026-03-23T18:00:48.253Z]   ✅  [4/11]  "WALL-E" (2008)  →  done
+[2026-03-23T18:00:48.254Z]   ⏳  Waiting 3s before next movie…
+[2026-03-23T18:00:51.255Z] 
+[5/11]  "Revolutionary Road" (2008)
+[2026-03-23T18:04:25.323Z]   ✅  [5/11]  "Revolutionary Road" (2008)  →  done
+[2026-03-23T18:04:25.326Z]   ⏳  Waiting 3s before next movie…
+[2026-03-23T18:04:28.327Z] 
+[6/11]  "Milk" (2008)
+[2026-03-23T18:07:19.059Z]   ❌  [6/11]  "Milk" (2008)  →  exited with code 2
+[2026-03-23T18:07:19.283Z]   ⏳  Waiting 3s before next movie…
+[2026-03-23T18:07:22.285Z] 
+[7/11]  "Let the Right One In" (2008)
+[2026-03-23T18:10:31.616Z]   ✅  [7/11]  "Let the Right One In" (2008)  →  done
+[2026-03-23T18:10:31.616Z]   ⏳  Waiting 3s before next movie…
+[2026-03-23T18:10:34.618Z] 
+[8/11]  "Gran Torino" (2008)
+[2026-03-23T18:13:56.799Z]   ✅  [8/11]  "Gran Torino" (2008)  →  done
+[2026-03-23T18:13:56.799Z]   ⏳  Waiting 3s before next movie…
+[2026-03-23T18:13:59.800Z] 
+[9/11]  "Frost/Nixon" (2008)
+[2026-03-23T18:17:20.965Z]   ✅  [9/11]  "Frost/Nixon" (2008)  →  done
+[2026-03-23T18:17:20.965Z]   ⏳  Waiting 3s before next movie…
+[2026-03-23T18:17:23.966Z] 
+[10/11]  "Changeling" (2008)
+[2026-03-23T18:19:19.573Z]   ✅  [10/11]  "Changeling" (2008)  →  done
+[2026-03-23T18:19:19.573Z]   ⏳  Waiting 3s before next movie…
+[2026-03-23T18:19:22.573Z] 
+[11/11]  "Die Welle" (2008)
+[2026-03-23T18:25:47.371Z]   ❌  [11/11]  "Die Welle" (2008)  →  exited with code 1
+[2026-03-23T18:25:47.623Z] 
+────────────────────────────────────────────────────────────
+[2026-03-23T18:25:47.623Z] 📊  Batch complete
+[2026-03-23T18:25:47.623Z]     ✅  Success:  9
+[2026-03-23T18:25:47.623Z]     ❌  Failed:   2  (safe_start set to -1 — rerun with --retry-failed)
+[2026-03-23T18:25:47.623Z]     Log: /Users/vascolencastre/cinescenes/scripts/output/scan-batch.log
+[2026-03-23T18:25:47.624Z] ────────────────────────────────────────────────────────────
+
+[2026-03-24T20:59:59.936Z] 
+────────────────────────────────────────────────────────────
+[2026-03-24T20:59:59.940Z] 🎬  Batch scan starting — 105 movie(s) to process
+[2026-03-24T20:59:59.943Z] ────────────────────────────────────────────────────────────
+[2026-03-24T20:59:59.943Z] 
+[1/105]  "The Wicker Man" (1973)
+[2026-03-24T21:02:17.960Z]   ❌  [1/105]  "The Wicker Man" (1973)  →  exited with code 1
+[2026-03-24T21:02:18.158Z]   ⏳  Waiting 3s before next movie…
+[2026-03-24T21:02:21.160Z] 
+[2/105]  "Eraserhead" (1977)
+[2026-03-24T21:02:30.990Z]   ❌  [2/105]  "Eraserhead" (1977)  →  exited with code 2
+[2026-03-24T21:02:31.082Z]   ⏳  Waiting 3s before next movie…
+[2026-03-24T21:02:34.085Z] 
+[3/105]  "Absolute Power" (1997)
+[2026-03-24T21:04:48.681Z]   ❌  [3/105]  "Absolute Power" (1997)  →  exited with code 1
+[2026-03-24T21:04:49.041Z]   ⏳  Waiting 3s before next movie…
+[2026-03-24T21:04:52.053Z] 
+[4/105]  "Chicken Run" (2000)
+[2026-03-24T21:07:15.456Z]   ❌  [4/105]  "Chicken Run" (2000)  →  exited with code 1
+[2026-03-24T21:07:15.509Z]   ⏳  Waiting 3s before next movie…
+[2026-03-24T21:07:18.510Z] 
+[5/105]  "Requiem for a Dream" (2000)
+[2026-03-24T21:09:31.505Z]   ❌  [5/105]  "Requiem for a Dream" (2000)  →  exited with code 1
+[2026-03-24T21:09:31.555Z]   ⏳  Waiting 3s before next movie…
+[2026-03-24T21:09:34.555Z] 
+[6/105]  "Crouching Tiger, Hidden Dragon" (2000)
+[2026-03-24T21:11:42.288Z]   ❌  [6/105]  "Crouching Tiger, Hidden Dragon" (2000)  →  exited with code 1
+[2026-03-24T21:11:42.412Z]   ⏳  Waiting 3s before next movie…
+[2026-03-25T07:56:06.242Z] 
+────────────────────────────────────────────────────────────
+[2026-03-25T07:56:06.244Z] 🎬  Batch scan starting — 2 movie(s) to process
+[2026-03-25T07:56:06.246Z]     DRY RUN — no scans will run
+[2026-03-25T07:56:06.246Z] ────────────────────────────────────────────────────────────
+[2026-03-25T07:56:06.246Z]   [1/2]  "It" (2017)  →  would scan  (tmdb_id=none)
+[2026-03-25T07:56:06.246Z]   [2/2]  "I, Tonya" (2017)  →  would scan  (tmdb_id=none)
+[2026-03-25T07:56:06.246Z] 
+────────────────────────────────────────────────────────────
+[2026-03-25T07:56:06.246Z] 📊  Batch complete
+[2026-03-25T07:56:06.246Z]     ✅  Success:  0
+[2026-03-25T07:56:06.247Z]     Log: /Users/vascolencastre/cinescenes/scripts/output/scan-batch.log
+[2026-03-25T07:56:06.247Z] ────────────────────────────────────────────────────────────
+
+[2026-03-25T07:56:09.509Z] 
+────────────────────────────────────────────────────────────
+[2026-03-25T07:56:09.511Z] 🎬  Batch scan starting — 2 movie(s) to process
+[2026-03-25T07:56:09.511Z] ────────────────────────────────────────────────────────────
+[2026-03-25T07:56:09.511Z] 
+[1/2]  "It" (2017)
+[2026-03-25T08:02:01.029Z]   ❌  [1/2]  "It" (2017)  →  exited with code 1
+[2026-03-25T08:02:01.339Z]   ⏳  Waiting 3s before next movie…
+[2026-03-25T08:02:04.342Z] 
+[2/2]  "I, Tonya" (2017)
+[2026-03-25T08:04:11.093Z]   ❌  [2/2]  "I, Tonya" (2017)  →  exited with code 1
+[2026-03-25T08:04:11.694Z] 
+────────────────────────────────────────────────────────────
+[2026-03-25T08:04:11.695Z] 📊  Batch complete
+[2026-03-25T08:04:11.695Z]     ✅  Success:  0
+[2026-03-25T08:04:11.695Z]     ❌  Failed:   2  (safe_start set to -1 — rerun with --retry-failed)
+[2026-03-25T08:04:11.695Z]     Log: /Users/vascolencastre/cinescenes/scripts/output/scan-batch.log
+[2026-03-25T08:04:11.695Z] ────────────────────────────────────────────────────────────
+
+[2026-03-25T08:04:35.717Z] 
+────────────────────────────────────────────────────────────
+[2026-03-25T08:04:35.722Z] 🎬  Batch scan starting — 2 movie(s) to process
+[2026-03-25T08:04:35.722Z] ────────────────────────────────────────────────────────────
+[2026-03-25T08:04:35.722Z] 
+[1/2]  "It" (2017)
+[2026-03-25T08:08:46.003Z]   ✅  [1/2]  "It" (2017)  →  done
+[2026-03-25T08:08:46.004Z]   ⏳  Waiting 3s before next movie…
+[2026-03-25T08:08:49.004Z] 
+[2/2]  "I, Tonya" (2017)
+[2026-03-25T08:11:32.772Z]   ✅  [2/2]  "I, Tonya" (2017)  →  done
+[2026-03-25T08:11:32.778Z] 
+────────────────────────────────────────────────────────────
+[2026-03-25T08:11:32.778Z] 📊  Batch complete
+[2026-03-25T08:11:32.778Z]     ✅  Success:  2
+[2026-03-25T08:11:32.778Z]     Log: /Users/vascolencastre/cinescenes/scripts/output/scan-batch.log
+[2026-03-25T08:11:32.778Z] ────────────────────────────────────────────────────────────
+
+[2026-03-25T08:15:20.689Z] 
+────────────────────────────────────────────────────────────
+[2026-03-25T08:15:20.691Z] 🎬  Batch scan starting — 11 movie(s) to process
+[2026-03-25T08:15:20.693Z]     DRY RUN — no scans will run
+[2026-03-25T08:15:20.693Z] ────────────────────────────────────────────────────────────
+[2026-03-25T08:15:20.694Z]   [1/11]  "The Assassination of Jesse James by the Coward Robert Ford" (2007)  →  would scan  (tmdb_id=none)
+[2026-03-25T08:15:20.694Z]   [2/11]  "4 Months, 3 Weeks and 2 Days" (2007)  →  would scan  (tmdb_id=none)
+[2026-03-25T08:15:20.694Z]   [3/11]  "Gone Baby Gone" (2007)  →  would scan  (tmdb_id=none)
+[2026-03-25T08:15:20.694Z]   [4/11]  "Zodiac" (2007)  →  would scan  (tmdb_id=none)
+[2026-03-25T08:15:20.694Z]   [5/11]  "Michael Clayton" (2007)  →  would scan  (tmdb_id=none)
+[2026-03-25T08:15:20.694Z]   [6/11]  "Into the Wild" (2007)  →  would scan  (tmdb_id=none)
+[2026-03-25T08:15:20.694Z]   [7/11]  "Ratatouille" (2007)  →  would scan  (tmdb_id=none)
+[2026-03-25T08:15:20.694Z]   [8/11]  "The Diving Bell and the Butterfly" (2007)  →  would scan  (tmdb_id=none)
+[2026-03-25T08:15:20.694Z]   [9/11]  "There Will Be Blood" (2007)  →  would scan  (tmdb_id=none)
+[2026-03-25T08:15:20.694Z]   [10/11]  "No Country for Old Men" (2007)  →  would scan  (tmdb_id=none)
+[2026-03-25T08:15:20.694Z]   [11/11]  "Atonement" (2007)  →  would scan  (tmdb_id=none)
+[2026-03-25T08:15:20.695Z] 
+────────────────────────────────────────────────────────────
+[2026-03-25T08:15:20.695Z] 📊  Batch complete
+[2026-03-25T08:15:20.695Z]     ✅  Success:  0
+[2026-03-25T08:15:20.695Z]     Log: /Users/vascolencastre/cinescenes/scripts/output/scan-batch.log
+[2026-03-25T08:15:20.695Z] ────────────────────────────────────────────────────────────
+
+[2026-03-25T08:15:42.717Z] 
+────────────────────────────────────────────────────────────
+[2026-03-25T08:15:42.722Z] 🎬  Batch scan starting — 10 movie(s) to process
+[2026-03-25T08:15:42.723Z]     DRY RUN — no scans will run
+[2026-03-25T08:15:42.723Z] ────────────────────────────────────────────────────────────
+[2026-03-25T08:15:42.723Z]   [1/10]  "4 Months, 3 Weeks and 2 Days" (2007)  →  would scan  (tmdb_id=none)
+[2026-03-25T08:15:42.723Z]   [2/10]  "Gone Baby Gone" (2007)  →  would scan  (tmdb_id=none)
+[2026-03-25T08:15:42.723Z]   [3/10]  "Zodiac" (2007)  →  would scan  (tmdb_id=none)
+[2026-03-25T08:15:42.723Z]   [4/10]  "Michael Clayton" (2007)  →  would scan  (tmdb_id=none)
+[2026-03-25T08:15:42.723Z]   [5/10]  "Into the Wild" (2007)  →  would scan  (tmdb_id=none)
+[2026-03-25T08:15:42.723Z]   [6/10]  "Ratatouille" (2007)  →  would scan  (tmdb_id=none)
+[2026-03-25T08:15:42.724Z]   [7/10]  "The Diving Bell and the Butterfly" (2007)  →  would scan  (tmdb_id=none)
+[2026-03-25T08:15:42.724Z]   [8/10]  "There Will Be Blood" (2007)  →  would scan  (tmdb_id=none)
+[2026-03-25T08:15:42.724Z]   [9/10]  "No Country for Old Men" (2007)  →  would scan  (tmdb_id=none)
+[2026-03-25T08:15:42.724Z]   [10/10]  "Atonement" (2007)  →  would scan  (tmdb_id=none)
+[2026-03-25T08:15:42.724Z] 
+────────────────────────────────────────────────────────────
+[2026-03-25T08:15:42.724Z] 📊  Batch complete
+[2026-03-25T08:15:42.724Z]     ✅  Success:  0
+[2026-03-25T08:15:42.724Z]     Log: /Users/vascolencastre/cinescenes/scripts/output/scan-batch.log
+[2026-03-25T08:15:42.724Z] ────────────────────────────────────────────────────────────
+
+[2026-03-25T08:15:46.015Z] 
+────────────────────────────────────────────────────────────
+[2026-03-25T08:15:46.018Z] 🎬  Batch scan starting — 10 movie(s) to process
+[2026-03-25T08:15:46.018Z] ────────────────────────────────────────────────────────────
+[2026-03-25T08:15:46.018Z] 
+[1/10]  "4 Months, 3 Weeks and 2 Days" (2007)
+[2026-03-25T08:19:42.145Z]   ✅  [1/10]  "4 Months, 3 Weeks and 2 Days" (2007)  →  done
+[2026-03-25T08:19:42.151Z]   ⏳  Waiting 3s before next movie…
+[2026-03-25T08:19:45.153Z] 
+[2/10]  "Gone Baby Gone" (2007)
+[2026-03-25T08:21:43.948Z]   ✅  [2/10]  "Gone Baby Gone" (2007)  →  done
+[2026-03-25T08:21:43.965Z]   ⏳  Waiting 3s before next movie…
+[2026-03-25T08:21:46.977Z] 
+[3/10]  "Zodiac" (2007)
+[2026-03-25T08:25:48.751Z]   ✅  [3/10]  "Zodiac" (2007)  →  done
+[2026-03-25T08:25:48.753Z]   ⏳  Waiting 3s before next movie…
+[2026-03-25T08:25:51.754Z] 
+[4/10]  "Michael Clayton" (2007)
+[2026-03-25T08:26:01.806Z]   ❌  [4/10]  "Michael Clayton" (2007)  →  exited with code 2
+[2026-03-25T08:26:01.927Z]   ⏳  Waiting 3s before next movie…
+[2026-03-25T08:26:04.927Z] 
+[5/10]  "Into the Wild" (2007)
+[2026-03-25T08:30:52.023Z]   ✅  [5/10]  "Into the Wild" (2007)  →  done
+[2026-03-25T08:30:52.023Z]   ⏳  Waiting 3s before next movie…
+[2026-03-25T08:30:55.025Z] 
+[6/10]  "Ratatouille" (2007)
+[2026-03-25T08:30:59.437Z]   ❌  [6/10]  "Ratatouille" (2007)  →  exited with code 1
+[2026-03-25T08:30:59.536Z]   ⏳  Waiting 3s before next movie…
+[2026-03-25T08:31:02.540Z] 
+[7/10]  "The Diving Bell and the Butterfly" (2007)
+[2026-03-25T08:35:25.259Z]   ✅  [7/10]  "The Diving Bell and the Butterfly" (2007)  →  done
+[2026-03-25T08:35:25.259Z]   ⏳  Waiting 3s before next movie…
+[2026-03-25T08:35:28.260Z] 
+[8/10]  "There Will Be Blood" (2007)
+[2026-03-25T08:36:42.279Z]   ✅  [8/10]  "There Will Be Blood" (2007)  →  done
+[2026-03-25T08:36:42.279Z]   ⏳  Waiting 3s before next movie…
+[2026-03-25T08:36:45.280Z] 
+[9/10]  "No Country for Old Men" (2007)
+[2026-03-25T08:44:06.574Z]   ✅  [9/10]  "No Country for Old Men" (2007)  →  done
+[2026-03-25T08:44:06.574Z]   ⏳  Waiting 3s before next movie…
+[2026-03-25T08:44:09.576Z] 
+[10/10]  "Atonement" (2007)
+[2026-03-25T08:52:41.881Z]   ✅  [10/10]  "Atonement" (2007)  →  done
+[2026-03-25T08:52:41.881Z] 
+────────────────────────────────────────────────────────────
+[2026-03-25T08:52:41.881Z] 📊  Batch complete
+[2026-03-25T08:52:41.881Z]     ✅  Success:  8
+[2026-03-25T08:52:41.881Z]     ❌  Failed:   2  (safe_start set to -1 — rerun with --retry-failed)
+[2026-03-25T08:52:41.881Z]     Log: /Users/vascolencastre/cinescenes/scripts/output/scan-batch.log
+[2026-03-25T08:52:41.881Z] ────────────────────────────────────────────────────────────
+
+[2026-03-25T20:15:34.349Z] 
+────────────────────────────────────────────────────────────
+[2026-03-25T20:15:34.365Z] 🎬  Batch scan starting — 7 movie(s) to process
+[2026-03-25T20:15:34.365Z] ────────────────────────────────────────────────────────────
+[2026-03-25T20:15:34.366Z] 
+[1/7]  "Children of Men" (2006)
+[2026-03-25T20:22:03.743Z]   ✅  [1/7]  "Children of Men" (2006)  →  done
+[2026-03-25T20:22:03.748Z]   ⏳  Waiting 3s before next movie…
+[2026-03-25T20:22:06.753Z] 
+[2/7]  "United 93" (2006)
+[2026-03-25T20:22:09.859Z]   ❌  [2/7]  "United 93" (2006)  →  exited with code 1
+[2026-03-25T20:22:10.246Z]   ⏳  Waiting 3s before next movie…
+[2026-03-25T20:22:13.246Z] 
+[3/7]  "Borat" (2006)
+[2026-03-25T20:24:47.072Z]   ✅  [3/7]  "Borat" (2006)  →  done
+[2026-03-25T20:24:47.079Z]   ⏳  Waiting 3s before next movie…
+[2026-03-25T20:24:50.081Z] 
+[4/7]  "Letters from Iwo Jima" (2006)
+[2026-03-25T20:29:20.102Z]   ✅  [4/7]  "Letters from Iwo Jima" (2006)  →  done
+[2026-03-25T20:29:20.109Z]   ⏳  Waiting 3s before next movie…
+[2026-03-25T20:29:23.114Z] 
+[5/7]  "Pan's Labyrinth" (2006)
+[2026-03-25T20:32:43.735Z]   ❌  [5/7]  "Pan's Labyrinth" (2006)  →  exited with code 2
+[2026-03-25T20:32:44.038Z]   ⏳  Waiting 3s before next movie…
+[2026-03-25T20:32:47.039Z] 
+[6/7]  "The Departed" (2006)
+[2026-03-25T20:36:25.930Z]   ✅  [6/7]  "The Departed" (2006)  →  done
+[2026-03-25T20:36:25.932Z]   ⏳  Waiting 3s before next movie…
+[2026-03-25T20:36:28.934Z] 
+[7/7]  "Babel" (2006)
+[2026-03-26T22:02:14.898Z] 
+────────────────────────────────────────────────────────────
+[2026-03-26T22:02:14.901Z] 🎬  Batch scan starting — 9 movie(s) to process
+[2026-03-26T22:02:14.902Z] ────────────────────────────────────────────────────────────
+[2026-03-26T22:02:14.903Z] 
+[1/9]  "Capote" (2005)
+[2026-03-26T22:04:18.640Z]   ✅  [1/9]  "Capote" (2005)  →  done
+[2026-03-26T22:04:18.641Z]   ⏳  Waiting 3s before next movie…
+[2026-03-26T22:04:21.642Z] 
+[2/9]  "A History of Violence" (2005)
+[2026-03-26T22:08:05.385Z]   ✅  [2/9]  "A History of Violence" (2005)  →  done
+[2026-03-26T22:08:05.388Z]   ⏳  Waiting 3s before next movie…
+[2026-03-26T22:08:08.389Z] 
+[3/9]  "Batman Begins" (2005)
+[2026-03-26T22:13:38.755Z]   ✅  [3/9]  "Batman Begins" (2005)  →  done
+[2026-03-26T22:13:38.756Z]   ⏳  Waiting 3s before next movie…
+[2026-03-26T22:13:41.758Z] 
+[4/9]  "Caché" (2005)
+[2026-03-26T22:18:32.868Z]   ✅  [4/9]  "Caché" (2005)  →  done
+[2026-03-26T22:18:32.875Z]   ⏳  Waiting 3s before next movie…
+[2026-03-26T22:18:35.881Z] 
+[5/9]  "Crash" (2005)
+[2026-03-26T22:20:19.820Z]   ✅  [5/9]  "Crash" (2005)  →  done
+[2026-03-26T22:20:19.820Z]   ⏳  Waiting 3s before next movie…
+[2026-03-26T22:20:22.823Z] 
+[6/9]  "Walk the Line" (2005)
+[2026-03-26T22:24:34.606Z]   ✅  [6/9]  "Walk the Line" (2005)  →  done
+[2026-03-26T22:24:34.608Z]   ⏳  Waiting 3s before next movie…
+[2026-03-26T22:24:37.612Z] 
+[7/9]  "The Constant Gardener" (2005)
+[2026-03-26T22:29:04.825Z]   ✅  [7/9]  "The Constant Gardener" (2005)  →  done
+[2026-03-26T22:29:04.830Z]   ⏳  Waiting 3s before next movie…
+[2026-03-26T22:29:07.833Z] 
+[8/9]  "Good Night, and Good Luck" (2005)
+[2026-03-26T22:31:07.518Z]   ✅  [8/9]  "Good Night, and Good Luck" (2005)  →  done
+[2026-03-26T22:31:07.518Z]   ⏳  Waiting 3s before next movie…
+[2026-03-26T22:31:10.521Z] 
+[9/9]  "Munich" (2005)
+[2026-03-26T22:35:07.929Z]   ✅  [9/9]  "Munich" (2005)  →  done
+[2026-03-26T22:35:07.932Z] 
+────────────────────────────────────────────────────────────
+[2026-03-26T22:35:07.932Z] 📊  Batch complete
+[2026-03-26T22:35:07.933Z]     ✅  Success:  9
+[2026-03-26T22:35:07.933Z]     Log: /Users/vascolencastre/cinescenes/scripts/output/scan-batch.log
+[2026-03-26T22:35:07.933Z] ────────────────────────────────────────────────────────────
+
+[2026-03-26T22:38:50.647Z] 
+────────────────────────────────────────────────────────────
+[2026-03-26T22:38:50.649Z] 🎬  Batch scan starting — 13 movie(s) to process
+[2026-03-26T22:38:50.649Z] ────────────────────────────────────────────────────────────
+[2026-03-26T22:38:50.649Z] 
+[1/13]  "The Passion of the Christ" (2004)
+[2026-03-26T22:38:51.336Z]   ❌  [1/13]  "The Passion of the Christ" (2004)  →  exited with code 1
+[2026-03-26T22:38:51.426Z]   ⏳  Waiting 3s before next movie…
+[2026-03-26T22:38:55.353Z] 
+────────────────────────────────────────────────────────────
+[2026-03-26T22:38:55.356Z] 🎬  Batch scan starting — 12 movie(s) to process
+[2026-03-26T22:38:55.356Z] ────────────────────────────────────────────────────────────
+[2026-03-26T22:38:55.356Z] 
+[1/12]  "The Sea Inside" (2004)
+[2026-03-26T22:43:58.860Z]   ✅  [1/12]  "The Sea Inside" (2004)  →  done
+[2026-03-26T22:43:58.861Z]   ⏳  Waiting 3s before next movie…
+[2026-03-26T22:44:01.862Z] 
+[2/12]  "The Machinist" (2004)
+[2026-03-26T22:46:27.839Z]   ✅  [2/12]  "The Machinist" (2004)  →  done
+[2026-03-26T22:46:27.845Z]   ⏳  Waiting 3s before next movie…
+[2026-03-26T22:46:30.847Z] 
+[3/12]  "Shrek 2" (2004)
+[2026-03-26T22:46:37.947Z]   ❌  [3/12]  "Shrek 2" (2004)  →  exited with code 1
+[2026-03-26T22:46:38.059Z]   ⏳  Waiting 3s before next movie…
+[2026-03-26T22:46:41.059Z] 
+[4/12]  "Eternal Sunshine of the Spotless Mind" (2004)
+[2026-03-26T22:48:43.079Z]   ✅  [4/12]  "Eternal Sunshine of the Spotless Mind" (2004)  →  done
+[2026-03-26T22:48:43.079Z]   ⏳  Waiting 3s before next movie…
+[2026-03-26T22:48:46.081Z] 
+[5/12]  "Hotel Rwanda" (2004)
+[2026-03-26T22:50:46.656Z]   ✅  [5/12]  "Hotel Rwanda" (2004)  →  done
+[2026-03-26T22:50:46.658Z]   ⏳  Waiting 3s before next movie…
+[2026-03-26T22:50:49.659Z] 
+[6/12]  "The Incredibles" (2004)
+[2026-03-26T23:07:16.437Z]   ✅  [6/12]  "The Incredibles" (2004)  →  done
+[2026-03-26T23:07:16.445Z]   ⏳  Waiting 3s before next movie…
+[2026-03-26T23:07:19.449Z] 
+[7/12]  "The Aviator" (2004)
+[2026-03-26T23:32:19.503Z]   ⏱  [7/12]  "The Aviator" (2004)  →  timed out after 10 min — skipping
+[2026-03-26T23:32:19.659Z]   ⏳  Waiting 3s before next movie…
+[2026-03-26T23:32:22.660Z] 
+[8/12]  "Sideways" (2004)
+[2026-03-26T23:32:25.913Z]   ❌  [8/12]  "Sideways" (2004)  →  exited with code 1
+[2026-03-26T23:32:25.949Z]   ⏳  Waiting 3s before next movie…
+[2026-03-26T23:32:28.950Z] 
+[9/12]  "Million Dollar Baby" (2004)
+[2026-03-27T05:49:16.612Z]   ✅  [9/12]  "Million Dollar Baby" (2004)  →  done
+[2026-03-27T05:49:16.617Z]   ⏳  Waiting 3s before next movie…
+[2026-03-27T05:49:19.613Z] 
+[10/12]  "Collateral" (2004)
+[2026-03-27T07:23:53.143Z]   ✅  [10/12]  "Collateral" (2004)  →  done
+[2026-03-27T07:23:53.153Z]   ⏳  Waiting 3s before next movie…
+[2026-03-27T07:23:56.159Z] 
+[11/12]  "Before Sunset" (2004)
+[2026-03-27T07:28:37.758Z]   ✅  [11/12]  "Before Sunset" (2004)  →  done
+[2026-03-27T07:28:37.760Z]   ⏳  Waiting 3s before next movie…
+[2026-03-27T07:28:40.762Z] 
+[12/12]  "2046" (2004)
+[2026-03-27T07:32:13.154Z]   ❌  [12/12]  "2046" (2004)  →  exited with code 2
+[2026-03-27T07:32:13.756Z] 
+────────────────────────────────────────────────────────────
+[2026-03-27T07:32:13.756Z] 📊  Batch complete
+[2026-03-27T07:32:13.756Z]     ✅  Success:  8
+[2026-03-27T07:32:13.756Z]     ❌  Failed:   3  (safe_start set to -1 — rerun with --retry-failed)
+[2026-03-27T07:32:13.756Z]     ⏱  Timed out: 1
+[2026-03-27T07:32:13.756Z]     Log: /Users/vascolencastre/cinescenes/scripts/output/scan-batch.log
+[2026-03-27T07:32:13.756Z] ────────────────────────────────────────────────────────────
+
+[2026-03-28T09:56:06.690Z] 
+────────────────────────────────────────────────────────────
+[2026-03-28T09:56:06.694Z] 🎬  Batch scan starting — 14 movie(s) to process
+[2026-03-28T09:56:06.696Z] ────────────────────────────────────────────────────────────
+[2026-03-28T09:56:06.696Z] 
+[1/14]  "Finding Nemo" (2003)
+[2026-03-28T09:56:16.382Z]   ❌  [1/14]  "Finding Nemo" (2003)  →  exited with code 1
+[2026-03-28T09:56:16.755Z]   ⏳  Waiting 3s before next movie…
+[2026-03-28T09:56:19.756Z] 
+[2/14]  "Good Bye, Lenin!" (2003)
+[2026-03-28T10:01:04.752Z]   ✅  [2/14]  "Good Bye, Lenin!" (2003)  →  done
+[2026-03-28T10:01:04.758Z]   ⏳  Waiting 3s before next movie…
+[2026-03-28T10:01:07.760Z] 
+[3/14]  "Elephant" (2003)
+[2026-03-28T10:05:15.618Z]   ✅  [3/14]  "Elephant" (2003)  →  done
+[2026-03-28T10:05:15.622Z]   ⏳  Waiting 3s before next movie…
+[2026-03-28T10:05:18.625Z] 
+[4/14]  "The Barbarian Invasions" (2003)
+[2026-03-28T10:07:15.151Z]   ❌  [4/14]  "The Barbarian Invasions" (2003)  →  exited with code 2
+[2026-03-28T10:07:15.464Z]   ⏳  Waiting 3s before next movie…
+[2026-03-28T10:07:18.466Z] 
+[5/14]  "21 Grams" (2003)
+[2026-03-28T10:10:21.289Z]   ✅  [5/14]  "21 Grams" (2003)  →  done
+[2026-03-28T10:10:21.290Z]   ⏳  Waiting 3s before next movie…
+[2026-03-28T10:10:24.292Z] 
+[6/14]  "The Ring" (2003)
+[2026-03-28T10:16:50.200Z]   ❌  [6/14]  "The Ring" (2003)  →  exited with code 2
+[2026-03-28T10:16:50.911Z]   ⏳  Waiting 3s before next movie…
+[2026-03-28T10:16:53.912Z] 
+[7/14]  "The Lord of the Rings: The Return of the King" (2003)
+[2026-03-28T10:21:10.624Z]   ❌  [7/14]  "The Lord of the Rings: The Return of the King" (2003)  →  exited with code 2
+[2026-03-28T10:21:10.754Z]   ⏳  Waiting 3s before next movie…
+[2026-03-28T10:21:13.755Z] 
+[8/14]  "Kill Bill" (2003)
+[2026-03-28T10:24:41.001Z]   ❌  [8/14]  "Kill Bill" (2003)  →  exited with code 2
+[2026-03-28T10:24:41.534Z]   ⏳  Waiting 3s before next movie…
+[2026-03-28T10:24:44.536Z] 
+[9/14]  "Lost in Translation" (2003)
+[2026-03-28T10:24:47.448Z]   ❌  [9/14]  "Lost in Translation" (2003)  →  exited with code 1
+[2026-03-28T10:24:47.533Z]   ⏳  Waiting 3s before next movie…
+[2026-03-28T10:24:50.535Z] 
+[10/14]  "Master and Commander" (2003)
+[2026-03-28T10:26:35.673Z]   ✅  [10/14]  "Master and Commander" (2003)  →  done
+[2026-03-28T10:26:35.674Z]   ⏳  Waiting 3s before next movie…
+[2026-03-28T10:26:38.676Z] 
+[11/14]  "Mystic River" (2003)
+[2026-03-28T10:28:59.318Z]   ✅  [11/14]  "Mystic River" (2003)  →  done
+[2026-03-28T10:28:59.320Z]   ⏳  Waiting 3s before next movie…
+[2026-03-28T10:29:02.323Z] 
+[12/14]  "Oldboy" (2003)
+[2026-03-28T10:32:31.258Z]   ❌  [12/14]  "Oldboy" (2003)  →  exited with code 2
+[2026-03-28T10:32:31.793Z]   ⏳  Waiting 3s before next movie…
+[2026-03-28T10:32:34.793Z] 
+[13/14]  "The Station Agent" (2003)
+[2026-03-28T10:32:37.627Z]   ❌  [13/14]  "The Station Agent" (2003)  →  exited with code 1
+[2026-03-28T10:32:37.725Z]   ⏳  Waiting 3s before next movie…
+[2026-03-28T10:32:40.726Z] 
+[14/14]  "Pirates of the Caribbean: The Curse of the Black Pearl" (2003)
+[2026-03-28T10:35:00.997Z]   ✅  [14/14]  "Pirates of the Caribbean: The Curse of the Black Pearl" (2003)  →  done
+[2026-03-28T10:35:00.997Z] 
+────────────────────────────────────────────────────────────
+[2026-03-28T10:35:00.998Z] 📊  Batch complete
+[2026-03-28T10:35:00.998Z]     ✅  Success:  6
+[2026-03-28T10:35:00.998Z]     ❌  Failed:   8  (safe_start set to -1 — rerun with --retry-failed)
+[2026-03-28T10:35:00.998Z]     Log: /Users/vascolencastre/cinescenes/scripts/output/scan-batch.log
+[2026-03-28T10:35:00.998Z] ────────────────────────────────────────────────────────────
+
