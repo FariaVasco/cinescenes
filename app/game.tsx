@@ -62,6 +62,7 @@ export default function GameScreen() {
     setCurrentTurn,
     setChallenges,
     startingMovieIds,
+    tvMode, setTvMode,
   } = useAppStore();
 
   const [players, setLocalPlayers] = useState<Player[]>(storePlayers);
@@ -80,6 +81,7 @@ export default function GameScreen() {
   const [showLandscapePrompt, setShowLandscapePrompt] = useState(false);
   const [trailerKey, setTrailerKey] = useState(0);
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
+  const [castVisible, setCastVisible] = useState(false);
 
   const [selectedInterval, setSelectedInterval] = useState<number | null>(null);
   const [hasPassed, setHasPassed] = useState(false);
@@ -135,6 +137,8 @@ export default function GameScreen() {
   const [voiceError, setVoiceError] = useState('');
   const voiceStateRef = useRef<'idle' | 'recording' | 'processing' | 'error'>('idle');
   const recordingRef = useRef<Audio.Recording | null>(null);
+  const waveformBars = useRef(Array.from({ length: 30 }, () => new Animated.Value(0.07))).current;
+  const waveformHistory = useRef<number[]>(Array(30).fill(0.07));
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Refs so the interval always has the latest values
@@ -805,7 +809,18 @@ export default function GameScreen() {
       }
       await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
       const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
+        { ...Audio.RecordingOptionsPresets.HIGH_QUALITY, isMeteringEnabled: true },
+        (status) => {
+          if (!status.isRecording || status.metering === undefined) return;
+          const level = Math.max(0, Math.min(1, (status.metering + 60) / 60));
+          const sample = Math.max(0.07, Math.min(1, level + (Math.random() * 0.25 - 0.125)));
+          waveformHistory.current.shift();
+          waveformHistory.current.push(sample);
+          waveformHistory.current.forEach((val, i) => {
+            Animated.timing(waveformBars[i], { toValue: val, duration: 60, useNativeDriver: true }).start();
+          });
+        },
+        80,
       );
       recordingRef.current = recording;
       voiceStateRef.current = 'recording';
@@ -823,6 +838,10 @@ export default function GameScreen() {
     recordingRef.current = null;
     voiceStateRef.current = 'processing';
     setVoiceState('processing');
+    waveformHistory.current.fill(0.07);
+    waveformBars.forEach((bar) =>
+      Animated.timing(bar, { toValue: 0.07, duration: 200, useNativeDriver: true }).start()
+    );
     try {
       await recording.stopAndUnloadAsync();
       await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
@@ -860,7 +879,10 @@ export default function GameScreen() {
           if (phoneticMatch(extracted.director, movie.director ?? '')) {
             directorValue = movie.director ?? '';
           } else {
-            directorValue = (await searchDirector(extracted.director)) ?? extracted.director;
+            const tmdbName = await searchDirector(extracted.director);
+            directorValue = (tmdbName && phoneticMatch(extracted.director, tmdbName))
+              ? tmdbName
+              : extracted.director;
           }
         }
       }
@@ -1239,7 +1261,26 @@ export default function GameScreen() {
     </TouchableOpacity>
   ) : null;
 
-
+  const castOverlay = castVisible ? (
+    <TouchableOpacity style={[StyleSheet.absoluteFill, styles.modalBackdrop]} activeOpacity={1} onPress={() => setCastVisible(false)}>
+      <View style={styles.castSheet} onStartShouldSetResponder={() => true}>
+        <View style={styles.castSheetHeader}>
+          <Text style={styles.castSheetTitle}>📺  Cast to TV</Text>
+          <TouchableOpacity onPress={() => setCastVisible(false)} style={styles.castCloseBtn}>
+            <Text style={styles.castCloseBtnText}>✕</Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.castSheetBody}>
+          {Platform.OS === 'ios'
+            ? '1. Swipe from top-right → Control Centre\n2. Tap Screen Mirroring\n3. Select your Apple TV or AirPlay 2 TV'
+            : '1. Swipe down twice → Quick Settings\n2. Tap Cast\n3. Select your TV or Chromecast'}
+        </Text>
+        <TouchableOpacity style={styles.castStartBtn} onPress={() => { setTvMode(true); setCastVisible(false); }}>
+          <Text style={styles.castStartBtnText}>Start Playing →</Text>
+        </TouchableOpacity>
+      </View>
+    </TouchableOpacity>
+  ) : null;
 
   // ── DRAWING ──
   if (currentTurn.status === 'drawing') {
@@ -1286,9 +1327,10 @@ export default function GameScreen() {
           )}
         </View>
 
-        <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} />
+        <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} onCast={() => setCastVisible(true)} />
         {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} />}
         {leaveModal}
+        {castOverlay}
       </SafeAreaView>
     );
   }
@@ -1323,9 +1365,10 @@ export default function GameScreen() {
               </View>
             </View>
           </View>
-          <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} />
+          <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} onCast={() => setCastVisible(true)} />
           {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} />}
           {leaveModal}
+        {castOverlay}
         </SafeAreaView>
       );
     }
@@ -1375,7 +1418,7 @@ export default function GameScreen() {
             </Animated.View>
           </View>
 
-          <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} />
+          <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} onCast={() => setCastVisible(true)} />
           {flyVisible && (
             <View style={StyleSheet.absoluteFill} pointerEvents="none">
               <Animated.View
@@ -1393,6 +1436,7 @@ export default function GameScreen() {
           )}
           {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} />}
           {leaveModal}
+        {castOverlay}
         </SafeAreaView>
       );
     }
@@ -1411,6 +1455,7 @@ export default function GameScreen() {
               </View>
             </SafeAreaView>
             {leaveModal}
+        {castOverlay}
           </View>
         );
       }
@@ -1462,10 +1507,19 @@ export default function GameScreen() {
                     <Text style={styles.voiceMicText}>Say the movie and director</Text>
                   </TouchableOpacity>
                 ) : voiceState === 'recording' ? (
-                  <TouchableOpacity style={[styles.voiceMicBtn, styles.voiceMicBtnListening]} onPress={stopVoice} activeOpacity={0.75}>
-                    <Text style={styles.voiceMicIcon}>🎤</Text>
-                    <Text style={styles.voiceMicText}>Recording… tap to stop</Text>
-                  </TouchableOpacity>
+                  <View style={styles.voiceRecordingView}>
+                    <View style={styles.waveformRow}>
+                      {waveformBars.map((anim, i) => (
+                        <Animated.View
+                          key={i}
+                          style={[styles.waveformBar, { transform: [{ scaleY: anim }] }]}
+                        />
+                      ))}
+                    </View>
+                    <TouchableOpacity style={styles.voiceStopBtn} onPress={stopVoice} activeOpacity={0.75}>
+                      <View style={styles.voiceStopSquare} />
+                    </TouchableOpacity>
+                  </View>
                 ) : voiceState === 'processing' ? (
                   <View style={styles.voiceMicBtn}>
                     <ActivityIndicator color={C.gold} size="small" />
@@ -1508,6 +1562,7 @@ export default function GameScreen() {
             </View>
           </KeyboardAvoidingView>
           {leaveModal}
+        {castOverlay}
         </SafeAreaView>
       );
     }
@@ -1527,6 +1582,7 @@ export default function GameScreen() {
             </View>
           </SafeAreaView>
           {leaveModal}
+        {castOverlay}
         </View>
       );
     }
@@ -1677,6 +1733,7 @@ export default function GameScreen() {
           {snackMessage}
         </Snackbar>
         {leaveModal}
+        {castOverlay}
       </View>
     );
   }
@@ -1846,9 +1903,10 @@ export default function GameScreen() {
           </Animated.View>
         </View>
 
-        <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} />
+        <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} onCast={() => setCastVisible(true)} />
         {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} />}
         {leaveModal}
+        {castOverlay}
       </SafeAreaView>
     );
   }
@@ -2013,10 +2071,11 @@ export default function GameScreen() {
             </View>
           )}
         </View>
-        <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} />
+        <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} onCast={() => setCastVisible(true)} />
         {winnerId === myPlayerId && revealPhase === 'result' && <ConfettiBurst />}
         {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} />}
         {leaveModal}
+        {castOverlay}
       </SafeAreaView>
     );
   }
@@ -2103,7 +2162,7 @@ function MyTimelineSheet({ timeline, cards, onClose }: {
   );
 }
 
-function ScoreBar({ players, myId, onOpenTimeline }: { players: Player[]; myId: string | null; onOpenTimeline?: () => void }) {
+function ScoreBar({ players, myId, onOpenTimeline, onCast }: { players: Player[]; myId: string | null; onOpenTimeline?: () => void; onCast?: () => void }) {
   return (
     <View style={styles.scoreBarRow}>
       <ScrollView
@@ -2123,6 +2182,11 @@ function ScoreBar({ players, myId, onOpenTimeline }: { players: Player[]; myId: 
       {onOpenTimeline && (
         <TouchableOpacity onPress={onOpenTimeline} style={styles.scoreBarTimelineBtn} activeOpacity={0.75}>
           <Text style={styles.scoreBarTimelineBtnText}>🎞</Text>
+        </TouchableOpacity>
+      )}
+      {onCast && (
+        <TouchableOpacity onPress={onCast} style={styles.scoreBarCastBtn} activeOpacity={0.75}>
+          <Text style={styles.scoreBarCastBtnText}>📺</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -2926,20 +2990,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingBottom: 132,
   },
-  timelineAreaReveal: {
-    paddingBottom: 90,
-  },
+  timelineAreaReveal: {},
   placingBottomPanel: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
+    height: 132,
     backgroundColor: C.bg,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: C.borderSubtle,
     paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 12,
     justifyContent: 'center',
   },
   placingBottomRow: {
@@ -2963,13 +3024,12 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    minHeight: 100,
+    height: 132,
     backgroundColor: C.bg,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: C.borderSubtle,
     paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 20,
+    paddingVertical: 16,
     gap: 12,
     justifyContent: 'center',
   },
@@ -3394,10 +3454,25 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(245,197,24,0.07)',
     borderWidth: 1.5, borderColor: 'rgba(245,197,24,0.3)',
   },
-  voiceMicBtnListening: {
-    borderColor: C.gold, backgroundColor: 'rgba(245,197,24,0.14)',
-  },
   voiceMicIcon: { fontSize: 22 },
+  voiceRecordingView: {
+    flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14,
+  },
+  waveformRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+  },
+  waveformBar: {
+    width: 3, height: 44, borderRadius: 2, backgroundColor: C.gold,
+  },
+  voiceStopBtn: {
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: 'rgba(230,57,70,0.12)',
+    borderWidth: 1.5, borderColor: '#e63946',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  voiceStopSquare: {
+    width: 14, height: 14, borderRadius: 3, backgroundColor: '#e63946',
+  },
   voiceMicText: {
     color: C.gold, fontSize: FS.base, fontWeight: '700',
   },
@@ -3593,5 +3668,51 @@ const styles = StyleSheet.create({
   },
   scoreBarTimelineBtnText: {
     fontSize: 18,
+  },
+  scoreBarCastBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: C.borderSubtle,
+  },
+  scoreBarCastBtnText: { fontSize: 18 },
+  castSheet: {
+    backgroundColor: C.surface,
+    borderRadius: R.card,
+    padding: 24,
+    width: '100%',
+    maxWidth: 420,
+    gap: 16,
+  },
+  castSheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  castSheetTitle: {
+    color: C.textPrimary,
+    fontSize: FS.lg,
+    fontWeight: '900',
+  },
+  castCloseBtn: { padding: 4 },
+  castCloseBtnText: { color: C.textSub, fontSize: 16 },
+  castSheetBody: {
+    color: C.textSub,
+    fontSize: FS.sm,
+    lineHeight: 22,
+  },
+  castStartBtn: {
+    backgroundColor: C.gold,
+    borderRadius: R.btn,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  castStartBtnText: {
+    color: '#0a0a0a',
+    fontSize: FS.base,
+    fontWeight: '900',
   },
 });
