@@ -15,7 +15,8 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { SpeechModule, speechAvailable, useSpeechRecognitionEvent } from '@/lib/speech-recognition';
+import { Audio } from 'expo-av';
+import { transcribeAudio } from '@/lib/whisper';
 import { C, R, FS } from '@/constants/theme';
 import { scanTranscript, phoneticMatch, fuzzyMatch, computeCorrectInterval, computeValidIntervals } from '@/lib/game-logic';
 import { llmExtractGuess } from '@/lib/llm-voice';
@@ -130,9 +131,10 @@ export default function GameScreen() {
   // Prefetched next-turn movie promise for insane mode — started during challenging phase
   const prefetchedInsaneMovieRef = useRef<Promise<Movie> | null>(null);
 
-  const [voiceState, setVoiceState] = useState<'idle' | 'listening' | 'processing' | 'error'>('idle');
+  const [voiceState, setVoiceState] = useState<'idle' | 'recording' | 'processing' | 'error'>('idle');
   const [voiceError, setVoiceError] = useState('');
-  const voiceStateRef = useRef<'idle' | 'listening' | 'processing' | 'error'>('idle');
+  const voiceStateRef = useRef<'idle' | 'recording' | 'processing' | 'error'>('idle');
+  const recordingRef = useRef<Audio.Recording | null>(null);
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Refs so the interval always has the latest values
@@ -351,80 +353,6 @@ export default function GameScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTurn?.status, currentTurn?.id]);
 
-  // Speech recognition event handlers (must be called at component level)
-  useSpeechRecognitionEvent('result', (event) => {
-    // Try multiple formats: WebSpeech nested, flat array, direct property
-    const results = event.results as any;
-    const transcript =
-      results?.[0]?.[0]?.transcript ??
-      results?.[0]?.transcript ??
-      event.transcript ??
-      '';
-    if (!transcript || voiceStateRef.current !== 'listening') return;
-    voiceStateRef.current = 'processing';
-    setVoiceState('processing');
-
-    const movie = getMovie();
-    if (!movie) {
-      // No movie context — fall back to simple text fill
-      voiceStateRef.current = 'idle';
-      setVoiceState('idle');
-      setMovieGuess(transcript);
-      return;
-    }
-
-    // Async: local scan first (cheap), then LLM extraction for any missing field
-    (async () => {
-      const scan = scanTranscript(transcript, movie);
-
-      // Local scan matched the canonical DB value — use it directly
-      let titleValue: string | null = scan.title;
-      let directorValue: string | null = scan.director;
-
-      // For fields the local scan missed, extract verbatim with LLM then phonetically
-      // compare the extracted text against the known canonical values.
-      if (!titleValue || !directorValue) {
-        const extracted = await llmExtractGuess(transcript);
-        if (!titleValue && extracted.title) {
-          // If extracted text is close enough to the real title, use canonical value;
-          // otherwise keep verbatim so the user can see what was captured.
-          titleValue = phoneticMatch(extracted.title, movie.title) ? movie.title : extracted.title;
-        }
-        if (!directorValue && extracted.director) {
-          directorValue = phoneticMatch(extracted.director, movie.director ?? '')
-            ? (movie.director ?? '')
-            : extracted.director;
-        }
-      }
-
-      if (titleValue) setMovieGuess(titleValue);
-      if (directorValue) setDirectorGuess(directorValue);
-
-      if (!titleValue && !directorValue) {
-        voiceStateRef.current = 'error';
-        setVoiceError("Couldn't recognise the movie or director — try again or type below.");
-        setVoiceState('error');
-      } else {
-        voiceStateRef.current = 'idle';
-        setVoiceState('idle');
-      }
-    })();
-  });
-
-  useSpeechRecognitionEvent('error', (event) => {
-    if (voiceStateRef.current === 'idle') return;
-    voiceStateRef.current = 'error';
-    setVoiceError(event?.message ?? 'Speech recognition failed. Please type instead.');
-    setVoiceState('error');
-  });
-
-  useSpeechRecognitionEvent('end', () => {
-    if (voiceStateRef.current === 'listening') {
-      voiceStateRef.current = 'error';
-      setVoiceError("Didn't catch that. Please try again or type.");
-      setVoiceState('error');
-    }
-  });
 
   function stopPolling() {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
@@ -867,38 +795,90 @@ export default function GameScreen() {
 
   async function startVoice() {
     setVoiceError('');
-    if (!speechAvailable) {
+    try {
+      const { granted } = await Audio.requestPermissionsAsync();
+      if (!granted) {
+        voiceStateRef.current = 'error';
+        setVoiceError('Microphone permission denied. Please type instead.');
+        setVoiceState('error');
+        return;
+      }
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+      recordingRef.current = recording;
+      voiceStateRef.current = 'recording';
+      setVoiceState('recording');
+    } catch {
       voiceStateRef.current = 'error';
-      setVoiceError('Voice input not available. Please type instead.');
+      setVoiceError('Could not start recording. Please type instead.');
       setVoiceState('error');
-      return;
     }
-    const { granted } = await SpeechModule.requestPermissionsAsync();
-    if (!granted) {
-      voiceStateRef.current = 'error';
-      setVoiceError('Microphone permission denied. Please type instead.');
-      setVoiceState('error');
-      return;
-    }
-    voiceStateRef.current = 'listening';
-    setVoiceState('listening');
-    SpeechModule.start({
-      lang: 'en-US',
-      continuous: false,
-      interimResults: false,
-      androidIntentOptions: {
-        // Give the user enough time to say "Oppenheimer by Christopher Nolan"
-        // without Android's VAD cutting off too early
-        EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS: 8000,
-        EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: 1500,
-        EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS: 1000,
-      },
-    });
   }
 
-  function stopVoice() {
-    SpeechModule.stop();
-    // State updated by the 'end' event handler
+  async function stopVoice() {
+    const recording = recordingRef.current;
+    if (!recording) return;
+    recordingRef.current = null;
+    voiceStateRef.current = 'processing';
+    setVoiceState('processing');
+    try {
+      await recording.stopAndUnloadAsync();
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      const uri = recording.getURI();
+      if (!uri) throw new Error('No recording URI');
+
+      const transcript = await transcribeAudio(uri);
+      console.log(`[whisper] transcript: "${transcript}"`);
+
+      if (!transcript) {
+        voiceStateRef.current = 'error';
+        setVoiceError("Didn't catch that. Please try again or type.");
+        setVoiceState('error');
+        return;
+      }
+
+      const movie = getMovie();
+      if (!movie) {
+        setMovieGuess(transcript);
+        voiceStateRef.current = 'idle';
+        setVoiceState('idle');
+        return;
+      }
+
+      const scan = scanTranscript(transcript, movie);
+      let titleValue: string | null = scan.title;
+      let directorValue: string | null = scan.director;
+
+      if (!titleValue || !directorValue) {
+        const extracted = await llmExtractGuess(transcript);
+        if (!titleValue && extracted.title) {
+          titleValue = phoneticMatch(extracted.title, movie.title) ? movie.title : extracted.title;
+        }
+        if (!directorValue && extracted.director) {
+          directorValue = phoneticMatch(extracted.director, movie.director ?? '')
+            ? (movie.director ?? '')
+            : extracted.director;
+        }
+      }
+
+      if (titleValue) setMovieGuess(titleValue);
+      if (directorValue) setDirectorGuess(directorValue);
+
+      if (!titleValue && !directorValue) {
+        voiceStateRef.current = 'error';
+        setVoiceError("Couldn't recognise the movie or director — try again or type below.");
+        setVoiceState('error');
+      } else {
+        voiceStateRef.current = 'idle';
+        setVoiceState('idle');
+      }
+    } catch {
+      voiceStateRef.current = 'error';
+      setVoiceError('Transcription failed. Please type instead.');
+      setVoiceState('error');
+    }
   }
 
   async function handleNextTurn() {
@@ -1474,32 +1454,28 @@ export default function GameScreen() {
 
               {/* Right: voice input */}
               <View style={styles.guessRightPanel}>
-                {speechAvailable ? (
-                  voiceState === 'idle' ? (
-                    <TouchableOpacity style={styles.voiceMicBtn} onPress={startVoice} activeOpacity={0.75}>
-                      <Text style={styles.voiceMicIcon}>🎤</Text>
-                      <Text style={styles.voiceMicText}>Say the movie and director</Text>
-                    </TouchableOpacity>
-                  ) : voiceState === 'listening' ? (
-                    <TouchableOpacity style={[styles.voiceMicBtn, styles.voiceMicBtnListening]} onPress={stopVoice} activeOpacity={0.75}>
-                      <Text style={styles.voiceMicIcon}>🎤</Text>
-                      <Text style={styles.voiceMicText}>Listening… tap to stop</Text>
-                    </TouchableOpacity>
-                  ) : voiceState === 'processing' ? (
-                    <View style={styles.voiceMicBtn}>
-                      <ActivityIndicator color={C.gold} size="small" />
-                      <Text style={styles.voiceMicText}>Processing…</Text>
-                    </View>
-                  ) : (
-                    <View style={styles.voiceErrorBox}>
-                      <Text style={styles.voiceErrorText}>{voiceError}</Text>
-                      <TouchableOpacity onPress={() => { voiceStateRef.current = 'idle'; setVoiceState('idle'); setVoiceError(''); }}>
-                        <Text style={styles.voiceRetryText}>Try again</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )
+                {voiceState === 'idle' ? (
+                  <TouchableOpacity style={styles.voiceMicBtn} onPress={startVoice} activeOpacity={0.75}>
+                    <Text style={styles.voiceMicIcon}>🎤</Text>
+                    <Text style={styles.voiceMicText}>Say the movie and director</Text>
+                  </TouchableOpacity>
+                ) : voiceState === 'recording' ? (
+                  <TouchableOpacity style={[styles.voiceMicBtn, styles.voiceMicBtnListening]} onPress={stopVoice} activeOpacity={0.75}>
+                    <Text style={styles.voiceMicIcon}>🎤</Text>
+                    <Text style={styles.voiceMicText}>Recording… tap to stop</Text>
+                  </TouchableOpacity>
+                ) : voiceState === 'processing' ? (
+                  <View style={styles.voiceMicBtn}>
+                    <ActivityIndicator color={C.gold} size="small" />
+                    <Text style={styles.voiceMicText}>Processing…</Text>
+                  </View>
                 ) : (
-                  <Text style={styles.voiceUnavailableText}>Type your answer on the left</Text>
+                  <View style={styles.voiceErrorBox}>
+                    <Text style={styles.voiceErrorText}>{voiceError}</Text>
+                    <TouchableOpacity onPress={() => { voiceStateRef.current = 'idle'; setVoiceState('idle'); setVoiceError(''); }}>
+                      <Text style={styles.voiceRetryText}>Try again</Text>
+                    </TouchableOpacity>
+                  </View>
                 )}
               </View>
             </View>
