@@ -1344,39 +1344,6 @@ export default function GameScreen() {
   if (currentTurn.status === 'placing') {
     if (!movie) return <LoadingScreen />;
 
-    // ── Observer: active player clicked "I know it!" — show waiting screen ──
-    if (!amActive && currentTurn.placed_interval === -1) {
-      return (
-        <SafeAreaView style={styles.container}>
-          <View style={styles.gameArea}>
-            <Animated.View style={styles.timelineAreaFull}>
-              <Timeline
-                timeline={timeline}
-                currentCardMovie={movie}
-                interactive={false}
-                selectedInterval={null}
-                onIntervalSelect={() => {}}
-                onConfirm={() => {}}
-                placedMovies={placedMovies}
-                hideFloatingCard
-              />
-            </Animated.View>
-            <View style={styles.placingBottomPanel}>
-              <View style={styles.placingBottomRow}>
-                <CardBack width={80} height={100} />
-                <Text style={[styles.phaseLabel, styles.placingLabel]}>
-                  Waiting for {activePlayer?.display_name}…
-                </Text>
-              </View>
-            </View>
-          </View>
-          <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} onCast={() => setCastVisible(true)} />
-          {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} />}
-          {leaveModal}
-        {castOverlay}
-        </SafeAreaView>
-      );
-    }
 
     // ── Timeline (after trailer + ready) ──
     if (readyToPlace) {
@@ -1458,6 +1425,22 @@ export default function GameScreen() {
                   Waiting for {activePlayer?.display_name} to place the card…
                 </Text>
               </View>
+              {!hasReplayed && (
+                <View style={{ paddingHorizontal: 24, paddingBottom: 24 }}>
+                  <TouchableOpacity
+                    style={styles.guessReplayBtn}
+                    onPressIn={() => {
+                      setHasReplayed(true);
+                      setTrailerEnded(false);
+                      setUserPaused(false);
+                      setTrailerKey(k => k + 1);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.guessReplayText}>↺ Replay trailer</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </SafeAreaView>
             {leaveModal}
         {castOverlay}
@@ -1951,18 +1934,12 @@ export default function GameScreen() {
                 <Text style={styles.challengeStatusStripText}>You withdrew.</Text>
               </View>
             )}
-            {/* Active player reveal button */}
+            {/* Active player status */}
             {amActive && (
-              <View style={styles.challengeBottomActions}>
-                <TouchableOpacity
-                  style={[styles.revealNowBtn, !canRevealNow && { opacity: 0.35 }]}
-                  onPress={canRevealNow ? handleReveal : undefined}
-                  activeOpacity={canRevealNow ? 0.85 : 1}
-                >
-                  <Text style={styles.revealNowBtnText}>
-                    {revealLocked ? 'Waiting…' : pendingChallengers ? 'Deciding…' : 'Reveal →'}
-                  </Text>
-                </TouchableOpacity>
+              <View style={styles.challengeStatusStrip}>
+                <Text style={styles.challengeStatusStripText}>
+                  {pendingChallengers ? 'Waiting for others to decide…' : 'All decided — revealing…'}
+                </Text>
               </View>
             )}
           </Animated.View>
@@ -3048,19 +3025,16 @@ const styles = StyleSheet.create({
 
   gameArea: {
     flex: 1,
-    position: 'relative',
+    overflow: 'hidden',
   },
   timelineAreaFull: {
     flex: 1,
     justifyContent: 'center',
+  },
+  timelineAreaReveal: {
     paddingBottom: 132,
   },
-  timelineAreaReveal: {},
   placingBottomPanel: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
     height: 132,
     backgroundColor: C.bg,
     borderTopWidth: StyleSheet.hairlineWidth,
@@ -3085,16 +3059,11 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   challengeBottomPanel: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 132,
     backgroundColor: C.bg,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: C.borderSubtle,
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 14,
     gap: 12,
     justifyContent: 'center',
   },
