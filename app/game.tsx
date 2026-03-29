@@ -1571,6 +1571,8 @@ export default function GameScreen() {
                     <TouchableOpacity
                       style={styles.guessRetryBtn}
                       onPress={() => {
+                        if (voiceResult?.movie) setMovieGuess(voiceResult.movie);
+                        if (voiceResult?.director) setDirectorGuess(voiceResult.director);
                         voiceStateRef.current = 'idle';
                         setVoiceState('idle');
                         setVoiceResult(null);
