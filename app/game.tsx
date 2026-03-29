@@ -16,7 +16,7 @@ import {
   Platform,
   Keyboard,
 } from 'react-native';
-import { Audio } from 'expo-av';
+import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
 import { transcribeAudio } from '@/lib/whisper';
 import { C, R, FS } from '@/constants/theme';
 import { scanTranscript, phoneticMatch, fuzzyMatch, computeCorrectInterval, computeValidIntervals } from '@/lib/game-logic';
@@ -138,7 +138,8 @@ export default function GameScreen() {
   const [voiceError, setVoiceError] = useState('');
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const voiceStateRef = useRef<'idle' | 'recording' | 'processing' | 'error'>('idle');
-  const recordingRef = useRef<Audio.Recording | null>(null);
+  const recorder = useAudioRecorder({ ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true });
+  const meteringIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const waveformBars = useRef(Array.from({ length: 30 }, () => new Animated.Value(0.07))).current;
   const waveformHistory = useRef<number[]>(Array(30).fill(0.07));
 
@@ -808,29 +809,27 @@ export default function GameScreen() {
   async function startVoice() {
     setVoiceError('');
     try {
-      const { granted } = await Audio.requestPermissionsAsync();
+      const { granted } = await requestRecordingPermissionsAsync();
       if (!granted) {
         voiceStateRef.current = 'error';
         setVoiceError('Microphone permission denied. Please type instead.');
         setVoiceState('error');
         return;
       }
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const { recording } = await Audio.Recording.createAsync(
-        { ...Audio.RecordingOptionsPresets.HIGH_QUALITY, isMeteringEnabled: true },
-        (status) => {
-          if (!status.isRecording || status.metering === undefined) return;
-          const level = Math.max(0, Math.min(1, (status.metering + 60) / 60));
-          const sample = Math.max(0.07, Math.min(1, level + (Math.random() * 0.25 - 0.125)));
-          waveformHistory.current.shift();
-          waveformHistory.current.push(sample);
-          waveformHistory.current.forEach((val, i) => {
-            Animated.timing(waveformBars[i], { toValue: val, duration: 60, useNativeDriver: true }).start();
-          });
-        },
-        80,
-      );
-      recordingRef.current = recording;
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      await recorder.prepareToRecordAsync();
+      recorder.record();
+      meteringIntervalRef.current = setInterval(() => {
+        const status = recorder.getStatus();
+        if (!status.isRecording || status.metering === undefined) return;
+        const level = Math.max(0, Math.min(1, (status.metering + 60) / 60));
+        const sample = Math.max(0.07, Math.min(1, level + (Math.random() * 0.25 - 0.125)));
+        waveformHistory.current.shift();
+        waveformHistory.current.push(sample);
+        waveformHistory.current.forEach((val, i) => {
+          Animated.timing(waveformBars[i], { toValue: val, duration: 60, useNativeDriver: true }).start();
+        });
+      }, 80);
       voiceStateRef.current = 'recording';
       setVoiceState('recording');
     } catch {
@@ -841,9 +840,8 @@ export default function GameScreen() {
   }
 
   async function stopVoice() {
-    const recording = recordingRef.current;
-    if (!recording) return;
-    recordingRef.current = null;
+    if (meteringIntervalRef.current) { clearInterval(meteringIntervalRef.current); meteringIntervalRef.current = null; }
+    if (!recorder.isRecording) return;
     voiceStateRef.current = 'processing';
     setVoiceState('processing');
     waveformHistory.current.fill(0.07);
@@ -851,9 +849,9 @@ export default function GameScreen() {
       Animated.timing(bar, { toValue: 0.07, duration: 200, useNativeDriver: true }).start()
     );
     try {
-      await recording.stopAndUnloadAsync();
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
-      const uri = recording.getURI();
+      await recorder.stop();
+      await setAudioModeAsync({ allowsRecording: false });
+      const uri = recorder.uri;
       if (!uri) throw new Error('No recording URI');
 
       const transcript = await transcribeAudio(uri);
