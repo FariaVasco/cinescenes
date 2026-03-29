@@ -110,7 +110,7 @@ export default function GameScreen() {
   const revealTriggered = useRef(false);
   const nextTurnInProgress = useRef(false);
   const challengeDecisionMade = useRef(false);
-  const [revealPhase, setRevealPhase] = useState<'flip' | 'result'>('flip');
+  const [revealPhase, setRevealPhase] = useState<'suspense' | 'flip' | 'result'>('suspense');
   const [showChallengerTimeline, setShowChallengerTimeline] = useState(false);
   const [showMyTimelineSheet, setShowMyTimelineSheet] = useState(false);
   const [movieGuess, setMovieGuess] = useState('');
@@ -180,27 +180,26 @@ export default function GameScreen() {
     return () => { show.remove(); hide.remove(); };
   }, []);
 
-  // Switch from 'flip' → 'result' after the FlippingMovieCard animation completes.
-  // Fetch fresh challenges at the 1200ms mark (not fire-and-forget) so the result
-  // is guaranteed to have current data before it renders. Only challenges are
-  // fetched here — updating players mid-reveal can mutate `timeline` and cause
-  // `activeCorrect` to flicker if another device already ran handleNextTurn.
+  // Suspense → flip → result reveal sequence.
+  // Challenges are fetched immediately (for the suspense overlay).
+  // Phase timeline: 0ms suspense, 2400ms flip (card visible+flipping), 3800ms result (panel slides up).
   useEffect(() => {
     if (currentTurn?.status !== 'revealing') return;
-    setRevealPhase('flip');
+    setRevealPhase('suspense');
     setShowChallengerTimeline(false);
     timelineFade.setValue(1);
     challengerTransitionOpacity.setValue(0);
     const turn = currentTurnRef.current;
-    const t = setTimeout(async () => {
-      if (turn) {
+    // Fetch fresh challenges immediately for the suspense overlay
+    if (turn) {
+      (async () => {
         const { data: cData } = await db.from('challenges').select('*').eq('turn_id', turn.id);
         if (cData) { setLocalChallenges(cData); setChallenges(cData); }
-      }
-      // Show result strip — timeline stays on active player's view first
-      setRevealPhase('result');
-    }, 1200);
-    return () => clearTimeout(t);
+      })();
+    }
+    const t1 = setTimeout(() => setRevealPhase('flip'), 2400);
+    const t2 = setTimeout(() => setRevealPhase('result'), 3800);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [currentTurn?.status]);
 
   // After the result strip appears and the card drifts away from the active player's
@@ -2040,6 +2039,17 @@ export default function GameScreen() {
       : myTimeline;
 
 
+    const challengersForOverlay = [...challenges]
+      .filter(c => c.interval_index >= 0)
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+    const subLines: string[] = [];
+    if (winningChallenger) subLines.push(`Card moves to ${getPlayer(winningChallenger.challenger_id)?.display_name}'s timeline`);
+    if (coinBackNames.length > 0) subLines.push(`${coinBackNames.join(', ')} also had it right`);
+    if (didSubmitBonus) subLines.push(gotBonusCoin ? '+1 bonus coin! Movie + director correct' : 'No bonus coin — movie or director wrong');
+
+    const revealIcon = activeCorrect ? '🎯' : winningChallenger ? '⚡' : '🗑️';
+
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.gameArea}>
@@ -2055,7 +2065,7 @@ export default function GameScreen() {
               placedLabel={amActive ? 'your pick' : 'their pick'}
               placedMovies={revealPlacedMovies}
               revealingMovie={m}
-              insertDelay={showChallengerTimeline ? 700 : undefined}
+              insertDelay={showChallengerTimeline ? 700 : 2100}
               trashAfter={(isTrash || (!!winningChallenger && !showChallengerTimeline)) && revealPhase === 'result' ? 1200 : undefined}
             />
           </Animated.View>
@@ -2082,40 +2092,25 @@ export default function GameScreen() {
             </Animated.View>
           )}
           {revealPhase === 'result' && (
-            <View style={styles.revealStrip}>
-              <View style={[styles.revealStripAccent, { backgroundColor: isTrash ? C.danger : C.gold }]} />
-              <ResultIcon result={activeCorrect ? 'correct' : winningChallenger ? 'challenge' : 'trash'} size={36} />
-              <View style={styles.revealStripBody}>
-                <Text style={styles.revealStripHeadline} numberOfLines={1}>
-                  {resultName
-                    ? <><Text style={styles.revealResultPlayerHL}>{resultName}</Text>{' '}{resultText}</>
-                    : resultText}
-                </Text>
-                {winningChallenger && (
-                  <Text style={styles.revealStripSub} numberOfLines={1}>
-                    Card moves to {getPlayer(winningChallenger.challenger_id)?.display_name}'s timeline
-                  </Text>
-                )}
-                {coinBackNames.length > 0 && (
-                  <Text style={styles.revealStripSub} numberOfLines={1}>
-                    {coinBackNames.join(', ')} also had it right
-                  </Text>
-                )}
-                {didSubmitBonus && (
-                  <Text style={styles.revealStripSub} numberOfLines={1}>
-                    {gotBonusCoin ? '+1 bonus coin! Movie + director correct' : 'No bonus coin — movie or director wrong'}
-                  </Text>
-                )}
-              </View>
-              <TouchableOpacity style={styles.revealStripBtn} onPress={handleNextTurn} activeOpacity={0.85}>
-                <Text style={styles.revealStripBtnText}>Next →</Text>
-              </TouchableOpacity>
-            </View>
+            <RevealResult
+              icon={revealIcon}
+              resultName={resultName}
+              resultText={resultText}
+              subLines={subLines}
+              onNext={handleNextTurn}
+            />
           )}
         </View>
         <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} onCast={() => setCastVisible(true)} />
+        {/* Suspense overlay — full-screen, covers timeline + scorebar */}
+        {revealPhase === 'suspense' && (
+          <SuspenseOverlay
+            challengers={challengersForOverlay}
+            getPlayer={getPlayer}
+          />
+        )}
         {winnerId === myPlayerId && revealPhase === 'result' && <ConfettiBurst />}
-        {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} />}
+        {showMyTimelineSheet && <MyTimelineSheet timeline={revealMyTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} />}
         {leaveModal}
         {castOverlay}
       </SafeAreaView>
@@ -2310,45 +2305,116 @@ function GameOverScreen({ winner, players, myId }: { winner: Player; players: Pl
   );
 }
 
-// ── Result icon ───────────────────────────────────────────────────────────────
+// ── Suspense overlay (shown at start of revealing phase) ─────────────────────
 
-type ResultType = 'correct' | 'challenge' | 'trash';
+const MAX_SUSPENSE_CHALLENGERS = 8;
 
-function ResultIcon({ result, size = 72 }: { result: ResultType; size?: number }) {
-  const scale = useRef(new Animated.Value(0.5)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
+function SuspenseOverlay({
+  challengers,
+  getPlayer,
+}: {
+  challengers: { id: string; challenger_id: string }[];
+  getPlayer: (id: string | null) => { display_name: string } | null;
+}) {
+  const bgOpacity = useRef(new Animated.Value(0)).current;
+  const countAnim = useRef(new Animated.Value(0)).current;
+  const countScale = useRef(new Animated.Value(0.82)).current;
+  const nameAnims = useRef(
+    Array.from({ length: MAX_SUSPENSE_CHALLENGERS }, () => new Animated.Value(0))
+  ).current;
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.spring(scale, { toValue: 1, useNativeDriver: true, damping: 12, stiffness: 150 }),
-      Animated.timing(opacity, { toValue: 1, duration: 220, useNativeDriver: true }),
+    Animated.timing(bgOpacity, { toValue: 0.93, duration: 220, useNativeDriver: true }).start();
+    Animated.sequence([
+      Animated.delay(100),
+      Animated.parallel([
+        Animated.timing(countAnim, { toValue: 1, duration: 260, useNativeDriver: true }),
+        Animated.spring(countScale, { toValue: 1, useNativeDriver: true, friction: 5, tension: 80 }),
+      ]),
     ]).start();
+    challengers.slice(0, MAX_SUSPENSE_CHALLENGERS).forEach((_, i) => {
+      Animated.sequence([
+        Animated.delay(380 + i * 200),
+        Animated.timing(nameAnims[i], { toValue: 1, duration: 300, useNativeDriver: true }),
+      ]).start();
+    });
+    // Fade out before phase switches at 2400ms
+    const t = setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(bgOpacity, { toValue: 0, duration: 350, useNativeDriver: true }),
+        Animated.timing(countAnim, { toValue: 0, duration: 350, useNativeDriver: true }),
+      ]).start();
+    }, 1900);
+    return () => clearTimeout(t);
   }, []);
 
-  const isTrash = result === 'trash';
-  const color = isTrash ? '#e63946' : '#f5c518';
-  const glowBg = isTrash ? 'rgba(230,57,70,0.14)' : 'rgba(245,197,24,0.14)';
-  const ringColor = isTrash ? 'rgba(230,57,70,0.4)' : 'rgba(245,197,24,0.4)';
+  const count = challengers.length;
 
   return (
-    <Animated.View style={{ transform: [{ scale }], opacity }}>
-      <Svg width={size} height={size} viewBox="0 0 72 72">
-        <Circle cx={36} cy={36} r={34} fill={glowBg} />
-        <Circle cx={36} cy={36} r={28} fill="none" stroke={ringColor} strokeWidth={1.5} />
-        {result === 'correct' && (
-          <Path d="M20 36 L30 47 L52 23" stroke={color} strokeWidth={4.5}
-            strokeLinecap="round" strokeLinejoin="round" fill="none" />
-        )}
-        {result === 'challenge' && (
-          <>
-            <Circle cx={36} cy={36} r={11} fill="none" stroke={color} strokeWidth={1.5} />
-            <Circle cx={36} cy={36} r={5} fill={color} />
-          </>
-        )}
-        {result === 'trash' && (
-          <Path d="M23 23 L49 49 M49 23 L23 49" stroke={color} strokeWidth={4.5} strokeLinecap="round" />
-        )}
-      </Svg>
+    <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+      <Animated.View style={[StyleSheet.absoluteFillObject, { backgroundColor: '#07041a', opacity: bgOpacity }]} />
+      <Animated.View style={[styles.suspenseContent, { opacity: countAnim }]}>
+        <Animated.Text style={[styles.suspenseCount, { transform: [{ scale: countScale }] }]}>
+          {count === 0 ? 'No challengers' : count === 1 ? '1 challenger' : `${count} challengers`}
+        </Animated.Text>
+        <Text style={styles.suspenseSubLabel}>
+          {count === 0 ? '— revealing now' : '— let\'s see who\'s right'}
+        </Text>
+        {challengers.slice(0, MAX_SUSPENSE_CHALLENGERS).map((c, i) => (
+          <Animated.Text key={c.id} style={[styles.suspenseName, { opacity: nameAnims[i] }]}>
+            {getPlayer(c.challenger_id)?.display_name ?? '?'}
+          </Animated.Text>
+        ))}
+      </Animated.View>
+    </View>
+  );
+}
+
+// ── Reveal result panel (slides up from bottom on result phase) ───────────────
+
+function RevealResult({
+  icon,
+  resultName,
+  resultText,
+  subLines,
+  onNext,
+}: {
+  icon: string;
+  resultName: string;
+  resultText: string;
+  subLines: string[];
+  onNext: () => void;
+}) {
+  const slideAnim = useRef(new Animated.Value(220)).current;
+
+  useEffect(() => {
+    Animated.spring(slideAnim, {
+      toValue: 0,
+      useNativeDriver: true,
+      friction: 8,
+      tension: 65,
+    }).start();
+  }, []);
+
+  return (
+    <Animated.View style={[styles.revealResult, { transform: [{ translateY: slideAnim }] }]}>
+      <View style={styles.revealResultAccentLine} />
+      <View style={styles.revealResultInner}>
+        <Text style={styles.revealResultIcon}>{icon}</Text>
+        <View style={styles.revealResultBody}>
+          <Text style={styles.revealResultHeadline} numberOfLines={2}>
+            {resultName
+              ? <><Text style={styles.revealResultHL}>{resultName}</Text>{' '}{resultText}</>
+              : resultText}
+          </Text>
+          {subLines.map((line, i) => (
+            <Text key={i} style={styles.revealResultSub} numberOfLines={1}>{line}</Text>
+          ))}
+        </View>
+        <TouchableOpacity style={styles.revealResultBtn} onPress={onNext} activeOpacity={0.85}>
+          <Text style={styles.revealResultBtnText}>Next →</Text>
+        </TouchableOpacity>
+      </View>
     </Animated.View>
   );
 }
@@ -2356,83 +2422,91 @@ function ResultIcon({ result, size = 72 }: { result: ResultType; size?: number }
 // ── Confetti burst (correct answer) ──────────────────────────────────────────
 // Two corner cannons (top-left + top-right) firing in a fan arc.
 // Particles follow a gravity curve: shoot outward + up, then fall down.
-// A quick golden screen flash lands on the beat.
+// Two waves of fire + double screen flash for extra flair.
 
 const CONFETTI_COLORS = [
   '#f5c518', '#f5c518', '#f5c518', // gold — dominant
   '#ffffff', '#ffffff',             // white
   '#ffd700', '#ffe082', '#fff3a0', // warm golds
   '#e63946',                        // accent red
+  '#a855f7',                        // purple
+  '#22d3ee',                        // teal
+  '#fb923c',                        // orange
 ];
-const PER_CANNON = 22;
+const PER_CANNON = 38;
 
 function ConfettiBurst() {
-  const flashAnim = useRef(new Animated.Value(0)).current;
+  const flash1Anim = useRef(new Animated.Value(0)).current;
+  const flash2Anim = useRef(new Animated.Value(0)).current;
+
+  const makeParticle = (i: number, wave: number) => {
+    const fromRight = i >= PER_CANNON;
+    const frac = (i % PER_CANNON) / (PER_CANNON - 1);
+    const spreadRad = (130 / 180) * Math.PI;
+    const baseAngle = fromRight
+      ? (115 / 180) * Math.PI + frac * spreadRad
+      : (-60 / 180) * Math.PI + frac * spreadRad;
+    const angle = baseAngle + (Math.random() - 0.5) * 0.22;
+    const speed = 120 + Math.random() * 220;
+    const isStrip = Math.random() < 0.55;
+    const gravity = 270 + Math.random() * 160;
+    return {
+      anim: new Animated.Value(0),
+      fromRight,
+      dx: Math.cos(angle) * speed,
+      dyMid: Math.sin(angle) * speed,
+      dyEnd: Math.sin(angle) * speed + gravity,
+      color: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
+      w: isStrip ? 2.5 + Math.random() * 2.5 : 5 + Math.random() * 5,
+      h: isStrip ? 11 + Math.random() * 10  : 5 + Math.random() * 5,
+      spins: (Math.random() - 0.5) * 9,
+      // wave 0 = 0-110ms, wave 1 = 500-660ms
+      delay: wave === 0 ? Math.floor(Math.random() * 110) : 500 + Math.floor(Math.random() * 160),
+    };
+  };
 
   const particles = useRef(
-    Array.from({ length: PER_CANNON * 2 }, (_, i) => {
-      const fromRight = i >= PER_CANNON;
-      const frac = (i % PER_CANNON) / (PER_CANNON - 1);
-
-      // Left cannon fires rightward arc: -55° to +65° from horizontal
-      // Right cannon fires leftward arc: 115° to 235° from horizontal
-      const spreadRad = (120 / 180) * Math.PI;
-      const baseAngle = fromRight
-        ? (115 / 180) * Math.PI + frac * spreadRad
-        : (-55 / 180) * Math.PI + frac * spreadRad;
-      const angle = baseAngle + (Math.random() - 0.5) * 0.18;
-
-      const speed = 110 + Math.random() * 200;
-      const isStrip = Math.random() < 0.55;
-      const gravity = 260 + Math.random() * 140;
-
-      return {
-        anim: new Animated.Value(0),
-        fromRight,
-        // x travels linearly; y is initial arc + gravity fall
-        dx: Math.cos(angle) * speed,
-        dyMid: Math.sin(angle) * speed,          // at t=0.45 (peak)
-        dyEnd: Math.sin(angle) * speed + gravity, // at t=1.0 (fallen)
-        color: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
-        w: isStrip ? 2.5 + Math.random() * 2 : 5 + Math.random() * 4,
-        h: isStrip ? 11 + Math.random() * 9  : 5 + Math.random() * 4,
-        spins: (Math.random() - 0.5) * 7,
-        delay: Math.floor(Math.random() * 90),
-      };
-    })
+    [
+      ...Array.from({ length: PER_CANNON * 2 }, (_, i) => makeParticle(i, 0)),
+      ...Array.from({ length: PER_CANNON * 2 }, (_, i) => makeParticle(i, 1)),
+    ]
   ).current;
 
   useEffect(() => {
-    // Golden screen flash on the beat
+    // Double flash: first on the beat, second on second wave
     Animated.sequence([
-      Animated.timing(flashAnim, { toValue: 0.15, duration: 100, useNativeDriver: true }),
-      Animated.timing(flashAnim, { toValue: 0,    duration: 380, useNativeDriver: true }),
+      Animated.timing(flash1Anim, { toValue: 0.18, duration: 90,  useNativeDriver: true }),
+      Animated.timing(flash1Anim, { toValue: 0,    duration: 400, useNativeDriver: true }),
     ]).start();
+    const t = setTimeout(() => {
+      Animated.sequence([
+        Animated.timing(flash2Anim, { toValue: 0.12, duration: 90,  useNativeDriver: true }),
+        Animated.timing(flash2Anim, { toValue: 0,    duration: 350, useNativeDriver: true }),
+      ]).start();
+    }, 500);
 
-    // Stagger particles slightly so they feel organic
     Animated.stagger(
-      10,
+      8,
       particles.map(p =>
         Animated.sequence([
           Animated.delay(p.delay),
           Animated.timing(p.anim, {
             toValue: 1,
-            duration: 1050 + Math.random() * 500,
+            duration: 1100 + Math.random() * 600,
             easing: Easing.out(Easing.cubic),
             useNativeDriver: true,
           }),
         ])
       )
     ).start();
+
+    return () => clearTimeout(t);
   }, []);
 
   return (
     <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
-      {/* Screen flash */}
-      <Animated.View
-        style={[StyleSheet.absoluteFillObject, { backgroundColor: '#f5c518', opacity: flashAnim }]}
-      />
-
+      <Animated.View style={[StyleSheet.absoluteFillObject, { backgroundColor: '#f5c518', opacity: flash1Anim }]} />
+      <Animated.View style={[StyleSheet.absoluteFillObject, { backgroundColor: '#f5c518', opacity: flash2Anim }]} />
       {particles.map((p, i) => {
         const tx = p.anim.interpolate({ inputRange: [0, 1], outputRange: [0, p.dx] });
         const ty = p.anim.interpolate({
@@ -3032,7 +3106,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   timelineAreaReveal: {
-    paddingBottom: 132,
+    paddingBottom: 185,
   },
   placingBottomPanel: {
     height: 132,
@@ -3190,37 +3264,84 @@ const styles = StyleSheet.create({
     opacity: 0.85,
     paddingBottom: 4,
   },
-  revealResultPlayerHL: { color: C.gold, fontWeight: '900' },
-  revealStrip: {
+  // ── Suspense overlay ──
+  suspenseContent: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 40,
+  },
+  suspenseCount: {
+    color: C.textPrimary,
+    fontSize: 40,
+    fontWeight: '900',
+    letterSpacing: -0.5,
+    textAlign: 'center',
+  },
+  suspenseSubLabel: {
+    color: C.gold,
+    fontSize: FS.sm,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1.8,
+    textAlign: 'center',
+    marginBottom: 8,
+    opacity: 0.9,
+  },
+  suspenseName: {
+    color: C.textPrimary,
+    fontSize: FS.xl,
+    fontWeight: '700',
+    textAlign: 'center',
+    opacity: 0.85,
+  },
+
+  // ── Reveal result panel ──
+  revealResult: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    gap: 12,
     backgroundColor: C.surface,
     borderTopWidth: 1,
     borderTopColor: C.border,
     overflow: 'hidden',
   },
-  revealStripAccent: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0,
-    height: 2,
+  revealResultAccentLine: {
+    height: 3,
+    backgroundColor: C.gold,
   },
-  revealStripBody: { flex: 1, gap: 2 },
-  revealStripHeadline: { color: C.textPrimary, fontSize: FS.base, fontWeight: '700' },
-  revealStripSub: { color: C.textSub, fontSize: FS.xs },
-  revealStripBtn: {
+  revealResultInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    gap: 14,
+  },
+  revealResultIcon: {
+    fontSize: 42,
+  },
+  revealResultBody: {
+    flex: 1,
+    gap: 3,
+  },
+  revealResultHeadline: {
+    color: C.textPrimary,
+    fontSize: FS.lg,
+    fontWeight: '800',
+    lineHeight: 24,
+  },
+  revealResultHL: { color: C.gold, fontWeight: '900' },
+  revealResultSub: { color: C.textSub, fontSize: FS.xs },
+  revealResultBtn: {
     backgroundColor: C.gold,
     borderRadius: R.btn,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    alignItems: 'center',
   },
-  revealStripBtnText: { color: C.textOnGold, fontSize: FS.base, fontWeight: '900', letterSpacing: 0.3 },
+  revealResultBtnText: { color: C.textOnGold, fontSize: FS.base, fontWeight: '900', letterSpacing: 0.3 },
   challengerTransitionOverlay: {
     position: 'absolute',
     top: 0,
