@@ -25,8 +25,11 @@ function transcriptContains(transcript: string, phrase: string): boolean {
   const tWords = normalize(transcript).split(' ').filter(Boolean);
   const pWords = normalize(phrase).split(' ').filter(Boolean);
   if (pWords.length === 0) return false;
-  // Try windows from full phrase down to just the last word (suffix / last-name match)
-  for (let len = pWords.length; len >= 1; len--) {
+  // Try windows from full phrase down to the last word (suffix / last-name match).
+  // For multi-word phrases, don't reduce below 2 words — prevents e.g. "labyrinth"
+  // alone matching "Pan's Labyrinth" when someone says "Faust Labyrinth".
+  const minLen = pWords.length > 1 ? 2 : 1;
+  for (let len = pWords.length; len >= minLen; len--) {
     const target = pWords.slice(pWords.length - len).join(' ');
     if (target.length < 3) continue;
     for (let i = 0; i <= tWords.length - len; i++) {

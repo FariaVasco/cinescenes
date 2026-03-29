@@ -134,10 +134,11 @@ export default function GameScreen() {
   // Prefetched next-turn movie promise for insane mode — started during challenging phase
   const prefetchedInsaneMovieRef = useRef<Promise<Movie> | null>(null);
 
-  const [voiceState, setVoiceState] = useState<'idle' | 'recording' | 'processing' | 'error'>('idle');
+  const [voiceState, setVoiceState] = useState<'idle' | 'recording' | 'processing' | 'result' | 'error'>('idle');
   const [voiceError, setVoiceError] = useState('');
+  const [voiceResult, setVoiceResult] = useState<{ movie: string; director: string } | null>(null);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
-  const voiceStateRef = useRef<'idle' | 'recording' | 'processing' | 'error'>('idle');
+  const voiceStateRef = useRef<'idle' | 'recording' | 'processing' | 'result' | 'error'>('idle');
   const recorder = useAudioRecorder({ ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true });
   const meteringIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const waveformBars = useRef(Array.from({ length: 30 }, () => new Animated.Value(0.07))).current;
@@ -866,9 +867,9 @@ export default function GameScreen() {
 
       const movie = getMovie();
       if (!movie) {
-        setMovieGuess(transcript);
-        voiceStateRef.current = 'idle';
-        setVoiceState('idle');
+        setVoiceResult({ movie: transcript, director: '' });
+        voiceStateRef.current = 'result';
+        setVoiceState('result');
         return;
       }
 
@@ -893,16 +894,14 @@ export default function GameScreen() {
         }
       }
 
-      if (titleValue) setMovieGuess(titleValue);
-      if (directorValue) setDirectorGuess(directorValue);
-
       if (!titleValue && !directorValue) {
         voiceStateRef.current = 'error';
         setVoiceError("Couldn't recognise the movie or director — try again or type below.");
         setVoiceState('error');
       } else {
-        voiceStateRef.current = 'idle';
-        setVoiceState('idle');
+        setVoiceResult({ movie: titleValue ?? '', director: directorValue ?? '' });
+        voiceStateRef.current = 'result';
+        setVoiceState('result');
       }
     } catch {
       voiceStateRef.current = 'error';
@@ -1472,108 +1471,156 @@ export default function GameScreen() {
             style={{ flex: 1 }}
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           >
-            {/* Header — hidden when keyboard is up to save space */}
-            {!keyboardVisible && (
+            {/* Header — hidden when keyboard is up or in result state */}
+            {!keyboardVisible && voiceState !== 'result' && (
               <View style={styles.guessHeader}>
                 <Text style={styles.guessTitle}>What year is this movie from?</Text>
                 <Text style={styles.guessSubtitle}>BONUS COIN — NAME THE MOVIE + DIRECTOR</Text>
               </View>
             )}
 
-            {/* Inputs always mounted — layout adapts around them */}
-            <View style={keyboardVisible ? styles.guessKeyboardPanel : styles.guessMainRow}>
-              <View style={keyboardVisible ? styles.guessInputsStack : styles.guessLeftPanel}>
-                <TextInput
-                  style={styles.guessInput}
-                  placeholder="Movie title…"
-                  placeholderTextColor={C.textMuted}
-                  value={movieGuess}
-                  onChangeText={setMovieGuess}
-                  autoCorrect={false}
-                  returnKeyType="next"
-                />
-                <TextInput
-                  style={styles.guessInput}
-                  placeholder="Director name…"
-                  placeholderTextColor={C.textMuted}
-                  value={directorGuess}
-                  onChangeText={setDirectorGuess}
-                  autoCorrect={false}
-                  returnKeyType="done"
-                  onSubmitEditing={() => Keyboard.dismiss()}
-                />
-              </View>
-
-              {keyboardVisible ? (
-                <TouchableOpacity style={styles.guessDoneBtn} onPress={() => Keyboard.dismiss()} activeOpacity={0.8}>
-                  <Text style={styles.guessDoneBtnText}>Done ✓</Text>
-                </TouchableOpacity>
-              ) : null}
-
-              {!keyboardVisible && <View style={styles.guessDivider} />}
-
-              {!keyboardVisible && (
-                <View style={styles.guessRightPanel}>
-                  {voiceState === 'idle' ? (
-                    <TouchableOpacity style={styles.voiceMicBtn} onPress={startVoice} activeOpacity={0.75}>
-                      <Text style={styles.voiceMicIcon}>🎤</Text>
-                      <Text style={styles.voiceMicText}>Say the movie and director</Text>
-                    </TouchableOpacity>
-                  ) : voiceState === 'recording' ? (
-                    <View style={styles.voiceRecordingView}>
-                      <View style={styles.waveformRow}>
-                        {waveformBars.map((anim, i) => (
-                          <Animated.View
-                            key={i}
-                            style={[styles.waveformBar, { transform: [{ scaleY: anim }] }]}
-                          />
-                        ))}
-                      </View>
-                      <TouchableOpacity style={styles.voiceStopBtn} onPress={stopVoice} activeOpacity={0.75}>
-                        <View style={styles.voiceStopSquare} />
-                      </TouchableOpacity>
-                    </View>
-                  ) : voiceState === 'processing' ? (
-                    <View style={styles.voiceMicBtn}>
-                      <ActivityIndicator color={C.gold} size="small" />
-                      <Text style={styles.voiceMicText}>Processing…</Text>
-                    </View>
-                  ) : (
-                    <View style={styles.voiceErrorBox}>
-                      <Text style={styles.voiceErrorText}>{voiceError}</Text>
-                      <TouchableOpacity onPress={() => { voiceStateRef.current = 'idle'; setVoiceState('idle'); setVoiceError(''); }}>
-                        <Text style={styles.voiceRetryText}>Try again</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
+            {/* Main area: result cards or inputs+voice */}
+            {voiceState === 'result' ? (
+              <View style={styles.guessResultArea}>
+                <Text style={styles.guessResultLabel}>We heard:</Text>
+                <View style={styles.guessResultCard}>
+                  <Text style={styles.guessResultIcon}>🎬</Text>
+                  <Text style={styles.guessResultText}>{voiceResult?.movie || "(couldn't catch the movie)"}</Text>
                 </View>
-              )}
-            </View>
+                <View style={styles.guessResultCard}>
+                  <Text style={styles.guessResultIcon}>🎬</Text>
+                  <Text style={styles.guessResultText}>{voiceResult?.director || "(couldn't catch the director)"}</Text>
+                </View>
+              </View>
+            ) : (
+              <View style={keyboardVisible ? styles.guessKeyboardPanel : styles.guessMainRow}>
+                <View style={keyboardVisible ? styles.guessInputsStack : styles.guessLeftPanel}>
+                  <TextInput
+                    style={styles.guessInput}
+                    placeholder="Movie title…"
+                    placeholderTextColor={C.textMuted}
+                    value={movieGuess}
+                    onChangeText={setMovieGuess}
+                    autoCorrect={false}
+                    returnKeyType="next"
+                  />
+                  <TextInput
+                    style={styles.guessInput}
+                    placeholder="Director name…"
+                    placeholderTextColor={C.textMuted}
+                    value={directorGuess}
+                    onChangeText={setDirectorGuess}
+                    autoCorrect={false}
+                    returnKeyType="done"
+                    onSubmitEditing={() => Keyboard.dismiss()}
+                  />
+                </View>
+
+                {keyboardVisible ? (
+                  <TouchableOpacity style={styles.guessDoneBtn} onPress={() => Keyboard.dismiss()} activeOpacity={0.8}>
+                    <Text style={styles.guessDoneBtnText}>Done ✓</Text>
+                  </TouchableOpacity>
+                ) : null}
+
+                {!keyboardVisible && <View style={styles.guessDivider} />}
+
+                {!keyboardVisible && (
+                  <View style={styles.guessRightPanel}>
+                    {voiceState === 'idle' ? (
+                      <TouchableOpacity style={styles.voiceMicBtn} onPress={startVoice} activeOpacity={0.75}>
+                        <Text style={styles.voiceMicIcon}>🎤</Text>
+                        <Text style={styles.voiceMicText}>Say the movie and director</Text>
+                      </TouchableOpacity>
+                    ) : voiceState === 'recording' ? (
+                      <View style={styles.voiceRecordingView}>
+                        <View style={styles.waveformRow}>
+                          {waveformBars.map((anim, i) => (
+                            <Animated.View
+                              key={i}
+                              style={[styles.waveformBar, { transform: [{ scaleY: anim }] }]}
+                            />
+                          ))}
+                        </View>
+                        <TouchableOpacity style={styles.voiceStopBtn} onPress={stopVoice} activeOpacity={0.75}>
+                          <View style={styles.voiceStopSquare} />
+                        </TouchableOpacity>
+                      </View>
+                    ) : voiceState === 'processing' ? (
+                      <View style={styles.voiceMicBtn}>
+                        <ActivityIndicator color={C.gold} size="small" />
+                        <Text style={styles.voiceMicText}>Processing…</Text>
+                      </View>
+                    ) : (
+                      <View style={styles.voiceErrorBox}>
+                        <Text style={styles.voiceErrorText}>{voiceError}</Text>
+                        <TouchableOpacity onPress={() => { voiceStateRef.current = 'idle'; setVoiceState('idle'); setVoiceError(''); }}>
+                          <Text style={styles.voiceRetryText}>Try again</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+                )}
+              </View>
+            )}
 
             {/* Footer: Replay + Place buttons (keyboard hidden only) */}
             {!keyboardVisible && (
               <View style={styles.guessFooter}>
-                {!hasReplayed && (
-                  <TouchableOpacity
-                    style={styles.guessReplayBtn}
-                    onPressIn={() => {
-                      setHasReplayed(true);
-                      setTrailerEnded(false);
-                      setUserPaused(false);
-                      setTrailerKey(k => k + 1);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.guessReplayText}>↺ Replay</Text>
-                  </TouchableOpacity>
+                {voiceState === 'result' ? (
+                  <>
+                    <TouchableOpacity
+                      style={styles.guessRetryBtn}
+                      onPress={() => {
+                        voiceStateRef.current = 'idle';
+                        setVoiceState('idle');
+                        setVoiceResult(null);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.guessRetryText}>↩ Try again</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.guessPlaceBtn, { flex: 2 }]}
+                      onPressIn={() => {
+                        setMovieGuess(voiceResult?.movie ?? '');
+                        setDirectorGuess(voiceResult?.director ?? '');
+                        setReadyToPlace(true);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.guessPlaceText}>Looks right →</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <>
+                    {!hasReplayed && (
+                      <TouchableOpacity
+                        style={styles.guessReplayBtn}
+                        onPressIn={() => {
+                          setHasReplayed(true);
+                          setTrailerEnded(false);
+                          setUserPaused(false);
+                          setTrailerKey(k => k + 1);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.guessReplayText}>↺ Replay</Text>
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity
+                      style={[
+                        styles.guessPlaceBtn,
+                        { flex: 2 },
+                        (voiceState === 'recording' || voiceState === 'processing') && styles.guessPlaceBtnDisabled,
+                      ]}
+                      onPressIn={() => setReadyToPlace(true)}
+                      activeOpacity={0.7}
+                      disabled={voiceState === 'recording' || voiceState === 'processing'}
+                    >
+                      <Text style={styles.guessPlaceText}>Place it →</Text>
+                    </TouchableOpacity>
+                  </>
                 )}
-                <TouchableOpacity
-                  style={[styles.guessPlaceBtn, { flex: 2 }]}
-                  onPressIn={() => setReadyToPlace(true)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.guessPlaceText}>Place it →</Text>
-                </TouchableOpacity>
               </View>
             )}
           </KeyboardAvoidingView>
@@ -3528,6 +3575,28 @@ const styles = StyleSheet.create({
   guessPlaceText: {
     color: C.textOnGold, fontSize: FS.md, fontWeight: '900', letterSpacing: 0.4,
   },
+  guessPlaceBtnDisabled: { opacity: 0.35 },
+  guessResultArea: {
+    flex: 1, justifyContent: 'center', alignItems: 'stretch', paddingHorizontal: 32, gap: 14,
+  },
+  guessResultLabel: {
+    color: C.textSub, fontSize: FS.xs, fontWeight: '700',
+    letterSpacing: 2.5, textTransform: 'uppercase', marginBottom: 4,
+  },
+  guessResultCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: R.card, paddingHorizontal: 20, paddingVertical: 16,
+  },
+  guessResultIcon: { fontSize: 22 },
+  guessResultText: { flex: 1, color: C.textPrimary, fontSize: FS.lg, fontWeight: '700' },
+  guessRetryBtn: {
+    flex: 1, height: 52, borderRadius: R.card,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  guessRetryText: { color: C.textSub, fontSize: FS.base, fontWeight: '600' },
 
 
   // Coin count in ScoreBar
