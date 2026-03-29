@@ -14,6 +14,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Keyboard,
 } from 'react-native';
 import { Audio } from 'expo-av';
 import { transcribeAudio } from '@/lib/whisper';
@@ -135,6 +136,7 @@ export default function GameScreen() {
 
   const [voiceState, setVoiceState] = useState<'idle' | 'recording' | 'processing' | 'error'>('idle');
   const [voiceError, setVoiceError] = useState('');
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const voiceStateRef = useRef<'idle' | 'recording' | 'processing' | 'error'>('idle');
   const recordingRef = useRef<Audio.Recording | null>(null);
   const waveformBars = useRef(Array.from({ length: 30 }, () => new Animated.Value(0.07))).current;
@@ -168,6 +170,12 @@ export default function GameScreen() {
       return true; // prevents default back action
     });
     return () => sub.remove();
+  }, []);
+
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
+    return () => { show.remove(); hide.remove(); };
   }, []);
 
   // Switch from 'flip' → 'result' after the FlippingMovieCard animation completes.
@@ -1466,16 +1474,17 @@ export default function GameScreen() {
             style={{ flex: 1 }}
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           >
-            {/* Header */}
-            <View style={styles.guessHeader}>
-              <Text style={styles.guessTitle}>What year is this movie from?</Text>
-              <Text style={styles.guessSubtitle}>BONUS COIN — NAME THE MOVIE + DIRECTOR</Text>
-            </View>
+            {/* Header — hidden when keyboard is up to save space */}
+            {!keyboardVisible && (
+              <View style={styles.guessHeader}>
+                <Text style={styles.guessTitle}>What year is this movie from?</Text>
+                <Text style={styles.guessSubtitle}>BONUS COIN — NAME THE MOVIE + DIRECTOR</Text>
+              </View>
+            )}
 
-            {/* Main two-panel row */}
-            <View style={styles.guessMainRow}>
-              {/* Left: text inputs */}
-              <View style={styles.guessLeftPanel}>
+            {/* Inputs always mounted — layout adapts around them */}
+            <View style={keyboardVisible ? styles.guessKeyboardPanel : styles.guessMainRow}>
+              <View style={keyboardVisible ? styles.guessInputsStack : styles.guessLeftPanel}>
                 <TextInput
                   style={styles.guessInput}
                   placeholder="Movie title…"
@@ -1493,73 +1502,82 @@ export default function GameScreen() {
                   onChangeText={setDirectorGuess}
                   autoCorrect={false}
                   returnKeyType="done"
+                  onSubmitEditing={() => Keyboard.dismiss()}
                 />
               </View>
 
-              {/* Divider */}
-              <View style={styles.guessDivider} />
+              {keyboardVisible ? (
+                <TouchableOpacity style={styles.guessDoneBtn} onPress={() => Keyboard.dismiss()} activeOpacity={0.8}>
+                  <Text style={styles.guessDoneBtnText}>Done ✓</Text>
+                </TouchableOpacity>
+              ) : null}
 
-              {/* Right: voice input */}
-              <View style={styles.guessRightPanel}>
-                {voiceState === 'idle' ? (
-                  <TouchableOpacity style={styles.voiceMicBtn} onPress={startVoice} activeOpacity={0.75}>
-                    <Text style={styles.voiceMicIcon}>🎤</Text>
-                    <Text style={styles.voiceMicText}>Say the movie and director</Text>
-                  </TouchableOpacity>
-                ) : voiceState === 'recording' ? (
-                  <View style={styles.voiceRecordingView}>
-                    <View style={styles.waveformRow}>
-                      {waveformBars.map((anim, i) => (
-                        <Animated.View
-                          key={i}
-                          style={[styles.waveformBar, { transform: [{ scaleY: anim }] }]}
-                        />
-                      ))}
+              {!keyboardVisible && <View style={styles.guessDivider} />}
+
+              {!keyboardVisible && (
+                <View style={styles.guessRightPanel}>
+                  {voiceState === 'idle' ? (
+                    <TouchableOpacity style={styles.voiceMicBtn} onPress={startVoice} activeOpacity={0.75}>
+                      <Text style={styles.voiceMicIcon}>🎤</Text>
+                      <Text style={styles.voiceMicText}>Say the movie and director</Text>
+                    </TouchableOpacity>
+                  ) : voiceState === 'recording' ? (
+                    <View style={styles.voiceRecordingView}>
+                      <View style={styles.waveformRow}>
+                        {waveformBars.map((anim, i) => (
+                          <Animated.View
+                            key={i}
+                            style={[styles.waveformBar, { transform: [{ scaleY: anim }] }]}
+                          />
+                        ))}
+                      </View>
+                      <TouchableOpacity style={styles.voiceStopBtn} onPress={stopVoice} activeOpacity={0.75}>
+                        <View style={styles.voiceStopSquare} />
+                      </TouchableOpacity>
                     </View>
-                    <TouchableOpacity style={styles.voiceStopBtn} onPress={stopVoice} activeOpacity={0.75}>
-                      <View style={styles.voiceStopSquare} />
-                    </TouchableOpacity>
-                  </View>
-                ) : voiceState === 'processing' ? (
-                  <View style={styles.voiceMicBtn}>
-                    <ActivityIndicator color={C.gold} size="small" />
-                    <Text style={styles.voiceMicText}>Processing…</Text>
-                  </View>
-                ) : (
-                  <View style={styles.voiceErrorBox}>
-                    <Text style={styles.voiceErrorText}>{voiceError}</Text>
-                    <TouchableOpacity onPress={() => { voiceStateRef.current = 'idle'; setVoiceState('idle'); setVoiceError(''); }}>
-                      <Text style={styles.voiceRetryText}>Try again</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </View>
+                  ) : voiceState === 'processing' ? (
+                    <View style={styles.voiceMicBtn}>
+                      <ActivityIndicator color={C.gold} size="small" />
+                      <Text style={styles.voiceMicText}>Processing…</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.voiceErrorBox}>
+                      <Text style={styles.voiceErrorText}>{voiceError}</Text>
+                      <TouchableOpacity onPress={() => { voiceStateRef.current = 'idle'; setVoiceState('idle'); setVoiceError(''); }}>
+                        <Text style={styles.voiceRetryText}>Try again</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              )}
             </View>
 
-            {/* Footer */}
-            <View style={styles.guessFooter}>
-              {!hasReplayed && (
+            {/* Footer: Replay + Place buttons (keyboard hidden only) */}
+            {!keyboardVisible && (
+              <View style={styles.guessFooter}>
+                {!hasReplayed && (
+                  <TouchableOpacity
+                    style={styles.guessReplayBtn}
+                    onPressIn={() => {
+                      setHasReplayed(true);
+                      setTrailerEnded(false);
+                      setUserPaused(false);
+                      setTrailerKey(k => k + 1);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.guessReplayText}>↺ Replay</Text>
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity
-                  style={styles.guessReplayBtn}
-                  onPressIn={() => {
-                    setHasReplayed(true);
-                    setTrailerEnded(false);
-                    setUserPaused(false);
-                    setTrailerKey(k => k + 1);
-                  }}
+                  style={[styles.guessPlaceBtn, { flex: 2 }]}
+                  onPressIn={() => setReadyToPlace(true)}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.guessReplayText}>↺ Replay</Text>
+                  <Text style={styles.guessPlaceText}>Place it →</Text>
                 </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                style={[styles.guessPlaceBtn, { flex: 2 }]}
-                onPressIn={() => setReadyToPlace(true)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.guessPlaceText}>Place it →</Text>
-              </TouchableOpacity>
-            </View>
+              </View>
+            )}
           </KeyboardAvoidingView>
           {leaveModal}
         {castOverlay}
@@ -3445,6 +3463,14 @@ const styles = StyleSheet.create({
   guessSubtitle: { color: C.gold, fontSize: FS.xs, fontWeight: '700', letterSpacing: 2.5, textTransform: 'uppercase' },
   guessMainRow: { flex: 1, flexDirection: 'row', paddingHorizontal: 20, paddingBottom: 8, gap: 16 },
   guessLeftPanel: { flex: 1.2, justifyContent: 'center', gap: 10 },
+  // Keyboard-visible layout: stacked inputs + Done button on right
+  guessKeyboardPanel: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, gap: 12 },
+  guessInputsStack: { flex: 1, gap: 10 },
+  guessDoneBtn: {
+    backgroundColor: C.gold, borderRadius: R.btn,
+    paddingHorizontal: 20, paddingVertical: 14, alignSelf: 'center',
+  },
+  guessDoneBtnText: { color: C.bg, fontSize: FS.base, fontWeight: '800' },
   guessDivider: { width: 1, alignSelf: 'stretch', backgroundColor: C.border, marginVertical: 8 },
   guessRightPanel: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   guessFooter: { flexDirection: 'row', paddingHorizontal: 20, paddingBottom: 16, gap: 10 },
