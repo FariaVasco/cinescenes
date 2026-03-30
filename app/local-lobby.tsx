@@ -470,7 +470,11 @@ export default function LocalLobbyScreen() {
             <Text style={styles.gameCode}>{localGame.game_code}</Text>
             <MaterialCommunityIcons name="content-copy" size={18} color="#f5c518" />
           </TouchableOpacity>
-          <Text style={styles.codeHint}>Tap to copy · share with friends</Text>
+          <Text style={styles.codeHint}>
+            {localGame.visibility === 'invite_only'
+              ? "Invite-only · won't appear in public games · share this code to invite"
+              : 'Open to everyone · anyone can join from the list · or share this code'}
+          </Text>
         </View>
 
         <View style={styles.playerCountRow}>
@@ -600,7 +604,7 @@ export default function LocalLobbyScreen() {
                 onPress={() => setVisibility('invite_only')}
               >
                 <Text style={[styles.visibilityOptionText, visibility === 'invite_only' && styles.visibilityOptionTextActive]}>
-                  Play with Friends
+                  Local Lobby
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -608,10 +612,15 @@ export default function LocalLobbyScreen() {
                 onPress={() => setVisibility('public')}
               >
                 <Text style={[styles.visibilityOptionText, visibility === 'public' && styles.visibilityOptionTextActive]}>
-                  Play with Strangers
+                  Online Lobby
                 </Text>
               </TouchableOpacity>
             </View>
+            <Text style={styles.visibilityHint}>
+              {visibility === 'invite_only'
+                ? "Invite-only · won't appear in public games · join by code only"
+                : 'Open to everyone · anyone can find it · joinable by code too'}
+            </Text>
           </View>
         )}
 
@@ -670,6 +679,7 @@ const styles = StyleSheet.create({
   visibilityOptionActive: { backgroundColor: C.gold },
   visibilityOptionText: { color: C.textSub, fontSize: FS.sm, fontWeight: '700' },
   visibilityOptionTextActive: { color: C.textOnGold },
+  visibilityHint: { color: C.textMuted, fontSize: FS.xs, textAlign: 'center' },
 
   waitingHeader: { alignItems: 'center', paddingTop: 24, paddingBottom: 16, gap: 6 },
   waitingLabel: {
