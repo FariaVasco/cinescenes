@@ -1324,7 +1324,7 @@ export default function GameScreen() {
           )}
         </View>
 
-        <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} onCast={() => setCastVisible(true)} />
+        <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} onCast={amHost && game?.visibility !== 'public' ? () => setCastVisible(true) : undefined} />
         {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} />}
         {leaveModal}
         {castOverlay}
@@ -1362,7 +1362,7 @@ export default function GameScreen() {
             </Animated.View>
           </View>
 
-          <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} onCast={() => setCastVisible(true)} />
+          <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} onCast={amHost && game?.visibility !== 'public' ? () => setCastVisible(true) : undefined} />
           {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} />}
           {leaveModal}
         {castOverlay}
@@ -1407,7 +1407,7 @@ export default function GameScreen() {
                 </TouchableOpacity>
               </View>
             )}
-            <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} onCast={() => setCastVisible(true)} />
+            <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} onCast={amHost && game?.visibility !== 'public' ? () => setCastVisible(true) : undefined} />
             {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} />}
             {leaveModal}
             {castOverlay}
@@ -1899,7 +1899,7 @@ export default function GameScreen() {
           )}
         </View>
 
-        <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} onCast={() => setCastVisible(true)} />
+        <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} onCast={amHost && game?.visibility !== 'public' ? () => setCastVisible(true) : undefined} />
         {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} />}
         {leaveModal}
         {castOverlay}
@@ -2058,7 +2058,7 @@ export default function GameScreen() {
             />
           )}
         </View>
-        <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} onCast={() => setCastVisible(true)} />
+        <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} onCast={amHost && game?.visibility !== 'public' ? () => setCastVisible(true) : undefined} />
         {/* Suspense overlay — full-screen, covers timeline + scorebar */}
         {revealPhase === 'suspense' && (
           <SuspenseOverlay
@@ -2389,7 +2389,9 @@ function RevealResult({
         </TouchableOpacity>
       ) : (
         <View style={styles.revealToastCountdown}>
-          <Text style={styles.revealToastCountdownText}>{Math.max(0, countdown)}</Text>
+          {countdown <= 0
+            ? <ActivityIndicator size="small" color={C.textSub} />
+            : <Text style={styles.revealToastCountdownText}>{countdown}</Text>}
         </View>
       )}
     </Animated.View>
