@@ -955,23 +955,26 @@ export default function GameScreen() {
         }
       }
 
+      // Compute new timeline in memory for nextPlayer calculation, but defer the DB
+      // write until AFTER the new turn is inserted. This closes the race window where
+      // a background poll could fetch the updated player timeline while currentTurn is
+      // still 'revealing', causing the won card to appear twice (once as revealingMovie
+      // and once as a regular CardFront in the updated winnerTimeline).
       let updatedPlayers = playersAfterRefunds;
+      let winnerNewTimeline: number[] | null = null;
       if (winnerId) {
         const winner = playersAfterRefunds.find(p => p.id === winnerId) ?? null;
         if (winner) {
-          const newTimeline = [...winner.timeline, movie.year].sort((a, b) => a - b);
-          await db.from('players').update({ timeline: newTimeline }).eq('id', winnerId);
-          // Keep updatedPlayers for nextPlayer calculation only — don't push to state here.
-          // poll() will re-fetch players when it detects the new turn, ensuring the drawing
-          // phase gets the correct timeline without the reveal phase ever seeing it early.
-          updatedPlayers = playersAfterRefunds.map(p => p.id === winnerId ? { ...p, timeline: newTimeline } : p);
+          winnerNewTimeline = [...winner.timeline, movie.year].sort((a, b) => a - b);
+          updatedPlayers = playersAfterRefunds.map(p => p.id === winnerId ? { ...p, timeline: winnerNewTimeline! } : p);
 
           // Game over — winner reached the target card count
-          if (newTimeline.length >= WIN_CARDS) {
+          if (winnerNewTimeline.length >= WIN_CARDS) {
+            await db.from('players').update({ timeline: winnerNewTimeline }).eq('id', winnerId);
             await db.from('games').update({ status: 'finished' }).eq('id', g.id);
             setLocalPlayers(updatedPlayers);
             setPlayers(updatedPlayers);
-            setGameOver({ ...winner, timeline: newTimeline });
+            setGameOver({ ...winner, timeline: winnerNewTimeline });
             stopPolling();
             return;
           }
@@ -1035,6 +1038,11 @@ export default function GameScreen() {
       if (insertError) {
         console.warn('[NXT] insert failed:', insertError.message, insertError.code);
         return;
+      }
+      // Write winner's timeline AFTER new turn is inserted so no background poll
+      // can observe: old turn (revealing) + updated timeline simultaneously.
+      if (winnerId && winnerNewTimeline) {
+        await db.from('players').update({ timeline: winnerNewTimeline }).eq('id', winnerId);
       }
       await poll();
     } finally {
@@ -1306,28 +1314,23 @@ export default function GameScreen() {
         <SafeAreaView style={styles.container}>
           <View style={styles.gameArea}>
             <Animated.View style={styles.timelineAreaFull}>
-              {amActive && (
-                <Text style={styles.placePrompt}>
-                  {selectedInterval === null ? 'Where does it belong?' : 'Confirm your pick'}
-                </Text>
-              )}
+              <Text style={styles.placePrompt}>
+                {amActive
+                  ? (selectedInterval === null ? 'Where does it belong?' : 'Confirm your pick')
+                  : `Waiting for ${activePlayer?.display_name}…`}
+              </Text>
               <Timeline
-                ref={timelineRef}
-                timeline={timeline}
-                currentCardMovie={movie}
+                ref={amActive ? timelineRef : undefined}
+                timeline={amActive ? timeline : myTimeline}
+                currentCardMovie={amActive ? (movie ?? undefined) : undefined}
                 interactive={amActive}
-                selectedInterval={selectedInterval}
-                onIntervalSelect={setSelectedInterval}
-                onConfirm={handleAnimatedConfirm}
-                placedMovies={placedMovies}
+                selectedInterval={amActive ? selectedInterval : null}
+                onIntervalSelect={amActive ? setSelectedInterval : () => {}}
+                onConfirm={amActive ? handleAnimatedConfirm : () => {}}
+                placedMovies={amActive ? placedMovies : myPlacedMovies}
                 hideFloatingCard
               />
             </Animated.View>
-            {!amActive && (
-              <Animated.View style={[styles.placingBottomStrip, { opacity: leftPanelFade }]}>
-                <Text style={styles.placingStripText}>{`Waiting for ${activePlayer?.display_name}…`}</Text>
-              </Animated.View>
-            )}
           </View>
 
           <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} onCast={() => setCastVisible(true)} />
@@ -1342,34 +1345,44 @@ export default function GameScreen() {
     if (trailerEnded) {
       if (!amActive) {
         return (
-          <View style={styles.endedOverlay}>
-            <SafeAreaView style={styles.endedInner} edges={['top', 'bottom']}>
-              <View style={styles.endedCenter}>
-                <Text style={styles.endedTitle}>🎬</Text>
-                <Text style={styles.endedWaiting}>
+          <SafeAreaView style={styles.container}>
+            <View style={styles.gameArea}>
+              <View style={styles.timelineAreaFull}>
+                <Text style={styles.placePrompt}>
                   Waiting for {activePlayer?.display_name} to place the card…
                 </Text>
+                <Timeline
+                  timeline={myTimeline}
+                  interactive={false}
+                  selectedInterval={null}
+                  onIntervalSelect={() => {}}
+                  onConfirm={() => {}}
+                  placedMovies={myPlacedMovies}
+                  hideFloatingCard
+                />
               </View>
-              {!hasReplayed && (
-                <View style={{ paddingHorizontal: 24, paddingBottom: 24 }}>
-                  <TouchableOpacity
-                    style={styles.guessReplayBtn}
-                    onPressIn={() => {
-                      setHasReplayed(true);
-                      setTrailerEnded(false);
-                      setUserPaused(false);
-                      setTrailerKey(k => k + 1);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.guessReplayText}>↺ Replay trailer</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </SafeAreaView>
+            </View>
+            {!hasReplayed && (
+              <View style={[styles.placingBottomStrip, { paddingHorizontal: 24, paddingVertical: 12 }]}>
+                <TouchableOpacity
+                  style={[styles.guessReplayBtn, { alignSelf: 'stretch' }]}
+                  onPressIn={() => {
+                    setHasReplayed(true);
+                    setTrailerEnded(false);
+                    setUserPaused(false);
+                    setTrailerKey(k => k + 1);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.guessReplayText}>↺ Replay trailer</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+            <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} onCast={() => setCastVisible(true)} />
+            {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} />}
             {leaveModal}
-        {castOverlay}
-          </View>
+            {castOverlay}
+          </SafeAreaView>
         );
       }
 

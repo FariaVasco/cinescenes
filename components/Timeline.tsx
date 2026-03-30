@@ -19,7 +19,7 @@ interface ChallengerCoin {
 
 interface TimelineProps {
   timeline: number[];
-  currentCardMovie: Movie;
+  currentCardMovie?: Movie;
   interactive: boolean;
   selectedInterval: number | null;
   onIntervalSelect: (i: number) => void;
