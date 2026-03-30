@@ -118,17 +118,19 @@ export default function LocalLobbyScreen() {
       }
 
       // Client-side stale detection (fallback if pg_cron is not available)
-      const stale = new Date(g.created_at).getTime() < Date.now() - 10 * 60 * 1000;
+      const stale = new Date(g.created_at).getTime() < Date.now() - 30 * 60 * 1000;
       if (g.status === 'lobby' && stale) {
         navigatedRef.current = true;
         stopPolling();
+        // Fire-and-forget — do NOT await so the alert is never blocked by a slow/failing DB call
         if (isHostRef.current) {
-          await db.from('games').update({ status: 'cancelled' }).eq('id', gId);
+          db.from('games').update({ status: 'cancelled' }).eq('id', gId);
         }
         Alert.alert(
           'Lobby expired',
-          'This lobby was open for more than 10 minutes and has been closed.',
-          [{ text: 'OK', onPress: () => router.back() }]
+          'This lobby was open for more than 30 minutes and has been closed.',
+          [{ text: 'OK', onPress: () => router.back() }],
+          { cancelable: false },
         );
         return;
       }
