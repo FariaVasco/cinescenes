@@ -113,6 +113,8 @@ export default function GameScreen() {
   const nextTurnInProgress = useRef(false);
   const challengeDecisionMade = useRef(false);
   const [revealPhase, setRevealPhase] = useState<'suspense' | 'flip' | 'result'>('suspense');
+  const [autoNextCountdown, setAutoNextCountdown] = useState(5);
+  const autoNextIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [showChallengerTimeline, setShowChallengerTimeline] = useState(false);
   const [showMyTimelineSheet, setShowMyTimelineSheet] = useState(false);
   const [movieGuess, setMovieGuess] = useState('');
@@ -244,6 +246,33 @@ export default function GameScreen() {
     return () => {
       clearTimeout(t);
       innerTimers.forEach(clearTimeout);
+    };
+  }, [revealPhase]);
+
+  // Auto-advance to next turn 5 s after result appears (active player can still tap Next early)
+  useEffect(() => {
+    if (autoNextIntervalRef.current) {
+      clearInterval(autoNextIntervalRef.current);
+      autoNextIntervalRef.current = null;
+    }
+    setAutoNextCountdown(5);
+    if (revealPhase !== 'result') return;
+    const isActive = isActivePlayer();
+    let remaining = 5;
+    autoNextIntervalRef.current = setInterval(() => {
+      remaining -= 1;
+      setAutoNextCountdown(remaining);
+      if (remaining <= 0) {
+        clearInterval(autoNextIntervalRef.current!);
+        autoNextIntervalRef.current = null;
+        if (isActive) handleNextTurn();
+      }
+    }, 1000);
+    return () => {
+      if (autoNextIntervalRef.current) {
+        clearInterval(autoNextIntervalRef.current);
+        autoNextIntervalRef.current = null;
+      }
     };
   }, [revealPhase]);
 
@@ -2024,6 +2053,8 @@ export default function GameScreen() {
               resultText={resultText}
               subLines={subLines}
               onNext={handleNextTurn}
+              showNext={amActive}
+              countdown={autoNextCountdown}
             />
           )}
         </View>
@@ -2317,12 +2348,16 @@ function RevealResult({
   resultText,
   subLines,
   onNext,
+  showNext,
+  countdown,
 }: {
   icon: string;
   resultName: string;
   resultText: string;
   subLines: string[];
   onNext: () => void;
+  showNext: boolean;
+  countdown: number;
 }) {
   const slideAnim = useRef(new Animated.Value(-100)).current;
 
@@ -2348,9 +2383,15 @@ function RevealResult({
           <Text style={styles.revealToastSub} numberOfLines={1}>{subLines[0]}</Text>
         )}
       </View>
-      <TouchableOpacity style={styles.revealToastBtn} onPress={onNext} activeOpacity={0.85}>
-        <Text style={styles.revealToastBtnText}>Next →</Text>
-      </TouchableOpacity>
+      {showNext ? (
+        <TouchableOpacity style={styles.revealToastBtn} onPress={onNext} activeOpacity={0.85}>
+          <Text style={styles.revealToastBtnText}>Next →</Text>
+        </TouchableOpacity>
+      ) : (
+        <View style={styles.revealToastCountdown}>
+          <Text style={styles.revealToastCountdownText}>{Math.max(0, countdown)}</Text>
+        </View>
+      )}
     </Animated.View>
   );
 }
@@ -3300,6 +3341,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   revealToastBtnText: { color: C.textOnGold, fontSize: FS.sm, fontWeight: '900', letterSpacing: 0.3 },
+  revealToastCountdown: {
+    width: 36, height: 36, borderRadius: 18,
+    borderWidth: 1.5, borderColor: C.border,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  revealToastCountdownText: { color: C.textSub, fontSize: FS.base, fontWeight: '700' },
   challengerTransitionOverlay: {
     position: 'absolute',
     top: 0,
