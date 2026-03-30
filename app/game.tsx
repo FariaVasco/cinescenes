@@ -1321,13 +1321,13 @@ export default function GameScreen() {
               </Text>
               <Timeline
                 ref={amActive ? timelineRef : undefined}
-                timeline={amActive ? timeline : myTimeline}
+                timeline={timeline}
                 currentCardMovie={amActive ? (movie ?? undefined) : undefined}
                 interactive={amActive}
                 selectedInterval={amActive ? selectedInterval : null}
                 onIntervalSelect={amActive ? setSelectedInterval : () => {}}
                 onConfirm={amActive ? handleAnimatedConfirm : () => {}}
-                placedMovies={amActive ? placedMovies : myPlacedMovies}
+                placedMovies={placedMovies}
                 hideFloatingCard
               />
             </Animated.View>
@@ -1352,12 +1352,12 @@ export default function GameScreen() {
                   Waiting for {activePlayer?.display_name} to place the card…
                 </Text>
                 <Timeline
-                  timeline={myTimeline}
+                  timeline={timeline}
                   interactive={false}
                   selectedInterval={null}
                   onIntervalSelect={() => {}}
                   onConfirm={() => {}}
-                  placedMovies={myPlacedMovies}
+                  placedMovies={placedMovies}
                   hideFloatingCard
                 />
               </View>
