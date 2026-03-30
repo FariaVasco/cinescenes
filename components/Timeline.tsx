@@ -272,14 +272,16 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
       );
     }
 
-    // ── Challenger coin — visible in all modes ──
-    const coin = challengerPlacements?.find(c => c.interval === index);
-    if (coin) {
+    // ── Challenger coins — visible in all modes (multiple per interval allowed) ──
+    const coins = challengerPlacements?.filter(c => c.interval === index) ?? [];
+    if (coins.length > 0) {
       return (
         <View key={`gap-${index}`} style={styles.coinWrap} onStartShouldSetResponder={() => true}>
-          <View style={styles.coinCircle}>
-            <Text style={styles.coinInitials}>🪙</Text>
-          </View>
+          {coins.map((coin, i) => (
+            <View key={i} style={styles.coinCircle}>
+              <Text style={styles.coinInitials}>{coin.label.charAt(0).toUpperCase()}</Text>
+            </View>
+          ))}
         </View>
       );
     }
@@ -461,6 +463,8 @@ const styles = StyleSheet.create({
     height: 100,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 6,
+    overflow: 'hidden',
   },
   coinLabel: {
     position: 'absolute',
