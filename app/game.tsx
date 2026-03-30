@@ -111,7 +111,15 @@ export default function GameScreen() {
   const challengeWindowStart = useRef<number | null>(null);
   const revealTriggered = useRef(false);
   const nextTurnInProgress = useRef(false);
+  const [nextTurnPending, setNextTurnPending] = useState(false);
   const challengeDecisionMade = useRef(false);
+  // Set to true while a local turn/placement write is in-flight so the poll doesn't
+  // overwrite our optimistic state with stale DB data before the write lands.
+  const pendingTurnWrite = useRef(false);
+  const [showBetReveal, setShowBetReveal] = useState(false);
+  const [betRevealCount, setBetRevealCount] = useState(0);
+  const betRevealTriggered = useRef(false);
+  const betRevealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [revealPhase, setRevealPhase] = useState<'suspense' | 'flip' | 'result'>('suspense');
   const [autoNextCountdown, setAutoNextCountdown] = useState(5);
   const autoNextIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -275,6 +283,34 @@ export default function GameScreen() {
       }
     };
   }, [revealPhase]);
+
+  // Bet-reveal animation: counts up betRevealCount once per participant, then calls handleReveal()
+  useEffect(() => {
+    if (!showBetReveal) return;
+    const ct = currentTurnRef.current;
+    if (!ct) return;
+    // Participants: active player + all finalised challenge rows (sorted by created_at)
+    const finalised = [...challenges]
+      .filter(c => c.interval_index !== -1)
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    const total = 1 + finalised.length; // active player + challengers/passers
+    let count = 0;
+    const tick = () => {
+      count++;
+      setBetRevealCount(count);
+      if (count < total) {
+        betRevealTimerRef.current = setTimeout(tick, 1100);
+      } else {
+        // All revealed — brief pause then flip the card (active player only)
+        betRevealTimerRef.current = setTimeout(() => {
+          if (isActivePlayer()) handleReveal();
+        }, 1400);
+      }
+    };
+    // Initial pause: let "All bets are in!" sink in
+    betRevealTimerRef.current = setTimeout(tick, 1000);
+    return () => { if (betRevealTimerRef.current) { clearTimeout(betRevealTimerRef.current); betRevealTimerRef.current = null; } };
+  }, [showBetReveal]);
 
   // Lock the Reveal button for 5.5 s after challenging starts
   // (gives everyone the challenge window + buffer before reveal is allowed)
@@ -462,7 +498,13 @@ export default function GameScreen() {
       const statusChanged = prevTurn?.status !== latestTurn.status;
       const placedIntervalChanged = prevTurn?.placed_interval !== latestTurn.placed_interval;
 
-      if (turnChanged || statusChanged || placedIntervalChanged) {
+      // If a local write is in-flight, skip overwriting our optimistic turn state
+      // with stale DB data. The next poll (after the write lands) will catch up.
+      const shouldUpdateTurn = !pendingTurnWrite.current
+        ? (turnChanged || statusChanged || placedIntervalChanged)
+        : turnChanged; // only allow cross-turn updates while pending
+
+      if (shouldUpdateTurn) {
         currentTurnRef.current = latestTurn;
 
         if (turnChanged && freshPlayers) {
@@ -519,7 +561,12 @@ export default function GameScreen() {
           challengeWindowStart.current = null;
           revealTriggered.current = false;
           nextTurnInProgress.current = false;
+          setNextTurnPending(false);
           challengeDecisionMade.current = false;
+          betRevealTriggered.current = false;
+          if (betRevealTimerRef.current) { clearTimeout(betRevealTimerRef.current); betRevealTimerRef.current = null; }
+          setShowBetReveal(false);
+          setBetRevealCount(0);
           setRevealPhase('flip');
           setWinnerPairs([]);
           setMovieGuess('');
@@ -552,33 +599,35 @@ export default function GameScreen() {
       }
 
 
-      // Auto-reveal: active player's device triggers once the challenge window settles
-      if (
-        latestTurn?.status === 'challenging' &&
-        myPlayerId === latestTurn.active_player_id &&
-        !revealTriggered.current
-      ) {
-        // allSettled: no one is still picking (no interval_index === -1)
-        const allSettled = (cData ?? []).every((c: Challenge) => c.interval_index !== -1);
-        // allDecided: every non-active player has a row, OR challenger slots are all filled
-        const observers = players.filter(p => p.id !== latestTurn.active_player_id);
+      // Bet-reveal trigger: all devices show the "reveal bets" overlay when all decisions are in.
+      // Active player's device also handles the fallback timer.
+      if (latestTurn?.status === 'challenging' && !betRevealTriggered.current) {
+        const cArr = cData ?? [];
+        const allSettled = cArr.every((c: Challenge) => c.interval_index !== -1);
+        const observersPoll = (freshPlayers as Player[] | null)?.filter(p => p.id !== latestTurn.active_player_id)
+          ?? players.filter(p => p.id !== latestTurn.active_player_id);
         const activeTL = (freshPlayers as Player[] | null)?.find(p => p.id === latestTurn.active_player_id)?.timeline ?? [];
         const maxChallengersPoll = activeTL.length;
         const challengerLimitReachedPoll = maxChallengersPoll > 0 &&
-          (cData ?? []).filter((c: Challenge) => c.interval_index !== -2).length >= maxChallengersPoll;
-        const allDecided = observers.length > 0 &&
-          ((cData ?? []).length >= observers.length || challengerLimitReachedPoll);
-        // Initialize window if not set (e.g. fresh load into an already-challenging turn)
-        if (challengeWindowStart.current === null) {
-          challengeWindowStart.current = (allDecided && allSettled) ? Date.now() - 14000 : Date.now();
-        }
-        const elapsed = Date.now() - challengeWindowStart.current;
-        // Reveal immediately once every observer has decided and none are still picking.
-        // Fallback: 6.5 s after placement (handles disconnected players).
-        // Hard cutoff: 15 s.
-        if ((allDecided && allSettled) || (elapsed > 6500 && allSettled) || elapsed > 15000) {
-          revealTriggered.current = true;
-          handleReveal();
+          cArr.filter((c: Challenge) => c.interval_index !== -2).length >= maxChallengersPoll;
+        const allDecided = observersPoll.length > 0 &&
+          (cArr.length >= observersPoll.length || challengerLimitReachedPoll);
+
+        // Active player: also initialize fallback timer and handle hard cutoffs
+        if (myPlayerId === latestTurn.active_player_id && !revealTriggered.current) {
+          if (challengeWindowStart.current === null) {
+            challengeWindowStart.current = (allDecided && allSettled) ? Date.now() - 14000 : Date.now();
+          }
+          const elapsed = Date.now() - challengeWindowStart.current;
+          if ((allDecided && allSettled) || (elapsed > 6500 && allSettled) || elapsed > 15000) {
+            revealTriggered.current = true;
+            betRevealTriggered.current = true;
+            setShowBetReveal(true);
+          }
+        } else if (allDecided && allSettled) {
+          // Non-active player: trigger overlay once all bets are confirmed
+          betRevealTriggered.current = true;
+          setShowBetReveal(true);
         }
       }
     }
@@ -643,6 +692,32 @@ export default function GameScreen() {
 
   // ── Helpers ──
 
+  function intervalToRevealText(idx: number | null | undefined, sortedYears: number[]): string {
+    if (idx === null || idx === undefined) return '?';
+    if (idx === -2 || idx === -3) return 'Passed';
+    if (sortedYears.length === 0) return 'first card ever';
+    if (idx === 0) return `before ${sortedYears[0]}`;
+    if (idx >= sortedYears.length) return `after ${sortedYears[sortedYears.length - 1]}`;
+    return `between ${sortedYears[idx - 1]} and ${sortedYears[idx]}`;
+  }
+
+  function buildBetRevealRows(turn: Turn, sortedTimeline: number[]): Array<{ emoji: string; name: string; intervalText: string }> {
+    const ap = getPlayer(turn.active_player_id);
+    const rows = [{ emoji: '🎬', name: ap?.display_name ?? '?', intervalText: intervalToRevealText(turn.placed_interval, sortedTimeline) }];
+    const sorted = [...challenges]
+      .filter(c => c.interval_index !== -1)
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    for (const c of sorted) {
+      const p = getPlayer(c.challenger_id);
+      rows.push({
+        emoji: c.interval_index >= 0 ? '⚡' : '💤',
+        name: p?.display_name ?? '?',
+        intervalText: c.interval_index >= 0 ? intervalToRevealText(c.interval_index, sortedTimeline) : 'Passed',
+      });
+    }
+    return rows;
+  }
+
   function getPlayer(id: string | null) {
     return players.find((p) => p.id === id) ?? null;
   }
@@ -656,19 +731,23 @@ export default function GameScreen() {
   async function handleLetsDraw() {
     if (!currentTurn) return;
     const optimistic = { ...currentTurn, status: 'placing' as const };
+    pendingTurnWrite.current = true;
     setLocalTurn(optimistic);
     setCurrentTurn(optimistic);
     currentTurnRef.current = optimistic;
     await db.from('turns').update({ status: 'placing' }).eq('id', currentTurn.id);
+    pendingTurnWrite.current = false;
   }
 
   async function handleConfirmPlacement() {
     if (!currentTurn || selectedInterval === null) return;
     const optimistic = { ...currentTurn, placed_interval: selectedInterval, status: 'challenging' as const };
+    pendingTurnWrite.current = true;
     setLocalTurn(optimistic);
     setCurrentTurn(optimistic);
     currentTurnRef.current = optimistic;
     await db.from('turns').update({ placed_interval: selectedInterval, status: 'challenging' }).eq('id', currentTurn.id);
+    pendingTurnWrite.current = false;
   }
 
   async function handleChallenge() {
@@ -676,6 +755,9 @@ export default function GameScreen() {
     if (challengeDecisionMade.current) return;
     challengeDecisionMade.current = true;
     setHasPassed(false);
+    // Optimistic: close the decision panel immediately
+    const tempChallenge = { id: 'pending', turn_id: currentTurn.id, challenger_id: myPlayerId!, interval_index: -1, created_at: new Date().toISOString() } as Challenge;
+    setMyChallenge(tempChallenge);
     // Challenging always costs 1 coin — optimistic update first, then persist
     const challenger = players.find(p => p.id === myPlayerId);
     if (challenger && challenger.coins > 0) {
@@ -683,7 +765,7 @@ export default function GameScreen() {
       const newPlayers = players.map(p => p.id === myPlayerId ? { ...p, coins: updatedCoins } : p);
       setLocalPlayers(newPlayers);
       setPlayers(newPlayers);
-      await db.from('players').update({ coins: updatedCoins }).eq('id', myPlayerId);
+      db.from('players').update({ coins: updatedCoins }).eq('id', myPlayerId);
     }
     const { data: inserted } = await db
       .from('challenges')
@@ -697,6 +779,9 @@ export default function GameScreen() {
     challengeDecisionMade.current = true;
     setHasPassed(true);
     if (!currentTurn) return;
+    // Optimistic: close the decision panel immediately
+    const tempChallenge = { id: 'pending', turn_id: currentTurn.id, challenger_id: myPlayerId!, interval_index: -2, created_at: new Date().toISOString() } as Challenge;
+    setMyChallenge(tempChallenge);
     const { data: inserted } = await db
       .from('challenges')
       .insert({ turn_id: currentTurn.id, challenger_id: myPlayerId!, interval_index: -2 })
@@ -706,9 +791,9 @@ export default function GameScreen() {
 
   async function handleConfirmChallengeInterval() {
     if (!myChallenge || challengeInterval === null) return;
-    await db.from('challenges').update({ interval_index: challengeInterval }).eq('id', myChallenge.id);
     setMyChallenge({ ...myChallenge, interval_index: challengeInterval });
     setChallengeConfirmed(true);
+    db.from('challenges').update({ interval_index: challengeInterval }).eq('id', myChallenge.id);
   }
 
   async function handleWithdrawChallenge() {
@@ -893,24 +978,27 @@ export default function GameScreen() {
     // Guard: prevent double-tap on this device
     if (nextTurnInProgress.current) return;
     nextTurnInProgress.current = true;
+    setNextTurnPending(true);
     try {
       const g = game;
       // Use the ref so we never act on a stale closure value
       const ct = currentTurnRef.current;
       if (!g || !ct) return;
 
-      let movie = activeMovies.find((m) => m.id === ct.movie_id) ?? null;
-      if (!movie) {
-        // Not in cache (e.g. insane mode movie) — fetch from DB
-        const { data: dbMovie } = await db.from('movies').select('*').eq('id', ct.movie_id).single();
-        movie = dbMovie ?? null;
-      }
+      // Fetch movie and fresh players in parallel to cut initial latency
+      const movieFromCache = activeMovies.find((m) => m.id === ct.movie_id) ?? null;
+      const [movieResult, freshPlayersResult] = await Promise.all([
+        movieFromCache
+          ? Promise.resolve({ data: movieFromCache })
+          : db.from('movies').select('*').eq('id', ct.movie_id).single(),
+        db.from('players').select('*').eq('game_id', g.id).order('created_at') as Promise<{ data: Player[] | null }>,
+      ]);
+      const movie = (movieResult.data as typeof movieFromCache) ?? null;
       if (!movie) return;
 
       // Fetch fresh player data BEFORE the cross-device guard so winner computation
       // and myMoviePairs sync happen on EVERY device, not just the one that "wins the race".
-      const { data: freshPlayers } = await db
-        .from('players').select('*').eq('game_id', g.id).order('created_at') as { data: Player[] | null };
+      const { data: freshPlayers } = freshPlayersResult;
       const latestPlayers: Player[] = freshPlayers ?? players;
 
       // Compute winner — needed here so myMoviePairs stays correct regardless of which
@@ -1076,6 +1164,7 @@ export default function GameScreen() {
       await poll();
     } finally {
       nextTurnInProgress.current = false;
+      setNextTurnPending(false);
     }
   }
 
@@ -1749,6 +1838,12 @@ export default function GameScreen() {
         </Snackbar>
         {leaveModal}
         {castOverlay}
+        {showBetReveal && currentTurn && (
+          <BetRevealOverlay
+            rows={buildBetRevealRows(currentTurn, [...(timeline ?? [])].sort((a, b) => a - b))}
+            revealCount={betRevealCount}
+          />
+        )}
       </View>
     );
   }
@@ -2054,6 +2149,7 @@ export default function GameScreen() {
               subLines={subLines}
               onNext={handleNextTurn}
               showNext={amActive}
+              nextPending={nextTurnPending}
               countdown={autoNextCountdown}
             />
           )}
@@ -2349,6 +2445,7 @@ function RevealResult({
   subLines,
   onNext,
   showNext,
+  nextPending,
   countdown,
 }: {
   icon: string;
@@ -2357,6 +2454,7 @@ function RevealResult({
   subLines: string[];
   onNext: () => void;
   showNext: boolean;
+  nextPending: boolean;
   countdown: number;
 }) {
   const slideAnim = useRef(new Animated.Value(-100)).current;
@@ -2384,8 +2482,10 @@ function RevealResult({
         )}
       </View>
       {showNext ? (
-        <TouchableOpacity style={styles.revealToastBtn} onPress={onNext} activeOpacity={0.85}>
-          <Text style={styles.revealToastBtnText}>Next →</Text>
+        <TouchableOpacity style={styles.revealToastBtn} onPress={onNext} activeOpacity={0.85} disabled={nextPending}>
+          {nextPending
+            ? <ActivityIndicator size="small" color={C.textSub} />
+            : <Text style={styles.revealToastBtnText}>Next →</Text>}
         </TouchableOpacity>
       ) : (
         <View style={styles.revealToastCountdown}>
@@ -2397,6 +2497,76 @@ function RevealResult({
     </Animated.View>
   );
 }
+
+// ── Bet-reveal overlay ────────────────────────────────────────────────────────
+
+function BetRevealRow({ emoji, name, intervalText }: { emoji: string; name: string; intervalText: string }) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(10)).current;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(opacity, { toValue: 1, duration: 380, useNativeDriver: true }),
+      Animated.spring(translateY, { toValue: 0, friction: 9, tension: 120, useNativeDriver: true }),
+    ]).start();
+  }, []);
+  const isPass = intervalText === 'Passed';
+  return (
+    <Animated.View style={[betRevealStyles.row, { opacity, transform: [{ translateY }] }]}>
+      <Text style={betRevealStyles.rowEmoji}>{emoji}</Text>
+      <View style={betRevealStyles.rowBody}>
+        <Text style={betRevealStyles.rowName}>{name}</Text>
+        <Text style={[betRevealStyles.rowInterval, isPass && betRevealStyles.rowIntervalPass]}>{intervalText}</Text>
+      </View>
+    </Animated.View>
+  );
+}
+
+function BetRevealOverlay({ rows, revealCount }: { rows: Array<{ emoji: string; name: string; intervalText: string }>; revealCount: number }) {
+  const bgOpacity = useRef(new Animated.Value(0)).current;
+  const titleOpacity = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.sequence([
+      Animated.timing(bgOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
+      Animated.timing(titleOpacity, { toValue: 1, duration: 350, useNativeDriver: true }),
+    ]).start();
+  }, []);
+  const allShown = revealCount >= rows.length && rows.length > 0;
+  return (
+    <Animated.View style={[StyleSheet.absoluteFill, betRevealStyles.overlay, { opacity: bgOpacity }]}>
+      <Animated.View style={[betRevealStyles.content, { opacity: titleOpacity }]}>
+        <Text style={betRevealStyles.title}>All bets are in</Text>
+        <Text style={betRevealStyles.subtitle}>Let's see what everyone picked…</Text>
+      </Animated.View>
+      <View style={betRevealStyles.rows}>
+        {rows.slice(0, revealCount).map((r, i) => (
+          <BetRevealRow key={i} emoji={r.emoji} name={r.name} intervalText={r.intervalText} />
+        ))}
+      </View>
+      {allShown && (
+        <View style={betRevealStyles.flippingRow}>
+          <ActivityIndicator size="small" color={C.gold} />
+          <Text style={betRevealStyles.flippingText}>Flipping the card…</Text>
+        </View>
+      )}
+    </Animated.View>
+  );
+}
+
+const betRevealStyles = StyleSheet.create({
+  overlay: { backgroundColor: 'rgba(0,0,0,0.93)', justifyContent: 'center', paddingHorizontal: 28, gap: 6 },
+  content: { alignItems: 'center', marginBottom: 20 },
+  title: { color: C.gold, fontSize: FS.xl, fontWeight: '900', letterSpacing: 0.3 },
+  subtitle: { color: C.textSub, fontSize: FS.sm, marginTop: 4 },
+  rows: { gap: 10 },
+  row: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.surfaceHigh, borderRadius: R.card, paddingVertical: 12, paddingHorizontal: 16, gap: 12 },
+  rowEmoji: { fontSize: 22, width: 28, textAlign: 'center' },
+  rowBody: { flex: 1 },
+  rowName: { color: C.textPrimary, fontSize: FS.base, fontWeight: '700' },
+  rowInterval: { color: C.gold, fontSize: FS.sm, fontWeight: '600', marginTop: 1 },
+  rowIntervalPass: { color: C.textMuted },
+  flippingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 20 },
+  flippingText: { color: C.textSub, fontSize: FS.sm },
+});
 
 // ── Confetti burst (correct answer) ──────────────────────────────────────────
 // Two corner cannons (top-left + top-right) firing in a fan arc.
