@@ -472,8 +472,8 @@ export default function LocalLobbyScreen() {
           </TouchableOpacity>
           <Text style={styles.codeHint}>
             {localGame.visibility === 'invite_only'
-              ? "Invite-only · won't appear in public games · share this code to invite"
-              : 'Open to everyone · anyone can join from the list · or share this code'}
+              ? '🔒  Invite-only · tap to copy & share'
+              : '🌐  Public · tap to copy & share'}
           </Text>
         </View>
 
@@ -618,8 +618,8 @@ export default function LocalLobbyScreen() {
             </View>
             <Text style={styles.visibilityHint}>
               {visibility === 'invite_only'
-                ? "Invite-only · won't appear in public games · join by code only"
-                : 'Open to everyone · anyone can find it · joinable by code too'}
+                ? '🔒  Private · join by code only'
+                : '🌐  Public · open to everyone'}
             </Text>
           </View>
         )}
@@ -679,7 +679,7 @@ const styles = StyleSheet.create({
   visibilityOptionActive: { backgroundColor: C.gold },
   visibilityOptionText: { color: C.textSub, fontSize: FS.sm, fontWeight: '700' },
   visibilityOptionTextActive: { color: C.textOnGold },
-  visibilityHint: { color: C.textMuted, fontSize: FS.xs, textAlign: 'center' },
+  visibilityHint: { color: C.textMuted, fontSize: FS.sm, textAlign: 'center' },
 
   waitingHeader: { alignItems: 'center', paddingTop: 24, paddingBottom: 16, gap: 6 },
   waitingLabel: {
