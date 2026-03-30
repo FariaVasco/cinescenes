@@ -29,6 +29,7 @@
     }
   },
   "dependencies": {
+    "airplay-picker": "file:./modules/airplay-picker",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-native-google-signin/google-signin": "^16.1.2",
     "@supabase/supabase-js": "^2.97.0",

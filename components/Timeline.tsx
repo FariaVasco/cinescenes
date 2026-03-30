@@ -527,7 +527,7 @@ const styles = StyleSheet.create({
   activeGap: {
     width: 80,
     height: 100,
-    marginHorizontal: 16,
+    marginHorizontal: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },

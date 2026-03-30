@@ -15,6 +15,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Keyboard,
+  PanResponder,
 } from 'react-native';
 import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
 import { transcribeAudio } from '@/lib/whisper';
@@ -34,6 +35,7 @@ import { Timeline, TimelineHandle } from '@/components/Timeline';
 import { ChallengeTimer } from '@/components/ChallengeTimer';
 import { CardBack, CardFront } from '@/components/MovieCard';
 import Svg, { Circle, Path } from 'react-native-svg';
+import { AirPlayButton } from 'airplay-picker';
 
 const REPORT_OPTIONS = [
   { id: 'spoiler',       label: '🎬  Title or info is revealed in the clip' },
@@ -332,17 +334,20 @@ export default function GameScreen() {
     prefetchedInsaneMovieRef.current = fetchRandomInsaneMovie(db);
   }, [currentTurn?.status, currentTurn?.id]);
 
-  // Auto-reveal: when all challengers have decided and the lock period has passed,
-  // trigger reveal automatically on the active player's device after a short grace period.
+  // Auto-reveal: trigger when all observers have committed (bypass lock) or when the
+  // lock expires with no pending pickers.
   useEffect(() => {
     const amActive = myPlayerId === currentTurn?.active_player_id;
     if (currentTurn?.status !== 'challenging' || !amActive) return;
-    const canReveal = !revealLocked && !challenges.some(c => c.interval_index === -1);
+    const noPendingPickers = !challenges.some(c => c.interval_index === -1);
+    const observers = players.filter(p => p.id !== currentTurn.active_player_id);
+    const everybodyIn = observers.length > 0 && challenges.length >= observers.length && noPendingPickers;
+    const canReveal = everybodyIn || (!revealLocked && noPendingPickers);
     if (!canReveal) return;
-    const t = setTimeout(() => { handleReveal(); }, 3000);
+    const t = setTimeout(() => { handleReveal(); }, 1000);
     return () => clearTimeout(t);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentTurn?.status, revealLocked, challenges, myPlayerId, currentTurn?.active_player_id]);
+  }, [currentTurn?.status, revealLocked, challenges, players, myPlayerId, currentTurn?.active_player_id]);
 
   // When reveal starts and a challenger won, fetch their existing won turns so all
   // devices can show the correct movies in the challenger's timeline without guessing.
@@ -698,62 +703,8 @@ export default function GameScreen() {
     setChallengeInterval(null);
   }
 
-  async function handleAnimatedConfirm() {
-    const measureCard = (): Promise<{ pageX: number; pageY: number } | null> =>
-      new Promise((resolve) => {
-        if (!floatingCardRef.current) { resolve(null); return; }
-        const timer = setTimeout(() => resolve(null), 200);
-        floatingCardRef.current.measure(
-          (_: number, __: number, _w: number, _h: number, pageX: number, pageY: number) => {
-            clearTimeout(timer);
-            resolve({ pageX, pageY });
-          },
-        );
-      });
-
-    const [cardPos, gapPos] = await Promise.all([
-      measureCard(),
-      timelineRef.current?.measureGap() ?? null,
-    ]);
-
-    if (cardPos && gapPos) {
-      flyAnimX.setValue(0);
-      flyAnimY.setValue(0);
-      flyAnimOpacity.setValue(1);
-      setFlyStart({ x: cardPos.pageX, y: cardPos.pageY });
-      setFlyVisible(true);
-      cardAnimOpacity.setValue(0);
-      // Fade the panel out visually but keep the layout (marginLeft: 120) so the
-      // measured gap position stays valid throughout the fly animation.
-      Animated.timing(leftPanelFade, { toValue: 0, duration: 180, useNativeDriver: true }).start();
-
-      await new Promise<void>((resolve) => {
-        Animated.parallel([
-          Animated.timing(flyAnimX, {
-            toValue: gapPos.pageX - cardPos.pageX,
-            duration: 800,
-            easing: Easing.out(Easing.cubic),
-            useNativeDriver: true,
-          }),
-          Animated.timing(flyAnimY, {
-            toValue: gapPos.pageY - cardPos.pageY,
-            duration: 800,
-            easing: Easing.out(Easing.cubic),
-            useNativeDriver: true,
-          }),
-          Animated.sequence([
-            Animated.delay(720),
-            Animated.timing(flyAnimOpacity, { toValue: 0, duration: 80, useNativeDriver: true }),
-          ]),
-        ]).start(() => resolve());
-      });
-
-      setFlyVisible(false);
-    } else {
-      // Fallback: panel fades out
-      Animated.timing(leftPanelFade, { toValue: 0, duration: 300, useNativeDriver: true }).start();
-    }
-
+  function handleAnimatedConfirm() {
+    Animated.timing(leftPanelFade, { toValue: 0, duration: 200, useNativeDriver: true }).start();
     challengeWindowStart.current = Date.now();
     revealTriggered.current = false;
     handleConfirmPlacement();
@@ -1274,11 +1225,16 @@ export default function GameScreen() {
             <Text style={styles.castCloseBtnText}>✕</Text>
           </TouchableOpacity>
         </View>
-        <Text style={styles.castSheetBody}>
-          {Platform.OS === 'ios'
-            ? '1. Swipe from top-right → Control Centre\n2. Tap Screen Mirroring\n3. Select your Apple TV or AirPlay 2 TV'
-            : '1. Swipe down twice → Quick Settings\n2. Tap Cast\n3. Select your TV or Chromecast'}
-        </Text>
+        {Platform.OS === 'ios' ? (
+          <View style={styles.castAirPlayRow}>
+            <Text style={styles.castAirPlayLabel}>Mirror to TV via AirPlay</Text>
+            <AirPlayButton style={styles.castAirPlayBtn} />
+          </View>
+        ) : (
+          <Text style={styles.castSheetBody}>
+            Swipe down twice → Quick Settings → Tap Cast
+          </Text>
+        )}
         <TouchableOpacity style={styles.castStartBtn} onPress={() => { setTvMode(true); setCastVisible(false); }}>
           <Text style={styles.castStartBtnText}>Start Playing →</Text>
         </TouchableOpacity>
@@ -1350,6 +1306,11 @@ export default function GameScreen() {
         <SafeAreaView style={styles.container}>
           <View style={styles.gameArea}>
             <Animated.View style={styles.timelineAreaFull}>
+              {amActive && (
+                <Text style={styles.placePrompt}>
+                  {selectedInterval === null ? 'Where does it belong?' : 'Confirm your pick'}
+                </Text>
+              )}
               <Timeline
                 ref={timelineRef}
                 timeline={timeline}
@@ -1362,49 +1323,14 @@ export default function GameScreen() {
                 hideFloatingCard
               />
             </Animated.View>
-            <Animated.View style={[styles.placingBottomPanel, { opacity: leftPanelFade }]}>
-              {amActive ? (
-                <View style={styles.placingBottomRow}>
-                  <Animated.View
-                    ref={floatingCardRef}
-                    style={[styles.placingBottomCard, {
-                      transform: [{ translateY: cardAnimY }, { scale: cardAnimScale }],
-                      opacity: cardAnimOpacity,
-                    }]}
-                  >
-                    <CardBack width={80} height={100} />
-                  </Animated.View>
-                  <View style={styles.placingBottomHint}>
-                    <Text style={[styles.phaseLabel, styles.placingLabel]}>Where does it go?</Text>
-                    <Text style={styles.tapHint}>
-                      {selectedInterval === null ? 'Tap + to pick a spot' : 'Tap ✓ to confirm'}
-                    </Text>
-                  </View>
-                </View>
-              ) : (
-                <Text style={[styles.phaseLabel, styles.placingLabel]}>
-                  {`Waiting for ${activePlayer?.display_name}…`}
-                </Text>
-              )}
-            </Animated.View>
+            {!amActive && (
+              <Animated.View style={[styles.placingBottomStrip, { opacity: leftPanelFade }]}>
+                <Text style={styles.placingStripText}>{`Waiting for ${activePlayer?.display_name}…`}</Text>
+              </Animated.View>
+            )}
           </View>
 
           <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} onCast={() => setCastVisible(true)} />
-          {flyVisible && (
-            <View style={StyleSheet.absoluteFill} pointerEvents="none">
-              <Animated.View
-                style={{
-                  position: 'absolute',
-                  left: flyStart.x,
-                  top: flyStart.y,
-                  transform: [{ translateX: flyAnimX }, { translateY: flyAnimY }],
-                  opacity: flyAnimOpacity,
-                }}
-              >
-                <CardBack width={80} height={100} />
-              </Animated.View>
-            </View>
-          )}
           {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} />}
           {leaveModal}
         {castOverlay}
@@ -1817,7 +1743,9 @@ export default function GameScreen() {
     const canChallenge = !challengerLimitReached && timeline.length > 0;
 
     const pendingChallengers = challenges.some(c => c.interval_index === -1);
-    const canRevealNow = !revealLocked && !pendingChallengers;
+    const observerCount = players.filter(p => p.id !== currentTurn.active_player_id).length;
+    const everybodyIn = observerCount > 0 && challenges.length >= observerCount && !pendingChallengers;
+    const canRevealNow = everybodyIn || (!revealLocked && !pendingChallengers);
     const myPlayerObj = players.find(p => p.id === myPlayerId);
     const hasCoins = (myPlayerObj?.coins ?? 0) > 0;
 
@@ -1856,6 +1784,21 @@ export default function GameScreen() {
       statusEmoji = '⏳';
     }
 
+    // Status badge: shown as a floating label inside the timeline, no layout impact
+    let badgeText: string | null = null;
+    if (amActive) {
+      badgeText = pendingChallengers ? 'Waiting for others to decide…' : canRevealNow ? 'Revealing…' : 'All decided';
+    } else if (isPickingInterval) {
+      badgeText = '↑  Tap a gap to place your coin';
+    } else if (!inSeqPhase && myChallenge?.interval_index === -1) {
+      badgeText = '⚡ You challenged!  Waiting for others…';
+    } else if (inSeqPhase && myChallenge !== null && myChallenge.interval_index >= 0 && !isPickingInterval) {
+      badgeText = 'Coin placed.  Waiting for others…';
+    } else if (myChallenge?.interval_index === -3) {
+      badgeText = 'You withdrew.';
+    }
+    const showChallengePanel = !amActive && !alreadyDecided && !inSeqPhase;
+
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.gameArea}>
@@ -1874,74 +1817,44 @@ export default function GameScreen() {
               blockedIntervals={isPickingInterval ? blockedIntervals : undefined}
               hideFloatingCard
             />
+            {badgeText && (
+              <View style={styles.challengeBadge} pointerEvents="none">
+                <Text style={styles.challengeBadgeText}>{badgeText}</Text>
+              </View>
+            )}
+            {isPickingInterval && !amFirstChallenger && (
+              <TouchableOpacity style={styles.withdrawOverlayBtn} onPress={handleWithdrawChallenge} activeOpacity={0.7}>
+                <Text style={styles.withdrawOverlayBtnText}>↩  Withdraw</Text>
+              </TouchableOpacity>
+            )}
           </Animated.View>
 
-          <Animated.View style={[styles.challengeBottomPanel, { transform: [{ translateY: challengePanelY }] }]}>
-            {/* Decision phase — not yet decided */}
-            {!amActive && !alreadyDecided && !inSeqPhase && (
-              <>
-                <ChallengeTimer seconds={10} onExpire={handlePass} barMode />
-                <View style={styles.challengeBottomActions}>
-                  <TouchableOpacity onPress={handlePass} activeOpacity={0.7} style={styles.passBtn}>
-                    <Text style={styles.passBtnLabel}>Pass</Text>
+          {showChallengePanel && (
+            <Animated.View style={[styles.challengeBottomPanel, { transform: [{ translateY: challengePanelY }] }]}>
+              <ChallengeTimer seconds={10} onExpire={handlePass} barMode />
+              <View style={styles.challengeBottomActions}>
+                <TouchableOpacity onPress={handlePass} activeOpacity={0.7} style={styles.passBtn}>
+                  <Text style={styles.passBtnLabel}>Pass</Text>
+                </TouchableOpacity>
+                {canChallenge ? (
+                  <TouchableOpacity
+                    style={[styles.challengeBtn, !hasCoins && styles.challengeBtnDisabled]}
+                    onPress={hasCoins ? handleChallenge : undefined}
+                    activeOpacity={hasCoins ? 0.8 : 1}
+                  >
+                    <Text style={styles.challengeBtnText}>
+                      {hasCoins ? '⚡  Challenge' : 'No coins'}
+                    </Text>
+                    {hasCoins && <Text style={styles.challengeBtnSub}>1 coin</Text>}
                   </TouchableOpacity>
-                  {canChallenge ? (
-                    <TouchableOpacity
-                      style={[styles.challengeBtn, !hasCoins && styles.challengeBtnDisabled]}
-                      onPress={hasCoins ? handleChallenge : undefined}
-                      activeOpacity={hasCoins ? 0.8 : 1}
-                    >
-                      <Text style={styles.challengeBtnText}>
-                        {hasCoins ? '⚡  Challenge' : 'No coins'}
-                      </Text>
-                      {hasCoins && <Text style={styles.challengeBtnSub}>1 coin</Text>}
-                    </TouchableOpacity>
-                  ) : (
-                    <View style={[styles.challengeBtn, styles.challengeBtnDisabled]}>
-                      <Text style={styles.challengeBtnText}>All spots taken</Text>
-                    </View>
-                  )}
-                </View>
-              </>
-            )}
-            {/* Decision phase — challenged, waiting for others */}
-            {!amActive && !inSeqPhase && myChallenge?.interval_index === -1 && (
-              <View style={styles.challengeStatusStrip}>
-                <Text style={styles.challengeStatusStripText}>⚡ You challenged!  Waiting for others…</Text>
-              </View>
-            )}
-            {/* Sequential phase — picking interval */}
-            {isPickingInterval && (
-              <View style={styles.challengeStatusStrip}>
-                <Text style={styles.challengeStatusStripText}>↑  Tap a gap to place your coin</Text>
-                {!amFirstChallenger && (
-                  <TouchableOpacity onPress={handleWithdrawChallenge} activeOpacity={0.7} style={styles.passTextBtn}>
-                    <Text style={styles.passTextBtnText}>↩  Withdraw</Text>
-                  </TouchableOpacity>
+                ) : (
+                  <View style={[styles.challengeBtn, styles.challengeBtnDisabled]}>
+                    <Text style={styles.challengeBtnText}>All spots taken</Text>
+                  </View>
                 )}
               </View>
-            )}
-            {/* Sequential phase — already picked */}
-            {!amActive && inSeqPhase && myChallenge !== null && myChallenge.interval_index >= 0 && !isPickingInterval && (
-              <View style={styles.challengeStatusStrip}>
-                <Text style={styles.challengeStatusStripText}>Coin placed.  Waiting for others…</Text>
-              </View>
-            )}
-            {/* Sequential phase — withdrawn */}
-            {!amActive && myChallenge?.interval_index === -3 && (
-              <View style={styles.challengeStatusStrip}>
-                <Text style={styles.challengeStatusStripText}>You withdrew.</Text>
-              </View>
-            )}
-            {/* Active player status */}
-            {amActive && (
-              <View style={styles.challengeStatusStrip}>
-                <Text style={styles.challengeStatusStripText}>
-                  {pendingChallengers ? 'Waiting for others to decide…' : 'All decided — revealing…'}
-                </Text>
-              </View>
-            )}
-          </Animated.View>
+            </Animated.View>
+          )}
         </View>
 
         <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} onCast={() => setCastVisible(true)} />
@@ -2053,7 +1966,7 @@ export default function GameScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.gameArea}>
-          <Animated.View style={[styles.timelineAreaFull, styles.timelineAreaReveal, { opacity: timelineFade }]}>
+          <Animated.View style={[styles.timelineAreaFull, { opacity: timelineFade }]}>
             <Timeline
               timeline={displayTimeline}
               currentCardMovie={m}
@@ -2064,8 +1977,8 @@ export default function GameScreen() {
               placedInterval={displayInterval}
               placedLabel={amActive ? 'your pick' : 'their pick'}
               placedMovies={revealPlacedMovies}
-              revealingMovie={m}
-              insertDelay={showChallengerTimeline ? 700 : 2100}
+              revealingMovie={revealPhase !== 'suspense' ? m : undefined}
+              insertDelay={showChallengerTimeline && revealPhase !== 'suspense' ? 700 : undefined}
               trashAfter={(isTrash || (!!winningChallenger && !showChallengerTimeline)) && revealPhase === 'result' ? 1200 : undefined}
             />
           </Animated.View>
@@ -2174,10 +2087,26 @@ function MyTimelineSheet({ timeline, cards, onClose }: {
   onClose: () => void;
 }) {
   const CARD_W = 80, CARD_H = 100;
+  const translateY = useRef(new Animated.Value(0)).current;
+
+  const panResponder = useRef(PanResponder.create({
+    onMoveShouldSetPanResponder: (_, gs) => gs.dy > 5 && Math.abs(gs.dy) > Math.abs(gs.dx),
+    onPanResponderMove: (_, gs) => {
+      if (gs.dy > 0) translateY.setValue(gs.dy);
+    },
+    onPanResponderRelease: (_, gs) => {
+      if (gs.dy > 80 || gs.vy > 0.5) {
+        Animated.timing(translateY, { toValue: 600, duration: 220, useNativeDriver: true }).start(onClose);
+      } else {
+        Animated.spring(translateY, { toValue: 0, useNativeDriver: true }).start();
+      }
+    },
+  })).current;
+
   return (
     <View style={[StyleSheet.absoluteFill, styles.timelineSheetOverlay]} pointerEvents="box-none">
       <TouchableOpacity style={StyleSheet.absoluteFill} onPress={onClose} activeOpacity={1} />
-      <View style={styles.timelineSheetPanel}>
+      <Animated.View style={[styles.timelineSheetPanel, { transform: [{ translateY }] }]} {...panResponder.panHandlers}>
         <View style={styles.timelineSheetHandle} />
         <Text style={styles.timelineSheetTitle}>Your Timeline</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}
@@ -2191,10 +2120,7 @@ function MyTimelineSheet({ timeline, cards, onClose }: {
                 </View>;
           })}
         </ScrollView>
-        <TouchableOpacity onPress={onClose} style={styles.timelineSheetClose}>
-          <Text style={styles.timelineSheetCloseText}>Close ✕</Text>
-        </TouchableOpacity>
-      </View>
+      </Animated.View>
     </View>
   );
 }
@@ -2370,7 +2296,7 @@ function SuspenseOverlay({
   );
 }
 
-// ── Reveal result panel (slides up from bottom on result phase) ───────────────
+// ── Reveal result toast (drops in from top) ──────────────────────────────────
 
 function RevealResult({
   icon,
@@ -2385,36 +2311,33 @@ function RevealResult({
   subLines: string[];
   onNext: () => void;
 }) {
-  const slideAnim = useRef(new Animated.Value(220)).current;
+  const slideAnim = useRef(new Animated.Value(-100)).current;
 
   useEffect(() => {
     Animated.spring(slideAnim, {
       toValue: 0,
       useNativeDriver: true,
-      friction: 8,
-      tension: 65,
+      friction: 9,
+      tension: 70,
     }).start();
   }, []);
 
   return (
-    <Animated.View style={[styles.revealResult, { transform: [{ translateY: slideAnim }] }]}>
-      <View style={styles.revealResultAccentLine} />
-      <View style={styles.revealResultInner}>
-        <Text style={styles.revealResultIcon}>{icon}</Text>
-        <View style={styles.revealResultBody}>
-          <Text style={styles.revealResultHeadline} numberOfLines={2}>
-            {resultName
-              ? <><Text style={styles.revealResultHL}>{resultName}</Text>{' '}{resultText}</>
-              : resultText}
-          </Text>
-          {subLines.map((line, i) => (
-            <Text key={i} style={styles.revealResultSub} numberOfLines={1}>{line}</Text>
-          ))}
-        </View>
-        <TouchableOpacity style={styles.revealResultBtn} onPress={onNext} activeOpacity={0.85}>
-          <Text style={styles.revealResultBtnText}>Next →</Text>
-        </TouchableOpacity>
+    <Animated.View style={[styles.revealToast, { transform: [{ translateY: slideAnim }] }]}>
+      <Text style={styles.revealToastIcon}>{icon}</Text>
+      <View style={styles.revealToastBody}>
+        <Text style={styles.revealToastHeadline} numberOfLines={1}>
+          {resultName
+            ? <><Text style={styles.revealToastHL}>{resultName}</Text>{' '}{resultText}</>
+            : resultText}
+        </Text>
+        {subLines.length > 0 && (
+          <Text style={styles.revealToastSub} numberOfLines={1}>{subLines[0]}</Text>
+        )}
       </View>
+      <TouchableOpacity style={styles.revealToastBtn} onPress={onNext} activeOpacity={0.85}>
+        <Text style={styles.revealToastBtnText}>Next →</Text>
+      </TouchableOpacity>
     </Animated.View>
   );
 }
@@ -3105,32 +3028,32 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
   },
-  timelineAreaReveal: {
-    paddingBottom: 185,
+
+  placePrompt: {
+    position: 'absolute',
+    top: 10,
+    left: 0,
+    right: 0,
+    color: C.textSub,
+    fontSize: FS.sm,
+    fontWeight: '600',
+    textAlign: 'center',
+    zIndex: 1,
   },
-  placingBottomPanel: {
-    height: 132,
+  placingBottomStrip: {
     backgroundColor: C.bg,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: C.borderSubtle,
+    paddingVertical: 10,
     paddingHorizontal: 20,
+    alignItems: 'center',
     justifyContent: 'center',
   },
-  placingBottomRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-  },
-  placingBottomCard: {
-    shadowColor: C.gold,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  placingBottomHint: {
-    flex: 1,
-    gap: 4,
+  placingStripText: {
+    color: C.textSub,
+    fontSize: FS.sm,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   challengeBottomPanel: {
     backgroundColor: C.bg,
@@ -3213,6 +3136,35 @@ const styles = StyleSheet.create({
   },
   placingLabel: {
     textAlign: 'center',
+  },
+  challengeBadge: {
+    position: 'absolute',
+    bottom: 12,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+  },
+  challengeBadgeText: {
+    color: C.textSub,
+    fontSize: FS.sm,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  withdrawOverlayBtn: {
+    position: 'absolute',
+    bottom: 12,
+    right: 16,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+  },
+  withdrawOverlayBtnText: {
+    color: C.textSub,
+    fontSize: FS.sm,
+    fontWeight: '600',
   },
   watchingBadge: {
     alignSelf: 'flex-start',
@@ -3297,51 +3249,44 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
 
-  // ── Reveal result panel ──
-  revealResult: {
+  // ── Reveal result toast ──
+  revealToast: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: C.surface,
-    borderTopWidth: 1,
-    borderTopColor: C.border,
-    overflow: 'hidden',
-  },
-  revealResultAccentLine: {
-    height: 3,
-    backgroundColor: C.gold,
-  },
-  revealResultInner: {
+    top: 10,
+    left: 16,
+    right: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    gap: 14,
+    gap: 10,
+    backgroundColor: C.surface,
+    borderRadius: R.card,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: C.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 8,
   },
-  revealResultIcon: {
-    fontSize: 42,
-  },
-  revealResultBody: {
-    flex: 1,
-    gap: 3,
-  },
-  revealResultHeadline: {
+  revealToastIcon: { fontSize: 28 },
+  revealToastBody: { flex: 1, gap: 2 },
+  revealToastHeadline: {
     color: C.textPrimary,
-    fontSize: FS.lg,
+    fontSize: FS.base,
     fontWeight: '800',
-    lineHeight: 24,
   },
-  revealResultHL: { color: C.gold, fontWeight: '900' },
-  revealResultSub: { color: C.textSub, fontSize: FS.xs },
-  revealResultBtn: {
+  revealToastHL: { color: C.gold, fontWeight: '900' },
+  revealToastSub: { color: C.textSub, fontSize: FS.xs },
+  revealToastBtn: {
     backgroundColor: C.gold,
     borderRadius: R.btn,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     alignItems: 'center',
   },
-  revealResultBtnText: { color: C.textOnGold, fontSize: FS.base, fontWeight: '900', letterSpacing: 0.3 },
+  revealToastBtnText: { color: C.textOnGold, fontSize: FS.sm, fontWeight: '900', letterSpacing: 0.3 },
   challengerTransitionOverlay: {
     position: 'absolute',
     top: 0,
@@ -3833,20 +3778,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 4,
   },
-  timelineSheetClose: {
-    alignItems: 'center',
-    paddingVertical: 6,
-  },
-  timelineSheetCloseText: {
-    color: C.textSub,
-    fontSize: FS.sm,
-    fontWeight: '600',
-  },
   // ScoreBar timeline icon button
   scoreBarTimelineBtn: {
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    justifyContent: 'center',
+    paddingBottom: 6,
+    alignSelf: 'stretch',
+    justifyContent: 'flex-end',
     alignItems: 'center',
     borderLeftWidth: StyleSheet.hairlineWidth,
     borderLeftColor: C.borderSubtle,
@@ -3856,8 +3793,9 @@ const styles = StyleSheet.create({
   },
   scoreBarCastBtn: {
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    justifyContent: 'center',
+    paddingBottom: 6,
+    alignSelf: 'stretch',
+    justifyContent: 'flex-end',
     alignItems: 'center',
     borderLeftWidth: StyleSheet.hairlineWidth,
     borderLeftColor: C.borderSubtle,
@@ -3899,5 +3837,23 @@ const styles = StyleSheet.create({
     color: '#0a0a0a',
     fontSize: FS.base,
     fontWeight: '900',
+  },
+  castAirPlayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: C.surfaceHigh,
+    borderRadius: R.md,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  castAirPlayLabel: {
+    color: C.textSub,
+    fontSize: FS.sm,
+    fontWeight: '600',
+  },
+  castAirPlayBtn: {
+    width: 44,
+    height: 44,
   },
 });
