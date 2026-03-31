@@ -26,9 +26,9 @@ interface AppState {
   setIsPremium: (v: boolean) => void;
 
   // Game mode selection
-  selectedGameMode: 'standard' | 'collection' | 'insane';
+  selectedGameMode: 'classic' | 'collection' | 'insane';
   selectedCollectionId: string | null;
-  setSelectedGameMode: (m: 'standard' | 'collection' | 'insane') => void;
+  setSelectedGameMode: (m: 'classic' | 'collection' | 'insane') => void;
   setSelectedCollectionId: (id: string | null) => void;
 
   // Phase 3+: game state
@@ -70,7 +70,7 @@ export const useAppStore = create<AppState>((set) => ({
   setAuthUser: (u) => set({ authUser: u }),
   setIsPremium: (v) => set({ isPremium: v }),
 
-  selectedGameMode: 'standard',
+  selectedGameMode: 'classic',
   selectedCollectionId: null,
   setSelectedGameMode: (m) => set({ selectedGameMode: m }),
   setSelectedCollectionId: (id) => set({ selectedCollectionId: id }),

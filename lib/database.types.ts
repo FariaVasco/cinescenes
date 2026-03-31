@@ -19,7 +19,7 @@ export interface Database {
           safe_start: number | null;
           safe_end: number | null;
           flagged: boolean;
-          standard_pool: boolean;
+          classic_pool: boolean;
           tags: string[];
           scan_status: 'validated' | 'unvalidated' | 'unusable';
           tmdb_id: number | null;
@@ -34,7 +34,7 @@ export interface Database {
           safe_start?: number | null;
           safe_end?: number | null;
           flagged?: boolean;
-          standard_pool?: boolean;
+          classic_pool?: boolean;
           tags?: string[];
           scan_status?: 'validated' | 'unvalidated' | 'unusable';
           tmdb_id?: number | null;
@@ -50,7 +50,7 @@ export interface Database {
           multiplayer_type: 'local' | 'online';
           status: 'lobby' | 'active' | 'finished' | 'cancelled';
           game_code: string;
-          game_mode: 'standard' | 'collection' | 'insane';
+          game_mode: 'classic' | 'collection' | 'insane';
           collection_id: string | null;
           max_players: number;
           visibility: 'public' | 'invite_only';
@@ -63,7 +63,7 @@ export interface Database {
           multiplayer_type?: 'local' | 'online';
           status?: 'lobby' | 'active' | 'finished' | 'cancelled';
           game_code: string;
-          game_mode?: 'standard' | 'collection' | 'insane';
+          game_mode?: 'classic' | 'collection' | 'insane';
           collection_id?: string | null;
           max_players?: number;
           visibility?: 'public' | 'invite_only';

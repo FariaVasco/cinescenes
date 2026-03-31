@@ -141,7 +141,7 @@ export default function GameScreen() {
   const introShownRef = useRef(false);
   // Insane mode: current turn's movie may not be in the activeMovies store
   const [movieOverride, setMovieOverride] = useState<Movie | null>(null);
-  // Cache of insane mode movies keyed by id (not in activeMovies standard pool)
+  // Cache of insane mode movies keyed by id (not in activeMovies classic pool)
   const insaneMoviesCacheRef = useRef<Map<string, Movie>>(new Map());
   // Prefetched next-turn movie promise for insane mode — started during challenging phase
   const prefetchedInsaneMovieRef = useRef<Promise<Movie> | null>(null);

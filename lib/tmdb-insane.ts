@@ -129,7 +129,7 @@ export async function fetchRandomInsaneMovie(db: Db): Promise<Movie> {
         safe_start: null,
         safe_end: null,
         scan_status: 'unvalidated',
-        standard_pool: false,
+        classic_pool: false,
         tags: [],
         flagged: false,
       })

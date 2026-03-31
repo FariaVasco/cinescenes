@@ -59,7 +59,7 @@ export default function ModeSelectScreen() {
   }
 
   function handleStandard() {
-    setSelectedGameMode('standard');
+    setSelectedGameMode('classic');
     setSelectedCollectionId(null);
     router.replace({ pathname: '/local-lobby', params: { startView: 'create' } });
   }
@@ -151,10 +151,10 @@ export default function ModeSelectScreen() {
           <Text style={styles.heading}>Choose a Mode</Text>
         </View>
 
-        {/* Standard */}
+        {/* Classic */}
         <TouchableOpacity style={styles.modeCard} onPress={handleStandard} activeOpacity={0.8}>
           <View style={styles.modeRow}>
-            <Text style={styles.modeName}>Standard</Text>
+            <Text style={styles.modeName}>Classic</Text>
             <View style={styles.freeBadge}>
               <Text style={styles.freeBadgeText}>FREE</Text>
             </View>

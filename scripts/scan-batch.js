@@ -50,7 +50,7 @@ function parseCli() {
     dryRun:       args.includes('--dry-run'),
     retryFailed:  args.includes('--retry-failed'),
     movieId:      get('--movie-id'),
-    standardPool: args.includes('--standard-pool'),
+    classicPool: args.includes('--classic-pool'),
   };
 }
 
@@ -88,11 +88,11 @@ async function main() {
   } else if (cli.retryFailed) {
     query = query.or('safe_start.is.null,safe_start.eq.-1');
     if (cli.year) query = query.eq('year', cli.year);
-    if (cli.standardPool) query = query.eq('standard_pool', true);
+    if (cli.classicPool) query = query.eq('classic_pool', true);
   } else {
     query = query.is('safe_start', null);
     if (cli.year) query = query.eq('year', cli.year);
-    if (cli.standardPool) query = query.eq('standard_pool', true);
+    if (cli.classicPool) query = query.eq('classic_pool', true);
   }
 
   const { data: movies, error } = await query.order('year', { ascending: true });

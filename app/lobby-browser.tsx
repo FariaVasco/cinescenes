@@ -4,9 +4,12 @@ import {
   Text,
   TouchableOpacity,
   FlatList,
+  TextInput,
   StyleSheet,
   RefreshControl,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -29,6 +32,7 @@ export default function LobbyBrowserScreen() {
   const [entries, setEntries] = useState<LobbyEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [inviteCode, setInviteCode] = useState('');
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useFocusEffect(
@@ -90,7 +94,7 @@ export default function LobbyBrowserScreen() {
           playerCount: countByGame[g.id] ?? 0,
           collectionName: g.game_mode === 'collection' && g.collection_id
             ? (collectionNames[g.collection_id] ?? 'Collection')
-            : 'Standard',
+            : 'Classic',
         }))
         .filter((e) => e.playerCount > 0);
 
@@ -110,69 +114,95 @@ export default function LobbyBrowserScreen() {
     router.push({ pathname: '/local-lobby', params: { joinCode: code } });
   }
 
-  const header = (
-    <View style={styles.header}>
-      <BackButton onPress={() => router.back()} />
-      <Text style={styles.title}>Open Games</Text>
-    </View>
-  );
-
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.container}>
-        {header}
-        <View style={styles.centered}>
-          <ActivityIndicator color={C.gold} />
-        </View>
-      </SafeAreaView>
-    );
-  }
+  const canJoinByCode = inviteCode.trim().length > 0;
 
   return (
     <SafeAreaView style={styles.container}>
-      {header}
-      <FlatList
-        data={entries}
-        keyExtractor={(item) => item.game.id}
-        contentContainerStyle={entries.length === 0 ? styles.emptyContainer : styles.listContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor={C.gold}
-          />
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>🎬</Text>
-            <Text style={styles.emptyText}>No open games right now</Text>
-            <Text style={styles.emptyHint}>Pull to refresh</Text>
+      <View style={styles.header}>
+        <BackButton onPress={() => router.back()} />
+        <Text style={styles.title}>Join Game</Text>
+      </View>
+
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
+      >
+        {loading ? (
+          <View style={styles.centered}>
+            <ActivityIndicator color={C.gold} />
           </View>
-        }
-        renderItem={({ item }) => (
-          <View style={styles.gameCard}>
-            <View style={styles.gameCardLeft}>
-              <Text style={styles.collectionName}>{item.collectionName}</Text>
-              <Text style={styles.playerCount}>
-                {item.playerCount} / {item.game.max_players} players
-              </Text>
-            </View>
+        ) : (
+          <FlatList
+            data={entries}
+            keyExtractor={(item) => item.game.id}
+            contentContainerStyle={entries.length === 0 ? styles.emptyContainer : styles.listContent}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+                tintColor={C.gold}
+              />
+            }
+            ListEmptyComponent={
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyIcon}>🎬</Text>
+                <Text style={styles.emptyText}>No open games right now</Text>
+                <Text style={styles.emptyHint}>Pull to refresh</Text>
+              </View>
+            }
+            renderItem={({ item }) => (
+              <View style={styles.gameCard}>
+                <View style={styles.gameCardLeft}>
+                  <Text style={styles.collectionName}>{item.collectionName}</Text>
+                  <Text style={styles.playerCount}>
+                    {item.playerCount} / {item.game.max_players} players
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.joinBtn}
+                  onPress={() => joinGame(item.game.game_code)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.joinBtnText}>Join</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          />
+        )}
+
+        <View style={styles.inviteFooter}>
+          <Text style={styles.inviteLabel}>Got an invite code?</Text>
+          <View style={styles.inviteRow}>
+            <TextInput
+              style={styles.inviteInput}
+              value={inviteCode}
+              onChangeText={(t) => setInviteCode(t.toUpperCase())}
+              placeholder="ABC123"
+              placeholderTextColor={C.textMuted}
+              autoCapitalize="characters"
+              maxLength={6}
+              returnKeyType="go"
+              onSubmitEditing={() => { if (canJoinByCode) joinGame(inviteCode.trim()); }}
+            />
             <TouchableOpacity
-              style={styles.joinBtn}
-              onPress={() => joinGame(item.game.game_code)}
+              style={[styles.inviteJoinBtn, !canJoinByCode && styles.inviteJoinBtnDisabled]}
+              onPress={() => joinGame(inviteCode.trim())}
+              disabled={!canJoinByCode}
               activeOpacity={0.8}
             >
-              <Text style={styles.joinBtnText}>Join</Text>
+              <Text style={styles.inviteJoinBtnText}>Join →</Text>
             </TouchableOpacity>
           </View>
-        )}
-      />
+        </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
+  flex: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -207,4 +237,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20, paddingVertical: 10,
   },
   joinBtnText: { color: C.textOnGold, fontSize: FS.base, fontWeight: '800' },
+
+  inviteFooter: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: C.border,
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingBottom: 12,
+    gap: 8,
+  },
+  inviteLabel: {
+    color: C.textMuted, fontSize: FS.sm, fontWeight: '600',
+    letterSpacing: 0.5,
+  },
+  inviteRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
+  inviteInput: {
+    flex: 1, backgroundColor: C.surface, borderRadius: R.md,
+    borderWidth: 1, borderColor: C.border, color: C.textPrimary,
+    fontSize: FS.md, paddingHorizontal: 14, paddingVertical: 12,
+    letterSpacing: 3, fontWeight: '700',
+  },
+  inviteJoinBtn: {
+    backgroundColor: C.gold, borderRadius: R.btn,
+    paddingHorizontal: 20, paddingVertical: 12,
+  },
+  inviteJoinBtnDisabled: { opacity: 0.35 },
+  inviteJoinBtnText: { color: C.textOnGold, fontSize: FS.base, fontWeight: '800' },
 });

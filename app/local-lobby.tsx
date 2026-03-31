@@ -310,7 +310,7 @@ export default function LocalLobbyScreen() {
       const startingMovieIdsList: string[] = [];
 
       if (localGame.game_mode === 'insane') {
-        // Insane Mode: one starting card per player (from TMDb, like standard mode).
+        // Insane Mode: one starting card per player (from TMDb, like classic mode).
         // Collected into a buffer so we call setActiveMovies once (avoids stale closure).
         const insaneMoviesBuffer: Movie[] = [];
         const usedYears = new Set<number>();
@@ -333,7 +333,7 @@ export default function LocalLobbyScreen() {
         // Add all at once so game.tsx can resolve them without a DB re-fetch
         setActiveMovies([...activeMovies, ...insaneMoviesBuffer]);
       } else {
-        // Standard / Collection: use pre-loaded pool
+        // Classic / Collection: use pre-loaded pool
         let pool: typeof activeMovies;
         if (localGame.game_mode === 'collection' && localGame.collection_id) {
           const { data: col } = await db
@@ -343,9 +343,9 @@ export default function LocalLobbyScreen() {
             .single() as { data: { tag: string } | null };
           pool = col
             ? activeMovies.filter((m) => (m.tags ?? []).includes(col.tag))
-            : activeMovies.filter((m) => m.standard_pool === true);
+            : activeMovies.filter((m) => m.classic_pool === true);
         } else {
-          pool = activeMovies.filter((m) => m.standard_pool === true);
+          pool = activeMovies.filter((m) => m.classic_pool === true);
         }
         if (pool.length < localPlayers.length + 1) throw new Error('Not enough movies available');
 
@@ -431,22 +431,13 @@ export default function LocalLobbyScreen() {
               <Text style={styles.choiceCardSub}>Share the code with friends</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.choiceCard, styles.choiceBrowseCard]}
+              style={[styles.choiceCard, styles.choiceCardSecondary]}
               onPress={() => router.push('/lobby-browser')}
               activeOpacity={0.8}
             >
-              <MaterialCommunityIcons name="earth" size={40} color="#f5c518" />
-              <Text style={styles.choiceCardTitle}>Browse Open Games</Text>
-              <Text style={styles.choiceCardSub}>Jump into a public game</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.choiceCard, styles.choiceCardSecondary]}
-              onPress={() => setView('join')}
-              activeOpacity={0.8}
-            >
               <MaterialCommunityIcons name="login" size={40} color="#f5c518" />
-              <Text style={styles.choiceCardTitle}>Join with Code</Text>
-              <Text style={styles.choiceCardSub}>Enter the host's code</Text>
+              <Text style={styles.choiceCardTitle}>Join Game</Text>
+              <Text style={styles.choiceCardSub}>Browse open games or enter an invite code</Text>
             </TouchableOpacity>
           </View>
         </View>
