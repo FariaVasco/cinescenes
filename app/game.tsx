@@ -523,7 +523,11 @@ export default function GameScreen() {
             db.from('turns').select('movie_id').eq('game_id', gId).eq('winner_id', myPlayerId ?? ''),
           ]).then(([{ data: activeWonTurns }, { data: myWonTurns }]) => {
             setActivePlayerPairs(wonTurnsToPairs(activeWonTurns ?? []));
-            setMyMoviePairs(wonTurnsToPairs(myWonTurns ?? []));
+            // Only apply DB result if it has MORE pairs than current state.
+            // Prevents a stale myWonTurns query (winner_id write still in-flight)
+            // from overwriting an optimistic update already applied in handleNextTurn.
+            const fromDB = wonTurnsToPairs(myWonTurns ?? []);
+            setMyMoviePairs(prev => fromDB.length > prev.length ? fromDB : prev);
           });
         } else {
           setLocalTurn(latestTurn);
