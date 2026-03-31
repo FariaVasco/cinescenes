@@ -1163,10 +1163,13 @@ export default function GameScreen() {
       nextTurnInProgress.current = false;
       setNextTurnPending(false);
 
-      // Fire-and-forget: write winner's timeline AFTER new turn is inserted so no
-      // background poll can observe: old turn (revealing) + updated timeline simultaneously.
+      // Await the timeline write before firing poll. poll() fetches freshPlayers
+      // concurrently — if the timeline write is still in-flight when poll reads the
+      // players table, it will return the old timeline and wipe the won card from
+      // the display. Keeping this await ensures the year is committed before poll
+      // sees the players row. Spinner already cleared above so UX remains fast.
       if (winnerId && winnerNewTimeline) {
-        db.from('players').update({ timeline: winnerNewTimeline }).eq('id', winnerId);
+        await db.from('players').update({ timeline: winnerNewTimeline }).eq('id', winnerId);
       }
       // Fire-and-forget: sync all devices.
       poll();
