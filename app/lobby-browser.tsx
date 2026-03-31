@@ -172,27 +172,30 @@ export default function LobbyBrowserScreen() {
         )}
 
         <View style={styles.inviteFooter}>
-          <Text style={styles.inviteLabel}>Got an invite code?</Text>
-          <View style={styles.inviteRow}>
-            <TextInput
-              style={styles.inviteInput}
-              value={inviteCode}
-              onChangeText={(t) => setInviteCode(t.toUpperCase())}
-              placeholder="ABC123"
-              placeholderTextColor={C.textMuted}
-              autoCapitalize="characters"
-              maxLength={6}
-              returnKeyType="go"
-              onSubmitEditing={() => { if (canJoinByCode) joinGame(inviteCode.trim()); }}
-            />
-            <TouchableOpacity
-              style={[styles.inviteJoinBtn, !canJoinByCode && styles.inviteJoinBtnDisabled]}
-              onPress={() => joinGame(inviteCode.trim())}
-              disabled={!canJoinByCode}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.inviteJoinBtnText}>Join →</Text>
-            </TouchableOpacity>
+          <View style={styles.inviteCard}>
+            <Text style={styles.inviteLabel}>Have an invite code?</Text>
+            <Text style={styles.inviteSub}>Enter the code your host shared with you</Text>
+            <View style={styles.inviteRow}>
+              <TextInput
+                style={styles.inviteInput}
+                value={inviteCode}
+                onChangeText={(t) => setInviteCode(t.toUpperCase())}
+                placeholder="ABC123"
+                placeholderTextColor={C.textMuted}
+                autoCapitalize="characters"
+                maxLength={6}
+                returnKeyType="go"
+                onSubmitEditing={() => { if (canJoinByCode) joinGame(inviteCode.trim()); }}
+              />
+              <TouchableOpacity
+                style={[styles.inviteJoinBtn, !canJoinByCode && styles.inviteJoinBtnDisabled]}
+                onPress={() => joinGame(inviteCode.trim())}
+                disabled={!canJoinByCode}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.inviteJoinBtnText}>Join →</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -239,21 +242,29 @@ const styles = StyleSheet.create({
   joinBtnText: { color: C.textOnGold, fontSize: FS.base, fontWeight: '800' },
 
   inviteFooter: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: C.border,
     paddingHorizontal: 20,
-    paddingTop: 14,
-    paddingBottom: 12,
-    gap: 8,
+    paddingTop: 12,
+    paddingBottom: 20,
+  },
+  inviteCard: {
+    backgroundColor: C.goldFaint,
+    borderRadius: R.card,
+    borderWidth: 1,
+    borderColor: 'rgba(245,197,24,0.35)',
+    padding: 18,
+    gap: 10,
   },
   inviteLabel: {
-    color: C.textMuted, fontSize: FS.sm, fontWeight: '600',
-    letterSpacing: 0.5,
+    color: C.gold, fontSize: FS.md, fontWeight: '800',
+    letterSpacing: 0.2,
+  },
+  inviteSub: {
+    color: C.textSub, fontSize: FS.sm, marginTop: -4,
   },
   inviteRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
   inviteInput: {
     flex: 1, backgroundColor: C.surface, borderRadius: R.md,
-    borderWidth: 1, borderColor: C.border, color: C.textPrimary,
+    borderWidth: 1, borderColor: 'rgba(245,197,24,0.3)', color: C.textPrimary,
     fontSize: FS.md, paddingHorizontal: 14, paddingVertical: 12,
     letterSpacing: 3, fontWeight: '700',
   },
