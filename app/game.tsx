@@ -508,23 +508,23 @@ export default function GameScreen() {
         currentTurnRef.current = latestTurn;
 
         if (turnChanged && freshPlayers) {
-          // Fetch both pair sets in parallel, then apply ALL state in one synchronous block
-          // so React batches into a single render. myWonTurns re-syncs myMoviePairs in case
-          // we won the previous turn but handleNextTurn didn't run on our device (e.g. another
-          // device tapped Next first) — without this, myTimeline gains a new year slot but
-          // myMoviePairs has no pair for it, causing a random-movie fallback.
+          // Transition the UI immediately — don't block on pair queries.
           const fp = freshPlayers as Player[];
           const newActiveId = latestTurn.active_player_id;
-          const [{ data: activeWonTurns }, { data: myWonTurns }] = await Promise.all([
-            db.from('turns').select('movie_id').eq('game_id', gId).eq('winner_id', newActiveId),
-            db.from('turns').select('movie_id').eq('game_id', gId).eq('winner_id', myPlayerId ?? ''),
-          ]);
           setLocalTurn(latestTurn);
           setCurrentTurn(latestTurn);
           setLocalPlayers(fp);
           setPlayers(fp);
-          setActivePlayerPairs(wonTurnsToPairs(activeWonTurns ?? []));
-          setMyMoviePairs(wonTurnsToPairs(myWonTurns ?? []));
+          // Fetch pair sets in the background and patch state when they land.
+          // myWonTurns re-syncs myMoviePairs in case we won the previous turn but
+          // handleNextTurn didn't run on our device (another device tapped Next first).
+          Promise.all([
+            db.from('turns').select('movie_id').eq('game_id', gId).eq('winner_id', newActiveId),
+            db.from('turns').select('movie_id').eq('game_id', gId).eq('winner_id', myPlayerId ?? ''),
+          ]).then(([{ data: activeWonTurns }, { data: myWonTurns }]) => {
+            setActivePlayerPairs(wonTurnsToPairs(activeWonTurns ?? []));
+            setMyMoviePairs(wonTurnsToPairs(myWonTurns ?? []));
+          });
         } else {
           setLocalTurn(latestTurn);
           setCurrentTurn(latestTurn);
