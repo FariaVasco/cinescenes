@@ -985,14 +985,20 @@ export default function GameScreen() {
       const ct = currentTurnRef.current;
       if (!g || !ct) return;
 
-      // Fetch movie and fresh players in parallel to cut initial latency
+      // Fire all independent initial fetches in parallel:
+      // movie, fresh players, cross-device guard, past turns (for movie dedup).
       const movieFromCache = activeMovies.find((m) => m.id === ct.movie_id) ?? null;
-      const [movieResult, freshPlayersResult] = await Promise.all([
+      const [movieResult, freshPlayersResult, existingNextResult, pastTurnsResult] = await Promise.all([
         movieFromCache
           ? Promise.resolve({ data: movieFromCache })
           : db.from('movies').select('*').eq('id', ct.movie_id).single(),
         db.from('players').select('*').eq('game_id', g.id).order('created_at') as Promise<{ data: Player[] | null }>,
+        db.from('turns').select('id').eq('game_id', g.id).neq('status', 'complete').gt('created_at', ct.created_at).limit(1) as Promise<{ data: { id: string }[] | null }>,
+        g.game_mode !== 'insane'
+          ? db.from('turns').select('movie_id').eq('game_id', g.id)
+          : Promise.resolve({ data: [] as { movie_id: string }[] }),
       ]);
+
       const movie = (movieResult.data as typeof movieFromCache) ?? null;
       if (!movie) return;
 
@@ -1020,11 +1026,10 @@ export default function GameScreen() {
       if (activeCorrect) winnerId = ct.active_player_id;
       else if (winningChallenger) winnerId = winningChallenger.challenger_id;
 
-      // Write winner_id on the current turn so every device can later reconstruct
-      // exact player→movie mappings without ambiguity (same-year collisions).
-      // Safe to run on all devices — idempotent same-value writes.
+      // Fire-and-forget: write winner_id on the current turn so every device can later
+      // reconstruct exact player→movie mappings. Idempotent same-value writes.
       if (winnerId) {
-        await db.from('turns').update({ winner_id: winnerId }).eq('id', ct.id);
+        db.from('turns').update({ winner_id: winnerId }).eq('id', ct.id);
       }
 
       // Sync myMoviePairs BEFORE the cross-device guard — this ensures that even when
@@ -1039,13 +1044,7 @@ export default function GameScreen() {
 
       // Guard against double-processing across devices: if a newer real turn already exists,
       // another device already handled this. Call poll() to sync UI then exit.
-      const { data: existingNext } = await db
-        .from('turns')
-        .select('id')
-        .eq('game_id', g.id)
-        .neq('status', 'complete')
-        .gt('created_at', ct.created_at)
-        .limit(1) as { data: { id: string }[] | null };
+      const { data: existingNext } = existingNextResult;
       if (existingNext && existingNext.length > 0) {
         await poll();
         return;
@@ -1053,9 +1052,9 @@ export default function GameScreen() {
 
       // Refund coins for challengers who placed at a valid interval but didn't win the card.
       // Runs on the single device that passes the cross-device guard — no race condition.
-      // Cases: (1) active player correct AND challenger also valid (same-year duplicate);
-      //        (2) an earlier challenger wins AND a later one also had a valid interval.
+      // Fire-and-forget in parallel — coin values are derived from memory, no ordering needed.
       let playersAfterRefunds = latestPlayers;
+      const refundWrites: Promise<any>[] = [];
       for (const c of challenges) {
         if (c.interval_index < 0) continue; // passed / withdrew / unpicked
         if (c.challenger_id === winnerId) continue; // winner keeps their coin
@@ -1066,11 +1065,12 @@ export default function GameScreen() {
           const p = playersAfterRefunds.find(pl => pl.id === c.challenger_id);
           if (p) {
             const refunded = p.coins + 1;
-            await db.from('players').update({ coins: refunded }).eq('id', c.challenger_id);
+            refundWrites.push(db.from('players').update({ coins: refunded }).eq('id', c.challenger_id));
             playersAfterRefunds = playersAfterRefunds.map(pl => pl.id === c.challenger_id ? { ...pl, coins: refunded } : pl);
           }
         }
       }
+      if (refundWrites.length > 0) Promise.all(refundWrites);
 
       // Compute new timeline in memory for nextPlayer calculation, but defer the DB
       // write until AFTER the new turn is inserted. This closes the race window where
@@ -1106,10 +1106,7 @@ export default function GameScreen() {
       const nextIdx = currentIdx === -1 ? 0 : (currentIdx + 1) % updatedPlayers.length;
       const nextPlayer = updatedPlayers[nextIdx];
 
-      const { data: pastTurns } = await db
-        .from('turns')
-        .select('movie_id')
-        .eq('game_id', g.id);
+      // Use the past turns already fetched in the initial parallel group.
       // All past turn movie_ids — includes phantom 'complete' turns for starting cards.
       // Build the exclusion set from three independent sources:
       // 1. All past turn movie IDs (includes phantom 'complete' turns when they exist)
@@ -1117,6 +1114,7 @@ export default function GameScreen() {
       // 3. Inferred starting card years: any year in a player's timeline that has no
       //    matching past turn must be a starting card year — robust against phantom turn
       //    failures and Zustand being unavailable on non-host devices.
+      const { data: pastTurns } = pastTurnsResult;
       const pastTurnMovieIds = new Set<string>(pastTurns?.map((t: { movie_id: string }) => t.movie_id) ?? []);
       const pastTurnYears = new Set<number>(
         [...pastTurnMovieIds]
@@ -1156,13 +1154,20 @@ export default function GameScreen() {
         console.warn('[NXT] insert failed:', insertError.message, insertError.code);
         return;
       }
-      // Write winner's timeline AFTER new turn is inserted so no background poll
-      // can observe: old turn (revealing) + updated timeline simultaneously.
+
+      // New turn is in the DB — clear the spinner immediately.
+      nextTurnInProgress.current = false;
+      setNextTurnPending(false);
+
+      // Fire-and-forget: write winner's timeline AFTER new turn is inserted so no
+      // background poll can observe: old turn (revealing) + updated timeline simultaneously.
       if (winnerId && winnerNewTimeline) {
-        await db.from('players').update({ timeline: winnerNewTimeline }).eq('id', winnerId);
+        db.from('players').update({ timeline: winnerNewTimeline }).eq('id', winnerId);
       }
-      await poll();
+      // Fire-and-forget: sync all devices.
+      poll();
     } finally {
+      // Safety net for error paths and early returns.
       nextTurnInProgress.current = false;
       setNextTurnPending(false);
     }
