@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
+  Image,
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
@@ -2321,7 +2322,8 @@ function ScoreBar({ players, myId, onOpenTimeline, onCast }: { players: Player[]
           <View key={p.id} style={[styles.scoreChip, p.id === myId && styles.scoreChipMe]}>
             <Text style={styles.scoreChipName}>{p.display_name}</Text>
             <Text style={styles.scoreChipCount}>{p.timeline.length}</Text>
-            <Text style={styles.scoreChipCoins}>🪙 {p.coins}</Text>
+            <Image source={require('../assets/lc-coin.png')} style={styles.scoreChipCoinIcon} />
+            <Text style={styles.scoreChipCoins}>{p.coins}</Text>
           </View>
         ))}
       </ScrollView>
@@ -2973,7 +2975,10 @@ function GameIntroScreen({
             onPress={() => setStarted(true)}
             activeOpacity={0.75}
           >
-            <Text style={introStyles.spinBtnText}>Let's spin! 🎰</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <Image source={require('../assets/lc-spinning-wheel.png')} style={{ width: 28, height: 28 }} />
+              <Text style={introStyles.spinBtnText}>Let's spin!</Text>
+            </View>
           </TouchableOpacity>
           <View style={{ height: 32 }} />
         </SafeAreaView>
@@ -3907,6 +3912,7 @@ const styles = StyleSheet.create({
 
 
   // Coin count in ScoreBar
+  scoreChipCoinIcon: { width: 12, height: 12 },
   scoreChipCoins: { color: C.textMuted, fontFamily: Fonts.label, fontSize: FS.xs },
 
   // ── Game Over ──
