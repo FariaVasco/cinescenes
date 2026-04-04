@@ -1,24 +1,26 @@
-import { TouchableOpacity, Text, StyleSheet } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { C, FS, R } from '@/constants/theme';
+import { TouchableOpacity, Text, StyleSheet, View } from 'react-native';
+import { C, FS, R, Fonts } from '@/constants/theme';
 
 type Props = {
   onPress: () => void;
   label?: string;
-  icon?: React.ComponentProps<typeof MaterialCommunityIcons>['name'];
   style?: object;
+  dark?: boolean; // use on dark (trailer/scanner) screens
 };
 
-export function BackButton({ onPress, label = 'Back', icon = 'chevron-left', style }: Props) {
+export function BackButton({ onPress, label = 'Back', style, dark = false }: Props) {
+  const textColor = dark ? C.textPrimaryDark : C.textSub;
+  const borderColor = dark ? 'rgba(250,250,247,0.3)' : C.ink;
+
   return (
     <TouchableOpacity
-      style={[styles.btn, style]}
+      style={[styles.btn, { borderColor }, style]}
       onPress={onPress}
       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
       activeOpacity={0.65}
     >
-      <MaterialCommunityIcons name={icon} size={16} color={C.textSub} />
-      {label ? <Text style={styles.label}>{label}</Text> : null}
+      <Text style={[styles.arrow, { color: textColor }]}>←</Text>
+      {label ? <Text style={[styles.label, { color: textColor }]}>{label}</Text> : null}
     </TouchableOpacity>
   );
 }
@@ -27,21 +29,22 @@ const styles = StyleSheet.create({
   btn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: R.full,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 2,
     alignSelf: 'flex-start',
     marginHorizontal: 16,
     marginTop: 6,
   },
+  arrow: {
+    fontSize: FS.base,
+    fontFamily: Fonts.label,
+  },
   label: {
-    color: C.textSub,
+    fontFamily: Fonts.label,
     fontSize: FS.sm,
-    fontWeight: '600',
     letterSpacing: 0.3,
   },
 });

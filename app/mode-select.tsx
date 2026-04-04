@@ -6,7 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
-import { C, R, T, SP } from '@/constants/theme';
+import { C, R, T, SP, Fonts, FS } from '@/constants/theme';
 import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
 import { presentCustomerCenter, checkPremium } from '@/lib/revenuecat';
@@ -216,7 +216,7 @@ export default function ModeSelectScreen() {
             <Text style={styles.sheetOverline}>SELECT A COLLECTION</Text>
             <Text style={styles.sheetTitle}>What's tonight's theme?</Text>
             {loadingCollections ? (
-              <ActivityIndicator color={C.gold} style={{ marginVertical: 32 }} />
+              <ActivityIndicator color={C.ochre} style={{ marginVertical: 32 }} />
             ) : (
               <ScrollView style={styles.colList} contentContainerStyle={styles.colListContent}>
                 {collections.map((col) => (
@@ -279,11 +279,11 @@ const styles = StyleSheet.create({
     paddingVertical: SP.md,
     paddingHorizontal: SP.lg,
     gap: 5,
-    borderWidth: 1,
-    borderColor: C.border,
+    borderWidth: 2,
+    borderColor: C.ink,
   },
   modeCardPremium: {
-    borderColor: C.goldGlow,
+    borderColor: C.ochre,
     backgroundColor: 'rgba(245,197,24,0.04)',
   },
   modeCardDisabled: { opacity: 0.35 },
@@ -311,7 +311,7 @@ const styles = StyleSheet.create({
   premiumBadgeText: { ...T.micro, color: C.gold },
 
   soonBadge: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: C.inkFaint,
     borderRadius: R.xs,
     paddingHorizontal: SP.sm,
     paddingVertical: 3,
@@ -328,6 +328,10 @@ const styles = StyleSheet.create({
     backgroundColor: C.surfaceHigh,
     borderTopLeftRadius: R.card,
     borderTopRightRadius: R.card,
+    borderTopWidth: 2,
+    borderLeftWidth: 2,
+    borderRightWidth: 2,
+    borderColor: C.ink,
     padding: SP.lg,
     paddingBottom: SP.xl,
     alignItems: 'center',
@@ -337,7 +341,7 @@ const styles = StyleSheet.create({
   handle: {
     width: 40, height: 4,
     borderRadius: 2,
-    backgroundColor: C.border,
+    backgroundColor: C.inkFaint,
     marginBottom: SP.xs,
   },
   sheetOverline: { ...T.overline },
@@ -347,8 +351,8 @@ const styles = StyleSheet.create({
   colItem: {
     backgroundColor: C.surface,
     borderRadius: R.md,
-    borderWidth: 1,
-    borderColor: C.border,
+    borderWidth: 2,
+    borderColor: C.ink,
     padding: SP.md,
     gap: 4,
   },

@@ -19,7 +19,7 @@ import {
 } from 'react-native';
 import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
 import { transcribeAudio } from '@/lib/whisper';
-import { C, R, FS } from '@/constants/theme';
+import { C, R, FS, Fonts } from '@/constants/theme';
 import { scanTranscript, phoneticMatch, fuzzyMatch, computeCorrectInterval, computeValidIntervals } from '@/lib/game-logic';
 import { llmExtractGuess } from '@/lib/llm-voice';
 import { fetchRandomInsaneMovie, searchDirector } from '@/lib/tmdb-insane';
@@ -1209,8 +1209,8 @@ export default function GameScreen() {
 
   if (loading || !currentTurn) {
     return (
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: C.bg, justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color="#f5c518" />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: C.inkBg, justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={C.ochre} />
       </View>
     );
   }
@@ -2335,8 +2335,8 @@ function ScoreBar({ players, myId, onOpenTimeline, onCast }: { players: Player[]
 
 function LoadingScreen() {
   return (
-    <View style={[StyleSheet.absoluteFill, { backgroundColor: C.bg, justifyContent: 'center', alignItems: 'center' }]}>
-      <ActivityIndicator size="large" color="#f5c518" />
+    <View style={[StyleSheet.absoluteFill, { backgroundColor: C.inkBg, justifyContent: 'center', alignItems: 'center' }]}>
+      <ActivityIndicator size="large" color={C.ochre} />
     </View>
   );
 }
@@ -2592,17 +2592,17 @@ function BetRevealOverlay({ rows, revealCount }: { rows: Array<{ emoji: string; 
 const betRevealStyles = StyleSheet.create({
   overlay: { backgroundColor: 'rgba(0,0,0,0.93)', justifyContent: 'center', paddingHorizontal: 28, gap: 6 },
   content: { alignItems: 'center', marginBottom: 20 },
-  title: { color: C.gold, fontSize: FS.xl, fontWeight: '900', letterSpacing: 0.3 },
-  subtitle: { color: C.textSub, fontSize: FS.sm, marginTop: 4 },
+  title: { color: C.ochre, fontFamily: Fonts.display, fontSize: FS.xl, letterSpacing: 0.3 },
+  subtitle: { color: C.textSubDark, fontFamily: Fonts.body, fontSize: FS.sm, marginTop: 4 },
   rows: { gap: 10 },
-  row: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.surfaceHigh, borderRadius: R.card, paddingVertical: 12, paddingHorizontal: 16, gap: 12 },
+  row: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.inkSurface, borderRadius: R.card, paddingVertical: 12, paddingHorizontal: 16, gap: 12 },
   rowEmoji: { fontSize: 22, width: 28, textAlign: 'center' },
   rowBody: { flex: 1 },
-  rowName: { color: C.textPrimary, fontSize: FS.base, fontWeight: '700' },
-  rowInterval: { color: C.gold, fontSize: FS.sm, fontWeight: '600', marginTop: 1 },
-  rowIntervalPass: { color: C.textMuted },
+  rowName: { color: C.textPrimaryDark, fontFamily: Fonts.bodyBold, fontSize: FS.base },
+  rowInterval: { color: C.ochre, fontFamily: Fonts.label, fontSize: FS.sm, marginTop: 1 },
+  rowIntervalPass: { color: C.textMutedDark },
   flippingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 20 },
-  flippingText: { color: C.textSub, fontSize: FS.sm },
+  flippingText: { color: C.textSubDark, fontFamily: Fonts.body, fontSize: FS.sm },
 });
 
 // ── Confetti burst (correct answer) ──────────────────────────────────────────
@@ -2809,7 +2809,7 @@ function LandscapePromptScreen({ onDone }: { onDone: () => void }) {
 const lsStyles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: C.bg,
+    backgroundColor: C.inkBg,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 14,
@@ -2817,14 +2817,15 @@ const lsStyles = StyleSheet.create({
   },
   icon: { fontSize: 56 },
   title: {
-    color: C.textPrimary,
+    color: C.textPrimaryDark,
+    fontFamily: Fonts.display,
     fontSize: FS.xl,
-    fontWeight: '900',
     textAlign: 'center',
     letterSpacing: 0.3,
   },
   subtitle: {
-    color: C.textMuted,
+    color: C.textSubDark,
+    fontFamily: Fonts.body,
     fontSize: FS.base,
     textAlign: 'center',
     lineHeight: 20,
@@ -3088,7 +3089,7 @@ function GameIntroScreen({
 const introStyles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: C.bg,
+    backgroundColor: C.inkBg,
   },
   inner: {
     flex: 1,
@@ -3099,15 +3100,15 @@ const introStyles = StyleSheet.create({
     gap: 5,
   },
   headline: {
-    color: C.textPrimary,
+    color: C.textPrimaryDark,
+    fontFamily: Fonts.display,
     fontSize: FS.lg,
-    fontWeight: '900',
     letterSpacing: 0.3,
   },
   subtext: {
-    color: C.textMuted,
+    color: C.textSubDark,
+    fontFamily: Fonts.body,
     fontSize: FS.sm,
-    fontWeight: '500',
   },
   // `right` and `top` are set dynamically in JSX (WHEEL_RADIUS is now dynamic)
   pointerRow: {
@@ -3147,8 +3148,8 @@ const introStyles = StyleSheet.create({
   },
   tapHint: {
     color: 'rgba(255,255,255,0.35)',
+    fontFamily: Fonts.label,
     fontSize: FS.sm,
-    fontWeight: '500',
   },
   miniTimeline: {
     flexDirection: 'row',
@@ -3162,26 +3163,28 @@ const introStyles = StyleSheet.create({
     borderRadius: 1,
   },
   addedLabel: {
-    color: C.textMuted,
+    color: C.textSubDark,
+    fontFamily: Fonts.body,
     fontSize: FS.sm,
-    fontWeight: '500',
   },
   startBtn: {
-    backgroundColor: C.gold,
+    backgroundColor: C.ochre,
     borderRadius: R.btn,
+    borderWidth: 2,
+    borderColor: C.ink,
     paddingHorizontal: 36,
     paddingVertical: 14,
   },
   startBtnText: {
-    color: C.textOnGold,
+    color: C.textOnOchre,
+    fontFamily: Fonts.display,
     fontSize: FS.base,
-    fontWeight: '900',
     letterSpacing: 0.4,
   },
   countdownText: {
     color: 'rgba(255,255,255,0.25)',
+    fontFamily: Fonts.label,
     fontSize: FS.xs,
-    fontWeight: '500',
   },
   // Context screen (before spin starts)
   contextInner: {
@@ -3196,43 +3199,46 @@ const introStyles = StyleSheet.create({
     gap: 12,
   },
   contextTitle: {
-    color: C.textPrimary,
+    color: C.textPrimaryDark,
+    fontFamily: Fonts.display,
     fontSize: FS['2xl'],
-    fontWeight: '900',
     textAlign: 'center',
     letterSpacing: 0.3,
   },
   contextDesc: {
-    color: C.textMuted,
+    color: C.textSubDark,
+    fontFamily: Fonts.body,
     fontSize: FS.base,
     textAlign: 'center',
     lineHeight: 22,
   },
   spinBtn: {
-    backgroundColor: C.gold,
+    backgroundColor: C.ochre,
     borderRadius: R.btn,
+    borderWidth: 2,
+    borderColor: C.ink,
     paddingHorizontal: 36,
     paddingVertical: 16,
   },
   spinBtnText: {
-    color: C.textOnGold,
+    color: C.textOnOchre,
+    fontFamily: Fonts.display,
     fontSize: FS.lg,
-    fontWeight: '900',
     letterSpacing: 0.5,
   },
 });
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: C.bg },
+  container: { flex: 1, backgroundColor: C.inkBg },
 
   // ── Drawing phase ──
   drawingTopSection: {
     paddingTop: 16,
   },
   drawingTurnLabel: {
-    color: C.gold,
+    color: C.ochre,
+    fontFamily: Fonts.label,
     fontSize: FS.xs,
-    fontWeight: '700',
     textAlign: 'center',
     letterSpacing: 1,
     textTransform: 'uppercase',
@@ -3245,9 +3251,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   drawingWaitingText: {
-    color: C.textSub,
+    color: C.textSubDark,
+    fontFamily: Fonts.label,
     fontSize: FS.sm,
-    fontWeight: '600',
     textAlign: 'center',
   },
   drawingMySection: {
@@ -3256,8 +3262,8 @@ const styles = StyleSheet.create({
   },
   drawingMySectionLabel: {
     color: 'rgba(255,255,255,0.3)',
+    fontFamily: Fonts.label,
     fontSize: FS.micro,
-    fontWeight: '700',
     letterSpacing: 0.8,
     textTransform: 'uppercase',
     paddingHorizontal: 16,
@@ -3270,18 +3276,19 @@ const styles = StyleSheet.create({
   },
 
   phaseCenter: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 24, paddingHorizontal: 40 },
-  bigTurnText: { color: C.textPrimary, fontSize: FS['2xl'], fontWeight: '900', textAlign: 'center' },
-  waitingText: { color: C.textSub, fontSize: FS.lg, textAlign: 'center' },
-  timelineOwnerLabel: { color: C.textSub, fontSize: FS.sm, textAlign: 'center', marginBottom: 4 },
+  bigTurnText: { color: C.textPrimaryDark, fontFamily: Fonts.display, fontSize: FS['2xl'], textAlign: 'center' },
+  waitingText: { color: C.textSubDark, fontFamily: Fonts.body, fontSize: FS.lg, textAlign: 'center' },
+  timelineOwnerLabel: { color: C.textSubDark, fontFamily: Fonts.label, fontSize: FS.sm, textAlign: 'center', marginBottom: 4 },
   avatarLarge: {
     width: 72, height: 72, borderRadius: R.full,
-    backgroundColor: C.gold, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: C.ochre, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2, borderColor: C.ink,
   },
-  avatarLargeText: { color: C.textOnGold, fontSize: FS.xl, fontWeight: '900' },
-  primaryBtn: { backgroundColor: C.gold, borderRadius: R.btn, paddingHorizontal: 32, paddingVertical: 14 },
-  primaryBtnText: { color: C.textOnGold, fontSize: FS.md, fontWeight: '900' },
-  phaseLabel: { color: C.textSub, fontSize: FS.base, fontWeight: '600', textAlign: 'center' },
-  tapHint: { color: C.textMuted, fontSize: FS.sm, textAlign: 'center', marginTop: 4, minHeight: 32 },
+  avatarLargeText: { color: C.textOnOchre, fontFamily: Fonts.display, fontSize: FS.xl },
+  primaryBtn: { backgroundColor: C.ochre, borderRadius: R.btn, borderWidth: 2, borderColor: C.ink, paddingHorizontal: 32, paddingVertical: 14 },
+  primaryBtnText: { color: C.textOnOchre, fontFamily: Fonts.display, fontSize: FS.md },
+  phaseLabel: { color: C.textSubDark, fontFamily: Fonts.label, fontSize: FS.base, textAlign: 'center' },
+  tapHint: { color: C.textMutedDark, fontFamily: Fonts.label, fontSize: FS.sm, textAlign: 'center', marginTop: 4, minHeight: 32 },
 
   gameArea: {
     flex: 1,
@@ -3297,31 +3304,31 @@ const styles = StyleSheet.create({
     top: 10,
     left: 0,
     right: 0,
-    color: C.textSub,
+    color: C.textSubDark,
+    fontFamily: Fonts.label,
     fontSize: FS.sm,
-    fontWeight: '600',
     textAlign: 'center',
     zIndex: 1,
   },
   placingBottomStrip: {
-    backgroundColor: C.bg,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: C.borderSubtle,
+    backgroundColor: C.inkSurface,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.10)',
     paddingVertical: 10,
     paddingHorizontal: 20,
     alignItems: 'center',
     justifyContent: 'center',
   },
   placingStripText: {
-    color: C.textSub,
+    color: C.textSubDark,
+    fontFamily: Fonts.label,
     fontSize: FS.sm,
-    fontWeight: '600',
     textAlign: 'center',
   },
   challengeBottomPanel: {
-    backgroundColor: C.bg,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: C.borderSubtle,
+    backgroundColor: C.inkSurface,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.10)',
     paddingHorizontal: 20,
     paddingVertical: 14,
     gap: 12,
@@ -3338,42 +3345,37 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: C.border,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.25)',
   },
   passBtnLabel: {
-    color: C.textSub,
+    color: C.textSubDark,
+    fontFamily: Fonts.label,
     fontSize: FS.sm,
-    fontWeight: '600',
   },
   challengeBtn: {
     flex: 2,
     borderRadius: R.btn,
+    borderWidth: 2,
+    borderColor: C.ink,
     paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#e63946',
-    shadowColor: '#e63946',
-    shadowOpacity: 0.45,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 6,
+    backgroundColor: C.vermillion,
   },
   challengeBtnDisabled: {
-    backgroundColor: 'rgba(230,57,70,0.2)',
-    shadowOpacity: 0,
-    elevation: 0,
+    backgroundColor: 'rgba(232,55,42,0.2)',
   },
   challengeBtnText: {
     color: '#fff',
+    fontFamily: Fonts.display,
     fontSize: FS.sm,
-    fontWeight: '900',
     letterSpacing: 0.3,
   },
   challengeBtnSub: {
     color: 'rgba(255,255,255,0.6)',
+    fontFamily: Fonts.label,
     fontSize: FS.xs,
-    fontWeight: '600',
     marginTop: 2,
   },
   // Keep these for the pass button in seq/withdraw
@@ -3382,9 +3384,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   passTextBtnText: {
-    color: C.textSub,
+    color: C.textSubDark,
+    fontFamily: Fonts.label,
     fontSize: FS.sm,
-    fontWeight: '600',
   },
   challengeStatusStrip: {
     paddingVertical: 18,
@@ -3392,9 +3394,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   challengeStatusStripText: {
-    color: C.textSub,
+    color: C.textSubDark,
+    fontFamily: Fonts.label,
     fontSize: FS.sm,
-    fontWeight: '600',
     textAlign: 'center',
   },
   placingLabel: {
@@ -3410,9 +3412,9 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   challengeBadgeText: {
-    color: C.textSub,
+    color: 'rgba(255,255,255,0.8)',
+    fontFamily: Fonts.label,
     fontSize: FS.sm,
-    fontWeight: '600',
     textAlign: 'center',
   },
   withdrawOverlayBtn: {
@@ -3425,9 +3427,9 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   withdrawOverlayBtnText: {
-    color: C.textSub,
+    color: 'rgba(255,255,255,0.8)',
+    fontFamily: Fonts.label,
     fontSize: FS.sm,
-    fontWeight: '600',
   },
   watchingBadge: {
     alignSelf: 'flex-start',
@@ -3437,29 +3439,27 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     margin: 12,
   },
-  watchingBadgeText: { color: 'rgba(255,255,255,0.6)', fontSize: FS.sm, fontWeight: '500' },
+  watchingBadgeText: { color: 'rgba(255,255,255,0.6)', fontFamily: Fonts.label, fontSize: FS.sm },
   endedWaiting: {
-    color: C.textSub,
+    color: C.textSubDark,
+    fontFamily: Fonts.body,
     fontSize: FS.md,
     textAlign: 'center',
     marginTop: 12,
     paddingHorizontal: 40,
   },
 
-  passBtnText: { color: C.textSub, fontSize: FS.sm, fontWeight: '600' },
+  passBtnText: { color: C.textSubDark, fontFamily: Fonts.label, fontSize: FS.sm },
   revealNowBtn: {
     width: '100%',
     borderRadius: R.btn,
+    borderWidth: 2,
+    borderColor: C.ink,
     paddingVertical: 12,
     alignItems: 'center',
-    backgroundColor: C.gold,
-    shadowColor: C.gold,
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 5,
+    backgroundColor: C.ochre,
   },
-  revealNowBtnText: { color: C.textOnGold, fontSize: FS.sm, fontWeight: '900' },
+  revealNowBtnText: { color: C.textOnOchre, fontFamily: Fonts.display, fontSize: FS.sm },
 
   // ── Revealing phase ──
   revealTimelineOwnerBadge: {
@@ -3470,9 +3470,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   revealTimelineOwner: {
-    color: C.gold,
+    color: C.ochre,
+    fontFamily: Fonts.label,
     fontSize: 11,
-    fontWeight: '700',
     letterSpacing: 0.8,
     textTransform: 'uppercase',
     textAlign: 'center',
@@ -3488,16 +3488,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
   suspenseCount: {
-    color: C.textPrimary,
+    color: C.textPrimaryDark,
+    fontFamily: Fonts.display,
     fontSize: 40,
-    fontWeight: '900',
     letterSpacing: -0.5,
     textAlign: 'center',
   },
   suspenseSubLabel: {
-    color: C.gold,
+    color: C.ochre,
+    fontFamily: Fonts.label,
     fontSize: FS.sm,
-    fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 1.8,
     textAlign: 'center',
@@ -3505,9 +3505,9 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
   suspenseName: {
-    color: C.textPrimary,
+    color: C.textPrimaryDark,
+    fontFamily: Fonts.bodyBold,
     fontSize: FS.xl,
-    fontWeight: '700',
     textAlign: 'center',
     opacity: 0.85,
   },
@@ -3525,37 +3525,34 @@ const styles = StyleSheet.create({
     borderRadius: R.card,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: C.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 8,
+    borderWidth: 2,
+    borderColor: C.ink,
   },
   revealToastIcon: { fontSize: 28 },
   revealToastBody: { flex: 1, gap: 2 },
   revealToastHeadline: {
     color: C.textPrimary,
+    fontFamily: Fonts.bodyBold,
     fontSize: FS.base,
-    fontWeight: '800',
   },
-  revealToastHL: { color: C.gold, fontWeight: '900' },
-  revealToastSub: { color: C.textSub, fontSize: FS.xs },
+  revealToastHL: { color: C.ochre, fontFamily: Fonts.display },
+  revealToastSub: { color: C.textSub, fontFamily: Fonts.label, fontSize: FS.xs },
   revealToastBtn: {
-    backgroundColor: C.gold,
+    backgroundColor: C.ochre,
     borderRadius: R.btn,
+    borderWidth: 2,
+    borderColor: C.ink,
     paddingHorizontal: 14,
     paddingVertical: 8,
     alignItems: 'center',
   },
-  revealToastBtnText: { color: C.textOnGold, fontSize: FS.sm, fontWeight: '900', letterSpacing: 0.3 },
+  revealToastBtnText: { color: C.textOnOchre, fontFamily: Fonts.display, fontSize: FS.sm, letterSpacing: 0.3 },
   revealToastCountdown: {
     width: 36, height: 36, borderRadius: 18,
-    borderWidth: 1.5, borderColor: C.border,
+    borderWidth: 2, borderColor: C.inkFaint,
     alignItems: 'center', justifyContent: 'center',
   },
-  revealToastCountdownText: { color: C.textSub, fontSize: FS.base, fontWeight: '700' },
+  revealToastCountdownText: { color: C.textSub, fontFamily: Fonts.bodyBold, fontSize: FS.base },
   challengerTransitionOverlay: {
     position: 'absolute',
     top: 0,
@@ -3566,16 +3563,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   challengerTransitionName: {
-    color: C.textPrimary,
+    color: C.textPrimaryDark,
+    fontFamily: Fonts.display,
     fontSize: 28,
-    fontWeight: '900',
     letterSpacing: 0.3,
     textAlign: 'center',
   },
   challengerTransitionSub: {
-    color: C.gold,
+    color: C.ochre,
+    fontFamily: Fonts.label,
     fontSize: 11,
-    fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 1.5,
     textAlign: 'center',
@@ -3584,17 +3581,14 @@ const styles = StyleSheet.create({
   },
   // Used by GameOverScreen
   revealNextBtn: {
-    backgroundColor: C.gold,
+    backgroundColor: C.ochre,
     borderRadius: R.btn,
+    borderWidth: 2,
+    borderColor: C.ink,
     paddingVertical: 14,
     alignItems: 'center',
-    shadowColor: C.gold,
-    shadowOpacity: 0.28,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
   },
-  revealNextBtnText: { color: C.textOnGold, fontSize: FS.md, fontWeight: '900', letterSpacing: 0.4 },
+  revealNextBtnText: { color: C.textOnOchre, fontFamily: Fonts.display, fontSize: FS.md, letterSpacing: 0.4 },
 
   // ── Trailer overlay ──
   trailerContainer: { flex: 1, backgroundColor: '#000' },
@@ -3607,13 +3601,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 8,
     borderRadius: R.btn, backgroundColor: 'rgba(0,0,0,0.55)',
   },
-  reportButtonText: { color: C.textSub, fontSize: FS.sm, fontWeight: '500' },
+  reportButtonText: { color: 'rgba(255,255,255,0.65)', fontFamily: Fonts.label, fontSize: FS.sm },
   skipButton: {
-    paddingHorizontal: 20, paddingVertical: 12, borderRadius: R.card, backgroundColor: C.gold,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3,
-    shadowRadius: 6, elevation: 6,
+    paddingHorizontal: 20, paddingVertical: 12, borderRadius: R.card, backgroundColor: C.ochre,
+    borderWidth: 2, borderColor: C.ink,
   },
-  skipButtonText: { color: C.textOnGold, fontSize: FS.md, fontWeight: '800', letterSpacing: 0.4 },
+  skipButtonText: { color: C.textOnOchre, fontFamily: Fonts.bodyBold, fontSize: FS.md, letterSpacing: 0.4 },
   skipButtonDisabled: { opacity: 0.4 },
   // Active player in private game — no video, centered layout
   activeNoVideoOverlay: {
@@ -3636,17 +3629,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 48,
     paddingVertical: 18,
     borderRadius: R.card,
-    backgroundColor: C.gold,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 8,
+    backgroundColor: C.ochre,
+    borderWidth: 2,
+    borderColor: C.ink,
   },
   knowItBtnText: {
-    color: C.textOnGold,
+    color: C.textOnOchre,
+    fontFamily: Fonts.bodyBold,
     fontSize: FS.xl,
-    fontWeight: '800',
     letterSpacing: 0.5,
   },
   pauseOverlay: {
@@ -3659,20 +3649,20 @@ const styles = StyleSheet.create({
   endedOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: '#000', zIndex: 20 },
   endedInner: { flex: 1, justifyContent: 'space-between', padding: 20 },
   endedCenter: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 10 },
-  endedTitle: { color: C.textPrimary, fontSize: 32, fontWeight: '900', textAlign: 'center', letterSpacing: 1 },
+  endedTitle: { color: C.textPrimaryDark, fontFamily: Fonts.display, fontSize: 32, textAlign: 'center', letterSpacing: 1 },
   endedSubtitle: {
-    color: C.gold, fontSize: FS.sm, textAlign: 'center',
-    fontWeight: '600', letterSpacing: 2.5, textTransform: 'uppercase',
+    color: C.ochre, fontFamily: Fonts.label, fontSize: FS.sm, textAlign: 'center',
+    letterSpacing: 2.5, textTransform: 'uppercase',
   },
   endedActions: { flexDirection: 'row', gap: 12, justifyContent: 'center', paddingBottom: 16 },
   actionButton: { paddingHorizontal: 32, paddingVertical: 16, borderRadius: R.card },
   replayButton: {
-    backgroundColor: C.border, borderWidth: 1,
-    borderColor: C.borderSubtle,
+    backgroundColor: C.inkSurface, borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
-  replayButtonText: { color: C.textPrimary, fontSize: FS.md, fontWeight: '700', letterSpacing: 0.3 },
-  nextButton: { backgroundColor: C.gold },
-  nextButtonText: { color: C.textOnGold, fontSize: FS.md + 1, fontWeight: '800', letterSpacing: 0.3 },
+  replayButtonText: { color: C.textPrimaryDark, fontFamily: Fonts.bodyBold, fontSize: FS.md, letterSpacing: 0.3 },
+  nextButton: { backgroundColor: C.ochre, borderWidth: 2, borderColor: C.ink },
+  nextButtonText: { color: C.textOnOchre, fontFamily: Fonts.bodyBold, fontSize: FS.md + 1, letterSpacing: 0.3 },
 
   // ── Report modal ──
   modalBackdrop: {
@@ -3683,17 +3673,17 @@ const styles = StyleSheet.create({
   reportHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingVertical: 14, paddingHorizontal: 20,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.border,
+    borderBottomWidth: 2, borderBottomColor: C.inkFaint,
   },
-  reportTitle: { color: C.textPrimary, fontSize: FS.md, fontWeight: '700' },
+  reportTitle: { color: C.textPrimary, fontFamily: Fonts.bodyBold, fontSize: FS.md },
   reportCloseBtn: { padding: 4 },
-  reportCloseText: { color: C.textMuted, fontSize: FS.md },
+  reportCloseText: { color: C.textMuted, fontFamily: Fonts.label, fontSize: FS.md },
   reportGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   reportOption: {
     width: '50%', paddingVertical: 13, paddingHorizontal: 20,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.borderSubtle,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.borderLight,
   },
-  reportOptionText: { color: C.textSub, fontSize: FS.sm, lineHeight: 18 },
+  reportOptionText: { color: C.textSub, fontFamily: Fonts.body, fontSize: FS.sm, lineHeight: 18 },
   snack: { backgroundColor: C.surface, marginBottom: 16 },
 
   scoreBarRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)' },
@@ -3702,10 +3692,11 @@ const styles = StyleSheet.create({
   scoreChip: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     backgroundColor: C.surface, borderRadius: R.full, paddingHorizontal: 10, paddingVertical: 4,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
   },
-  scoreChipMe: { borderWidth: 1, borderColor: C.gold },
-  scoreChipName: { color: C.textSub, fontSize: FS.sm, fontWeight: '600' },
-  scoreChipCount: { color: C.gold, fontSize: FS.sm, fontWeight: '800' },
+  scoreChipMe: { borderWidth: 2, borderColor: C.ochre },
+  scoreChipName: { color: C.textSub, fontFamily: Fonts.label, fontSize: FS.sm },
+  scoreChipCount: { color: C.ochre, fontFamily: Fonts.bodyBold, fontSize: FS.sm },
 
   timelineBtn: {
     paddingHorizontal: 14, paddingVertical: 8,
@@ -3715,7 +3706,7 @@ const styles = StyleSheet.create({
   timelineBtnIcon: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   timelineMiniCard: { width: 7, height: 10, borderRadius: 1.5, backgroundColor: 'rgba(245,197,24,0.75)' },
   timelineMiniLine: { width: 4, height: 1.5, backgroundColor: 'rgba(245,197,24,0.35)' },
-  myTimelineHintLabel: { color: C.textSub, fontSize: 9, textAlign: 'center', marginBottom: 3 },
+  myTimelineHintLabel: { color: 'rgba(255,255,255,0.45)', fontFamily: Fonts.label, fontSize: 9, textAlign: 'center', marginBottom: 3 },
 
   // ── Leave dialog ──
   leaveSheet: {
@@ -3728,12 +3719,13 @@ const styles = StyleSheet.create({
   },
   leaveTitle: {
     color: C.textPrimary,
+    fontFamily: Fonts.display,
     fontSize: FS.lg,
-    fontWeight: '900',
     textAlign: 'center',
   },
   leaveBody: {
     color: C.textSub,
+    fontFamily: Fonts.body,
     fontSize: FS.sm,
     textAlign: 'center',
     lineHeight: 20,
@@ -3747,29 +3739,31 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 48,
     borderRadius: R.btn,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 2,
+    borderColor: C.inkFaint,
+    backgroundColor: C.surfaceHigh,
     alignItems: 'center',
     justifyContent: 'center',
   },
   leaveExitText: {
     color: C.textSub,
+    fontFamily: Fonts.label,
     fontSize: FS.base,
-    fontWeight: '600',
   },
   leaveStayBtn: {
     flex: 2,
     height: 48,
     borderRadius: R.btn,
-    backgroundColor: C.gold,
+    borderWidth: 2,
+    borderColor: C.ink,
+    backgroundColor: C.ochre,
     alignItems: 'center',
     justifyContent: 'center',
   },
   leaveStayText: {
-    color: C.textOnGold,
+    color: C.textOnOchre,
+    fontFamily: Fonts.display,
     fontSize: FS.base,
-    fontWeight: '900',
     letterSpacing: 0.3,
   },
 
@@ -3782,46 +3776,46 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   myTimelineHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  myTimelineTitle: { color: C.textPrimary, fontSize: FS.lg, fontWeight: '800' },
-  myTimelineEmpty: { color: C.textMuted, fontSize: FS.base, textAlign: 'center', paddingVertical: 16 },
+  myTimelineTitle: { color: C.textPrimary, fontFamily: Fonts.bodyBold, fontSize: FS.lg },
+  myTimelineEmpty: { color: C.textMuted, fontFamily: Fonts.body, fontSize: FS.base, textAlign: 'center', paddingVertical: 16 },
   myTimelineScroll: { gap: 8, paddingVertical: 4 },
   myTimelinePlaceholder: {
-    width: 90, height: 126, backgroundColor: C.bg,
-    borderRadius: R.md, borderWidth: 1, borderColor: C.border,
+    width: 90, height: 126, backgroundColor: C.surfaceHigh,
+    borderRadius: R.md, borderWidth: 2, borderColor: C.inkFaint,
     alignItems: 'center', justifyContent: 'center',
   },
-  myTimelinePlaceholderYear: { color: C.gold, fontSize: FS.md, fontWeight: '800' },
+  myTimelinePlaceholderYear: { color: C.ochre, fontFamily: Fonts.bodyBold, fontSize: FS.md },
 
   // Bonus coin guess inputs (trailerEnded screen)
   bonusCoinBox: {
     alignItems: 'stretch', gap: 8, marginTop: 12, width: '100%', paddingHorizontal: 16,
   },
   bonusCoinHint: {
-    color: C.gold, fontSize: FS.xs, fontWeight: '700',
+    color: C.ochre, fontFamily: Fonts.label, fontSize: FS.xs,
     textAlign: 'center', letterSpacing: 0.5, textTransform: 'uppercase',
   },
   guessInput: {
     backgroundColor: 'rgba(255,255,255,0.07)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)',
     borderRadius: R.sm, paddingHorizontal: 12, paddingVertical: 12,
-    color: C.textPrimary, fontSize: FS.base,
+    color: C.textPrimaryDark, fontFamily: Fonts.body, fontSize: FS.base,
   },
 
   // ── Landscape guess screen (trailer ended, active player) ──
-  guessScreen: { flex: 1, backgroundColor: C.bg },
+  guessScreen: { flex: 1, backgroundColor: C.inkBg },
   guessHeader: { paddingHorizontal: 20, paddingVertical: 10, gap: 4 },
-  guessTitle: { color: C.textPrimary, fontSize: FS.lg, fontWeight: '900', letterSpacing: 0.3 },
-  guessSubtitle: { color: C.gold, fontSize: FS.xs, fontWeight: '700', letterSpacing: 2.5, textTransform: 'uppercase' },
+  guessTitle: { color: C.textPrimaryDark, fontFamily: Fonts.display, fontSize: FS.lg, letterSpacing: 0.3 },
+  guessSubtitle: { color: C.ochre, fontFamily: Fonts.label, fontSize: FS.xs, letterSpacing: 2.5, textTransform: 'uppercase' },
   guessMainRow: { flex: 1, flexDirection: 'row', paddingHorizontal: 20, paddingBottom: 8, gap: 16 },
   guessLeftPanel: { flex: 1.2, justifyContent: 'center', gap: 10 },
   // Keyboard-visible layout: stacked inputs + Done button on right
   guessKeyboardPanel: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, gap: 12 },
   guessInputsStack: { flex: 1, gap: 10 },
   guessDoneBtn: {
-    backgroundColor: C.gold, borderRadius: R.btn,
+    backgroundColor: C.ochre, borderRadius: R.btn, borderWidth: 2, borderColor: C.ink,
     paddingHorizontal: 20, paddingVertical: 14, alignSelf: 'center',
   },
-  guessDoneBtnText: { color: C.bg, fontSize: FS.base, fontWeight: '800' },
+  guessDoneBtnText: { color: C.textOnOchre, fontFamily: Fonts.bodyBold, fontSize: FS.base },
   guessDivider: { width: 1, alignSelf: 'stretch', backgroundColor: C.border, marginVertical: 8 },
   guessRightPanel: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   guessFooter: { flexDirection: 'row', paddingHorizontal: 20, paddingBottom: 16, gap: 10 },
@@ -3829,7 +3823,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 10, paddingVertical: 14, borderRadius: R.card,
     backgroundColor: 'rgba(245,197,24,0.07)',
-    borderWidth: 1.5, borderColor: 'rgba(245,197,24,0.3)',
+    borderWidth: 2, borderColor: 'rgba(245,197,24,0.4)',
   },
   voiceMicIcon: { fontSize: 22 },
   voiceRecordingView: {
@@ -3851,42 +3845,43 @@ const styles = StyleSheet.create({
     width: 14, height: 14, borderRadius: 3, backgroundColor: '#e63946',
   },
   voiceMicText: {
-    color: C.gold, fontSize: FS.base, fontWeight: '700',
+    color: C.ochre, fontFamily: Fonts.bodyBold, fontSize: FS.base,
   },
   voiceErrorBox: {
-    backgroundColor: 'rgba(230,57,70,0.08)',
-    borderWidth: 1, borderColor: 'rgba(230,57,70,0.3)',
+    backgroundColor: 'rgba(232,55,42,0.08)',
+    borderWidth: 2, borderColor: 'rgba(232,55,42,0.35)',
     borderRadius: R.sm, padding: 14, gap: 8, alignItems: 'center',
   },
   voiceErrorText: {
-    color: C.textSub, fontSize: FS.sm, textAlign: 'center', lineHeight: 18,
+    color: C.textSubDark, fontFamily: Fonts.body, fontSize: FS.sm, textAlign: 'center', lineHeight: 18,
   },
   voiceRetryText: {
-    color: C.gold, fontSize: FS.sm, fontWeight: '700',
+    color: C.ochre, fontFamily: Fonts.bodyBold, fontSize: FS.sm,
   },
   voiceUnavailableText: {
-    color: C.textMuted, fontSize: FS.sm, textAlign: 'center',
+    color: C.textMutedDark, fontFamily: Fonts.body, fontSize: FS.sm, textAlign: 'center',
   },
   guessReplayBtn: {
     flex: 1, height: 52, borderRadius: R.card,
     backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 2, borderColor: 'rgba(255,255,255,0.18)',
     alignItems: 'center', justifyContent: 'center',
   },
-  guessReplayText: { color: C.textSub, fontSize: FS.base, fontWeight: '600' },
+  guessReplayText: { color: C.textSubDark, fontFamily: Fonts.label, fontSize: FS.base },
   guessPlaceBtn: {
-    flex: 1, height: 52, backgroundColor: C.gold, borderRadius: R.card,
+    flex: 1, height: 52, backgroundColor: C.ochre, borderRadius: R.card,
+    borderWidth: 2, borderColor: C.ink,
     alignItems: 'center', justifyContent: 'center',
   },
   guessPlaceText: {
-    color: C.textOnGold, fontSize: FS.md, fontWeight: '900', letterSpacing: 0.4,
+    color: C.textOnOchre, fontFamily: Fonts.display, fontSize: FS.md, letterSpacing: 0.4,
   },
   guessPlaceBtnDisabled: { opacity: 0.35 },
   guessResultArea: {
     flex: 1, justifyContent: 'center', alignItems: 'stretch', paddingHorizontal: 32, gap: 14,
   },
   guessResultLabel: {
-    color: C.textSub, fontSize: FS.xs, fontWeight: '700',
+    color: C.textSubDark, fontFamily: Fonts.label, fontSize: FS.xs,
     letterSpacing: 2.5, textTransform: 'uppercase', marginBottom: 4,
   },
   guessResultCard: {
@@ -3895,18 +3890,18 @@ const styles = StyleSheet.create({
     borderRadius: R.card, paddingHorizontal: 20, paddingVertical: 16,
   },
   guessResultIcon: { fontSize: 22 },
-  guessResultText: { flex: 1, color: C.textPrimary, fontSize: FS.lg, fontWeight: '700' },
+  guessResultText: { flex: 1, color: C.textPrimaryDark, fontFamily: Fonts.bodyBold, fontSize: FS.lg },
   guessRetryBtn: {
     flex: 1, height: 52, borderRadius: R.card,
     backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 2, borderColor: 'rgba(255,255,255,0.18)',
     alignItems: 'center', justifyContent: 'center',
   },
-  guessRetryText: { color: C.textSub, fontSize: FS.base, fontWeight: '600' },
+  guessRetryText: { color: C.textSubDark, fontFamily: Fonts.label, fontSize: FS.base },
 
 
   // Coin count in ScoreBar
-  scoreChipCoins: { color: C.textMuted, fontSize: FS.xs, fontWeight: '600' },
+  scoreChipCoins: { color: C.textMuted, fontFamily: Fonts.label, fontSize: FS.xs },
 
   // ── Game Over ──
   gameOverLayout: {
@@ -3919,8 +3914,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 32,
     gap: 8,
-    borderRightWidth: 1,
-    borderRightColor: C.border,
+    borderRightWidth: 2,
+    borderRightColor: 'rgba(255,255,255,0.10)',
   },
   gameOverRight: {
     flex: 1,
@@ -3928,24 +3923,24 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
   },
   gameOverLabel: {
-    color: C.gold,
+    color: C.ochre,
+    fontFamily: Fonts.label,
     fontSize: FS.xs,
-    fontWeight: '700',
     letterSpacing: 4,
     textTransform: 'uppercase',
     marginTop: 4,
   },
   gameOverWinner: {
-    color: C.textPrimary,
+    color: C.textPrimaryDark,
+    fontFamily: Fonts.display,
     fontSize: FS.xl,
-    fontWeight: '900',
     textAlign: 'center',
     letterSpacing: 0.3,
   },
   gameOverCards: {
-    color: C.textSub,
+    color: C.textSubDark,
+    fontFamily: Fonts.body,
     fontSize: FS.sm,
-    fontWeight: '500',
   },
   gameOverLeaderboard: {
     gap: 6,
@@ -3953,34 +3948,34 @@ const styles = StyleSheet.create({
   gameOverRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: C.surface,
+    backgroundColor: C.inkSurface,
     borderRadius: R.sm,
     paddingHorizontal: 14,
     paddingVertical: 10,
     gap: 12,
   },
   gameOverRowMe: {
-    borderWidth: 1,
-    borderColor: 'rgba(245,197,24,0.35)',
-    backgroundColor: C.goldFaint,
+    borderWidth: 2,
+    borderColor: C.ochre,
+    backgroundColor: 'rgba(245,197,24,0.08)',
   },
   gameOverRank: {
-    color: C.textMuted,
+    color: C.textMutedDark,
+    fontFamily: Fonts.bodyBold,
     fontSize: FS.sm,
-    fontWeight: '700',
     width: 18,
     textAlign: 'center',
   },
   gameOverPlayerName: {
     flex: 1,
-    color: C.textPrimary,
+    color: C.textPrimaryDark,
+    fontFamily: Fonts.label,
     fontSize: FS.base,
-    fontWeight: '600',
   },
   gameOverPlayerCards: {
-    color: C.gold,
+    color: C.ochre,
+    fontFamily: Fonts.bodyBold,
     fontSize: FS.base,
-    fontWeight: '800',
   },
   collapsibleBar: {
     alignItems: 'center',
@@ -4010,9 +4005,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   collapsedYearText: {
-    color: C.gold,
+    color: C.ochre,
+    fontFamily: Fonts.bodyBold,
     fontSize: FS.sm,
-    fontWeight: '800',
   },
   // Timeline sheet (absoluteFill overlay)
   timelineSheetOverlay: {
@@ -4023,6 +4018,10 @@ const styles = StyleSheet.create({
     backgroundColor: C.surfaceHigh,
     borderTopLeftRadius: R.card,
     borderTopRightRadius: R.card,
+    borderTopWidth: 2,
+    borderLeftWidth: 2,
+    borderRightWidth: 2,
+    borderColor: C.ink,
     paddingHorizontal: 16,
     paddingTop: 10,
     paddingBottom: 16,
@@ -4032,13 +4031,13 @@ const styles = StyleSheet.create({
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: C.border,
+    backgroundColor: C.inkFaint,
     alignSelf: 'center',
   },
   timelineSheetTitle: {
     color: C.textPrimary,
+    fontFamily: Fonts.bodyBold,
     fontSize: FS.base,
-    fontWeight: '800',
     textAlign: 'center',
     letterSpacing: 0.3,
   },
@@ -4054,8 +4053,8 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     justifyContent: 'flex-end',
     alignItems: 'center',
-    borderLeftWidth: StyleSheet.hairlineWidth,
-    borderLeftColor: C.borderSubtle,
+    borderLeftWidth: 1,
+    borderLeftColor: 'rgba(255,255,255,0.10)',
   },
   scoreBarTimelineBtnText: {
     fontSize: 18,
@@ -4066,8 +4065,8 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     justifyContent: 'flex-end',
     alignItems: 'center',
-    borderLeftWidth: StyleSheet.hairlineWidth,
-    borderLeftColor: C.borderSubtle,
+    borderLeftWidth: 1,
+    borderLeftColor: 'rgba(255,255,255,0.10)',
   },
   scoreBarCastBtnText: { fontSize: 18 },
   castSheet: {
@@ -4085,27 +4084,30 @@ const styles = StyleSheet.create({
   },
   castSheetTitle: {
     color: C.textPrimary,
+    fontFamily: Fonts.display,
     fontSize: FS.lg,
-    fontWeight: '900',
   },
   castCloseBtn: { padding: 4 },
-  castCloseBtnText: { color: C.textSub, fontSize: 16 },
+  castCloseBtnText: { color: C.textSub, fontFamily: Fonts.label, fontSize: 16 },
   castSheetBody: {
     color: C.textSub,
+    fontFamily: Fonts.body,
     fontSize: FS.sm,
     lineHeight: 22,
   },
   castStartBtn: {
-    backgroundColor: C.gold,
+    backgroundColor: C.ochre,
     borderRadius: R.btn,
+    borderWidth: 2,
+    borderColor: C.ink,
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: 4,
   },
   castStartBtnText: {
-    color: '#0a0a0a',
+    color: C.textOnOchre,
+    fontFamily: Fonts.display,
     fontSize: FS.base,
-    fontWeight: '900',
   },
   castAirPlayRow: {
     flexDirection: 'row',
@@ -4113,13 +4115,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     backgroundColor: C.surfaceHigh,
     borderRadius: R.md,
+    borderWidth: 2,
+    borderColor: C.inkFaint,
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
   castAirPlayLabel: {
     color: C.textSub,
+    fontFamily: Fonts.label,
     fontSize: FS.sm,
-    fontWeight: '600',
   },
   castAirPlayBtn: {
     width: 44,

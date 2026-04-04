@@ -9,7 +9,7 @@ import {
   Easing,
 } from 'react-native';
 import { Movie } from '@/lib/database.types';
-import { C, R, FS } from '@/constants/theme';
+import { C, R, FS, Fonts } from '@/constants/theme';
 import { FlippingMovieCard, CardBack, CardFront } from '@/components/MovieCard';
 
 interface ChallengerCoin {
@@ -422,22 +422,22 @@ const styles = StyleSheet.create({
   card: {
     width: 80,
     height: 100,
-    backgroundColor: C.surface,
+    backgroundColor: C.inkSurface,
     borderRadius: R.md,
-    borderWidth: 1,
-    borderColor: C.border,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.15)',
     padding: 8,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
   },
   cardYear: {
-    color: C.gold,
+    color: C.ochre,
     fontSize: FS.md,
-    fontWeight: '800',
+    fontFamily: Fonts.display,
   },
   cardTitle: {
-    color: C.textSub,
+    color: C.textSubDark,
     fontSize: FS.micro,
     textAlign: 'center',
     lineHeight: 12,
@@ -451,9 +451,9 @@ const styles = StyleSheet.create({
   placedMarkerLabel: {
     position: 'absolute',
     top: -16,
-    color: C.gold,
+    color: C.ochre,
     fontSize: 9,
-    fontWeight: '700',
+    fontFamily: Fonts.label,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
     opacity: 0.9,
@@ -469,9 +469,9 @@ const styles = StyleSheet.create({
   coinLabel: {
     position: 'absolute',
     top: -16,
-    color: C.gold,
+    color: C.ochre,
     fontSize: 9,
-    fontWeight: '700',
+    fontFamily: Fonts.label,
     letterSpacing: 0.5,
     textTransform: 'uppercase',
     opacity: 0.75,
@@ -487,9 +487,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   coinInitials: {
-    color: C.gold,
+    color: C.ochre,
     fontSize: FS.xs,
-    fontWeight: '800',
+    fontFamily: Fonts.display,
   },
   gapSpacer: {
     width: 20,
@@ -503,7 +503,7 @@ const styles = StyleSheet.create({
   gapBlockedText: {
     color: 'rgba(230,57,70,0.45)',
     fontSize: FS.xs,
-    fontWeight: '700',
+    fontFamily: Fonts.bodyBold,
   },
   gapTap: {
     width: 32,
@@ -525,7 +525,7 @@ const styles = StyleSheet.create({
     color: 'rgba(245,197,24,0.8)',
     fontSize: 16,
     lineHeight: 20,
-    fontWeight: '400',
+    fontFamily: Fonts.body,
     includeFontPadding: false,
   },
   activeGap: {
@@ -567,7 +567,7 @@ const styles = StyleSheet.create({
   confirmCheckmarkText: {
     color: 'rgba(245,197,24,0.9)',
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: Fonts.bodyBold,
     lineHeight: 22,
   },
 });

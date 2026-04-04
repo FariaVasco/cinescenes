@@ -6,6 +6,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { supabase } from '@/lib/supabase';
 import { useAppStore } from '@/store/useAppStore';
+import { C, R, FS, Fonts } from '@/constants/theme';
 
 type ErrorInfo = { title: string; body: string };
 
@@ -210,8 +211,8 @@ const styles = StyleSheet.create({
     width: FRAME_SIZE,
     height: FRAME_SIZE,
     borderWidth: 2,
-    borderColor: '#f5c518',
-    borderRadius: 12,
+    borderColor: C.ochre,
+    borderRadius: R.card,
   },
   overlayBottom: {
     flex: 1,
@@ -233,8 +234,8 @@ const styles = StyleSheet.create({
   },
   closeButtonText: {
     color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
+    fontFamily: Fonts.label,
+    fontSize: FS.md,
   },
   hint: {
     alignItems: 'center',
@@ -242,14 +243,15 @@ const styles = StyleSheet.create({
   },
   hintText: {
     color: '#fff',
-    fontSize: 15,
+    fontFamily: Fonts.label,
+    fontSize: FS.sm,
     backgroundColor: 'rgba(0,0,0,0.5)',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
     overflow: 'hidden',
   },
-  // Permission screen
+  // Permission screen (dark context — camera is landscape)
   permissionContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -261,36 +263,40 @@ const styles = StyleSheet.create({
     fontSize: 48,
   },
   permissionTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#fff',
+    fontFamily: Fonts.display,
+    fontSize: FS.xl,
+    color: C.textPrimaryDark,
     textAlign: 'center',
   },
   permissionBody: {
-    fontSize: 15,
-    color: '#888',
+    fontFamily: Fonts.body,
+    fontSize: FS.base,
+    color: C.textSubDark,
     textAlign: 'center',
     lineHeight: 22,
   },
   permissionButton: {
     marginTop: 8,
-    backgroundColor: '#f5c518',
-    borderRadius: 12,
+    backgroundColor: C.ochre,
+    borderRadius: R.btn,
+    borderWidth: 2,
+    borderColor: C.ink,
     paddingVertical: 14,
     paddingHorizontal: 40,
   },
   permissionButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0a0a0a',
+    fontFamily: Fonts.display,
+    fontSize: FS.md,
+    color: C.textOnOchre,
   },
   backButton: {
     paddingVertical: 12,
     paddingHorizontal: 24,
   },
   backButtonText: {
-    fontSize: 15,
-    color: '#666',
+    fontFamily: Fonts.label,
+    fontSize: FS.sm,
+    color: C.textMutedDark,
   },
   // ── Modals (landscape-optimised) ──
   modalBackdrop: {
@@ -305,8 +311,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 24,
-    backgroundColor: '#1a1a2e',
-    borderRadius: 18,
+    backgroundColor: C.inkSurface,
+    borderRadius: R.sheet,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.12)',
     paddingVertical: 22,
     paddingHorizontal: 28,
     width: '100%',
@@ -317,13 +325,14 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   exitTitle: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: '700',
+    color: C.textPrimaryDark,
+    fontFamily: Fonts.display,
+    fontSize: FS.lg,
   },
   exitBody: {
-    color: '#888',
-    fontSize: 13,
+    color: C.textSubDark,
+    fontFamily: Fonts.body,
+    fontSize: FS.sm,
   },
   exitSheetRight: {
     flexDirection: 'row',
@@ -331,43 +340,48 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   stayBtn: {
-    backgroundColor: '#f5c518',
-    borderRadius: 22,
+    backgroundColor: C.ochre,
+    borderRadius: R.btn,
+    borderWidth: 2,
+    borderColor: C.ink,
     paddingVertical: 10,
     paddingHorizontal: 22,
   },
   stayBtnText: {
-    color: '#0a0a0a',
-    fontSize: 15,
-    fontWeight: '700',
+    color: C.textOnOchre,
+    fontFamily: Fonts.display,
+    fontSize: FS.base,
   },
   leaveBtn: {
     paddingVertical: 10,
     paddingHorizontal: 18,
   },
   leaveBtnText: {
-    color: '#777',
-    fontSize: 15,
-    fontWeight: '600',
+    color: C.textSubDark,
+    fontFamily: Fonts.label,
+    fontSize: FS.base,
   },
   // Error — compact centred card
   errorSheet: {
-    backgroundColor: '#1a1a2e',
-    borderRadius: 18,
+    backgroundColor: C.inkSurface,
+    borderRadius: R.sheet,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.12)',
     padding: 24,
     gap: 10,
     width: '100%',
     maxWidth: 420,
   },
   errorTitle: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: '700',
+    color: C.textPrimaryDark,
+    fontFamily: Fonts.display,
+    fontSize: FS.lg,
   },
   errorBody: {
-    color: '#aaa',
-    fontSize: 14,
-    lineHeight: 20,
+    color: C.textSubDark,
+    fontFamily: Fonts.body,
+    fontSize: FS.base,
+    lineHeight: 22,
   },
   errorActions: {
     flexDirection: 'row',

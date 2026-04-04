@@ -1,9 +1,13 @@
 /**
- * CinemaButton — unified button component for Cinescenes.
- * Translated from the Figma Make design (web → React Native).
+ * CinemaButton — Ligne Claire button component.
  *
- * Variants: 'primary' (gold fill) | 'ghost' (bordered) | 'danger' (red fill)
- * Sizes:    'sm' | 'md' | 'lg'
+ * Variants:
+ *   'primary'   — ochre fill, ink text, ink stroke     (main CTAs)
+ *   'secondary' — vermillion fill, white text, ink stroke
+ *   'ghost'     — transparent, ink stroke, ink text
+ *   'danger'    — alias for 'secondary' (kept for compatibility)
+ *
+ * Sizes: 'sm' | 'md' | 'lg'
  */
 
 import { useRef } from 'react';
@@ -13,12 +17,11 @@ import {
   Text,
   TouchableOpacity,
   TouchableOpacityProps,
-  View,
 } from 'react-native';
-import { C, R, FS } from '@/constants/theme';
+import { C, R, FS, Fonts } from '@/constants/theme';
 
 interface CinemaButtonProps extends TouchableOpacityProps {
-  variant?: 'primary' | 'ghost' | 'danger';
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
   size?: 'sm' | 'md' | 'lg';
   children: React.ReactNode;
 }
@@ -35,11 +38,13 @@ export function CinemaButton({
   const scale = useRef(new Animated.Value(1)).current;
 
   const onPressIn = () => {
-    Animated.spring(scale, { toValue: 0.97, useNativeDriver: true, speed: 40, bounciness: 0 }).start();
+    Animated.timing(scale, { toValue: 0.97, useNativeDriver: true, duration: 80 }).start();
   };
   const onPressOut = () => {
-    Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 4 }).start();
+    Animated.timing(scale, { toValue: 1, useNativeDriver: true, duration: 120 }).start();
   };
+
+  const resolvedVariant = variant === 'danger' ? 'secondary' : variant;
 
   return (
     <Animated.View style={[{ transform: [{ scale }] }, style]}>
@@ -52,12 +57,12 @@ export function CinemaButton({
         style={[
           s.base,
           sizeStyle[size],
-          variantStyle[variant],
+          variantStyle[resolvedVariant],
           disabled && s.disabled,
         ]}
         {...rest}
       >
-        <Text style={[s.label, sizeLabel[size], variantLabel[variant], disabled && s.labelDisabled]}>
+        <Text style={[s.label, sizeLabel[size], variantLabel[resolvedVariant]]}>
           {children}
         </Text>
       </TouchableOpacity>
@@ -65,51 +70,43 @@ export function CinemaButton({
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
-
 const s = StyleSheet.create({
   base: {
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: C.ink,
   },
   disabled: {
-    opacity: 0.4,
+    opacity: 0.35,
   },
   label: {
-    fontWeight: '600',
+    fontFamily: Fonts.display,
     textAlign: 'center',
+    letterSpacing: 0.5,
   },
-  labelDisabled: {},
 });
 
 const sizeStyle = StyleSheet.create({
-  sm: { paddingHorizontal: 16, paddingVertical:  8, borderRadius: R.sm  },
+  sm: { paddingHorizontal: 16, paddingVertical:  8, borderRadius: R.md  },
   md: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: R.btn },
   lg: { paddingHorizontal: 32, paddingVertical: 16, borderRadius: R.btn },
 });
 
 const sizeLabel = StyleSheet.create({
   sm: { fontSize: FS.base },
-  md: { fontSize: FS.base },
-  lg: { fontSize: FS.lg   },
+  md: { fontSize: FS.md   },
+  lg: { fontSize: FS.xl   },
 });
 
 const variantStyle = StyleSheet.create({
-  primary: {
-    backgroundColor: C.gold,
-  },
-  ghost: {
-    backgroundColor: 'transparent',
-    borderWidth: 2,
-    borderColor: C.border,
-  },
-  danger: {
-    backgroundColor: C.danger,
-  },
+  primary:   { backgroundColor: C.ochre },
+  secondary: { backgroundColor: C.vermillion },
+  ghost:     { backgroundColor: 'transparent' },
 });
 
 const variantLabel = StyleSheet.create({
-  primary: { color: C.textOnGold },
-  ghost:   { color: C.textPrimary },
-  danger:  { color: '#ffffff' },
+  primary:   { color: C.textOnOchre },
+  secondary: { color: C.textOnRed },
+  ghost:     { color: C.textPrimary },
 });

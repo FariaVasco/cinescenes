@@ -1,31 +1,15 @@
-import React, { useCallback } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { useCallback } from 'react';
+import { View, Text, Image, StyleSheet } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ScreenOrientation from 'expo-screen-orientation';
-import { CinescenesLogo } from '@/components/CinescenesLogo';
 import { CinemaButton } from '@/components/CinemaButton';
-import { DecoFilmReel, DecoClapperboard, DecoStar } from '@/components/CinemaIcons';
-import { C, T, SP } from '@/constants/theme';
+import { C, Fonts, FS, SP } from '@/constants/theme';
 
-type DecoEntry = {
-  Component: React.ComponentType<{ size?: number; opacity?: number }>;
-  size: number; top: string; rotate: string; opacity: number;
-  left?: string; right?: string;
-};
-
-const DECOS: DecoEntry[] = [
-  { Component: DecoClapperboard, size: 80,  top: '5%',  left: '5%',   rotate: '-15deg', opacity: 0.07 },
-  { Component: DecoFilmReel,     size: 96,  top: '10%', right: '6%',  rotate: '10deg',  opacity: 0.08 },
-  { Component: DecoStar,         size: 64,  top: '3%',  left: '48%',  rotate: '5deg',   opacity: 0.07 },
-  { Component: DecoClapperboard, size: 72,  top: '70%', left: '3%',   rotate: '20deg',  opacity: 0.06 },
-  { Component: DecoFilmReel,     size: 88,  top: '74%', right: '5%',  rotate: '-12deg', opacity: 0.07 },
-  { Component: DecoStar,         size: 56,  top: '42%', left: '52%',  rotate: '15deg',  opacity: 0.06 },
-  { Component: DecoClapperboard, size: 68,  top: '83%', left: '30%',  rotate: '-8deg',  opacity: 0.06 },
-  { Component: DecoFilmReel,     size: 80,  top: '29%', left: '8%',   rotate: '22deg',  opacity: 0.07 },
-  { Component: DecoStar,         size: 48,  top: '56%', right: '10%', rotate: '-5deg',  opacity: 0.06 },
-  { Component: DecoStar,         size: 60,  top: '20%', left: '62%',  rotate: '30deg',  opacity: 0.05 },
-];
+const lcClapperboard  = require('@/assets/lc-clapperboard.png');
+const lcFilmReel      = require('@/assets/lc-film-reel.png');
+const lcSpinningWheel = require('@/assets/lc-spinning-wheel.png');
+const lcCoin          = require('@/assets/lc-coin.png');
 
 export default function LandingScreen() {
   const router = useRouter();
@@ -38,37 +22,44 @@ export default function LandingScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* SVG decorative background */}
-      {DECOS.map(({ Component, size, top, left, right, rotate, opacity }, i) => (
-        <View
-          key={i}
-          style={{
-            position: 'absolute',
-            top: top as any,
-            left: left as any,
-            right: right as any,
-            transform: [{ rotate }],
-          }}
-          pointerEvents="none"
-        >
-          <Component size={size} opacity={opacity} />
-        </View>
-      ))}
 
+      {/* Geometric background accents */}
+      <View style={styles.accentTopRight}  pointerEvents="none" />
+      <View style={styles.accentBottomLeft} pointerEvents="none" />
+
+      {/* Background icons — low opacity */}
+      <Image source={lcFilmReel}      style={styles.bgFilmReel}      pointerEvents="none" />
+      <Image source={lcSpinningWheel} style={styles.bgSpinningWheel} pointerEvents="none" />
+      <Image source={lcCoin}          style={styles.bgCoin}          pointerEvents="none" />
+
+      {/* Hero */}
       <View style={styles.hero}>
-        <CinescenesLogo layout="vertical" iconSize={68} />
-        <Text style={styles.tagline}>Build your timeline.</Text>
+
+        {/* Light halo behind main icon to lift it from background icons */}
+        <View style={styles.iconHalo}>
+          <Image source={lcClapperboard} style={styles.mainIcon} />
+        </View>
+
+        <Text style={styles.wordmark}>CINESCENES</Text>
+        <Text style={styles.tagline}>A love letter to cinema</Text>
+        <View style={styles.divider} />
       </View>
 
+      {/* Actions */}
       <View style={styles.actions}>
         <CinemaButton size="lg" onPress={() => router.push('/play')} style={styles.fullWidth}>
-          LET'S PLAY
+          Let's Play
         </CinemaButton>
-
-        <CinemaButton variant="ghost" size="md" onPress={() => router.push('/rules')} style={styles.fullWidth}>
-          HOW TO PLAY
+        <CinemaButton
+          variant="ghost"
+          size="md"
+          onPress={() => router.push('/rules')}
+          style={styles.fullWidth}
+        >
+          How to Play
         </CinemaButton>
       </View>
+
     </SafeAreaView>
   );
 }
@@ -77,21 +68,107 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: C.bg,
-    paddingHorizontal: SP.lg + 4,
+    paddingHorizontal: SP.lg,
   },
+
+  // Geometric accents
+  accentTopRight: {
+    position: 'absolute',
+    top: -80,
+    right: -80,
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: 'rgba(232,55,42,0.07)',
+  },
+  accentBottomLeft: {
+    position: 'absolute',
+    bottom: -60,
+    left: -60,
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: 'rgba(74,158,196,0.07)',
+  },
+
+  // Background icons
+  bgFilmReel: {
+    position: 'absolute',
+    left: -20,
+    top: '22%',
+    width: 130,
+    height: 130,
+    opacity: 0.18,
+  },
+  bgSpinningWheel: {
+    position: 'absolute',
+    right: -16,
+    top: '30%',
+    width: 110,
+    height: 110,
+    opacity: 0.15,
+  },
+  bgCoin: {
+    position: 'absolute',
+    right: 24,
+    bottom: '18%',
+    width: 72,
+    height: 72,
+    opacity: 0.14,
+  },
+
+  // Hero
   hero: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: SP.md,
+    gap: SP.sm,
+  },
+  iconHalo: {
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    backgroundColor: C.bg,
+    shadowColor: C.bg,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 28,
+    elevation: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mainIcon: {
+    width: 140,
+    height: 140,
+    resizeMode: 'contain',
+  },
+  wordmark: {
+    fontFamily: Fonts.display,
+    fontSize: 52,
+    letterSpacing: 8,
+    color: C.cerulean,
+    marginTop: SP.sm,
+    textAlign: 'center',
   },
   tagline: {
-    ...T.overline,
+    fontFamily: Fonts.label,
+    fontSize: FS.xs,
+    letterSpacing: 3.5,
+    textTransform: 'uppercase',
+    color: C.textMuted,
     marginTop: SP.xs,
   },
+  divider: {
+    width: 64,
+    height: 2,
+    backgroundColor: C.ink,
+    marginTop: SP.md,
+  },
+
+  // Buttons
   actions: {
-    paddingBottom: SP.md,
-    gap: SP.sm + 4,
+    paddingBottom: SP.lg,
+    gap: SP.sm,
   },
   fullWidth: {
     width: '100%',

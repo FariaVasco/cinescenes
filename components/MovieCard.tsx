@@ -1,7 +1,7 @@
 import { useEffect, useImperativeHandle, forwardRef, useRef } from 'react';
 import { View, Text, Animated, StyleSheet } from 'react-native';
 import { Movie } from '@/lib/database.types';
-import { cardColor } from '@/constants/theme';
+import { cardColor, Fonts } from '@/constants/theme';
 
 export { cardColor as getCardColor };
 
@@ -153,8 +153,8 @@ const s = StyleSheet.create({
     justifyContent: 'center',
   },
   shellOutlined: {
-    borderWidth: 1,
-    borderColor: 'rgba(245,197,24,0.35)',
+    borderWidth: 2,
+    borderColor: 'rgba(245,197,24,0.45)',
   },
   // Outer gold border frame (absolute inset)
   frame1: {
@@ -177,7 +177,7 @@ const s = StyleSheet.create({
   },
   word: {
     color: `${GOLD}0.88)`,
-    fontWeight: '800',
+    fontFamily: Fonts.display,
     textAlign: 'center',
   },
   rule: {
@@ -215,24 +215,21 @@ const s = StyleSheet.create({
   frontDirector: {
     alignSelf: 'stretch',
     color: 'rgba(255,255,255,0.75)',
-    fontWeight: '500',
+    fontFamily: Fonts.body,
     fontStyle: 'italic',
     textAlign: 'center',
   },
   frontYear: {
     alignSelf: 'stretch',
     color: '#ffffff',
-    fontWeight: '900',
+    fontFamily: Fonts.display,
     letterSpacing: -0.5,
     textAlign: 'center',
-    textShadowColor: 'rgba(0,0,0,0.25)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
   },
   frontTitle: {
     alignSelf: 'stretch',
     color: 'rgba(255,255,255,0.9)',
-    fontWeight: '700',
+    fontFamily: Fonts.bodyBold,
     fontStyle: 'italic',
     textAlign: 'center',
   },

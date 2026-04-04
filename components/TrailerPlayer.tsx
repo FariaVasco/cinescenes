@@ -2,6 +2,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 're
 import { View, StyleSheet, ActivityIndicator, useWindowDimensions } from 'react-native';
 import YoutubePlayer from 'react-native-youtube-iframe';
 import { Movie } from '@/lib/database.types';
+import { C } from '@/constants/theme';
 
 export interface TrailerPlayerHandle {
   pause: () => void;
@@ -222,7 +223,7 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
 
         {loading && (
           <View style={styles.loader}>
-            <ActivityIndicator size="large" color="#f5c518" />
+            <ActivityIndicator size="large" color={C.ochre} />
           </View>
         )}
       </View>

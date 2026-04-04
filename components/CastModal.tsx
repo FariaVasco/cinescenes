@@ -8,7 +8,7 @@ import {
   StyleSheet,
   ScrollView,
 } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { C, R, FS, Fonts } from '@/constants/theme';
 
 interface CastModalProps {
   visible: boolean;
@@ -33,7 +33,7 @@ export function CastModal({ visible, onDismiss, onConfirm }: CastModalProps) {
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerLeft}>
-              <MaterialCommunityIcons name="cast" size={20} color="#f5c518" />
+              <Text style={styles.castIcon}>📺</Text>
               <Text style={styles.headerTitle}>Cast to TV</Text>
             </View>
             <TouchableOpacity onPress={onDismiss} style={styles.closeBtn}>
@@ -106,8 +106,7 @@ export function CastModal({ visible, onDismiss, onConfirm }: CastModalProps) {
                 Once mirrored, everything on your phone appears on the TV.
               </Text>
               <TouchableOpacity style={styles.startBtn} onPress={onConfirm}>
-                <MaterialCommunityIcons name="cast" size={16} color="#0a0a0a" />
-                <Text style={styles.startBtnText}>Start Playing</Text>
+                <Text style={styles.startBtnText}>Start Playing →</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -137,8 +136,10 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   sheet: {
-    backgroundColor: '#1a1a2e',
-    borderRadius: 20,
+    backgroundColor: C.inkSurface,
+    borderRadius: R.sheet,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.12)',
     overflow: 'hidden',
     width: '100%',
     maxWidth: 680,
@@ -149,21 +150,22 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 14,
     paddingHorizontal: 20,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.10)',
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 9,
   },
+  castIcon: { fontSize: 18 },
   headerTitle: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '700',
+    color: C.textPrimaryDark,
+    fontSize: FS.md,
+    fontFamily: Fonts.bodyBold,
   },
   closeBtn: { padding: 4 },
-  closeText: { color: '#666', fontSize: 16 },
+  closeText: { color: C.textMutedDark, fontSize: FS.md, fontFamily: Fonts.label },
 
   columns: {
     flexDirection: 'row',
@@ -179,7 +181,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     width: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(255,255,255,0.10)',
     marginVertical: 4,
   },
   rightCol: {
@@ -190,11 +192,11 @@ const styles = StyleSheet.create({
   },
 
   stepsLabel: {
-    color: '#888',
-    fontSize: 11,
-    fontWeight: '600',
+    color: C.textSubDark,
+    fontSize: FS.xs,
+    fontFamily: Fonts.label,
     textTransform: 'uppercase',
-    letterSpacing: 1,
+    letterSpacing: 1.5,
     marginBottom: 10,
   },
   steps: {
@@ -210,22 +212,25 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: '#f5c518',
+    backgroundColor: C.ochre,
+    borderWidth: 1,
+    borderColor: C.ink,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 1,
     flexShrink: 0,
   },
   stepNum: {
-    color: '#0a0a0a',
-    fontSize: 11,
-    fontWeight: '800',
+    color: C.textOnOchre,
+    fontSize: FS.xs,
+    fontFamily: Fonts.display,
   },
   stepText: {
     flex: 1,
-    color: '#ddd',
-    fontSize: 13,
+    color: C.textSubDark,
+    fontSize: FS.sm,
     lineHeight: 18,
+    fontFamily: Fonts.body,
   },
 
   fireStickToggle: {
@@ -234,45 +239,47 @@ const styles = StyleSheet.create({
     borderTopColor: 'rgba(255,255,255,0.08)',
   },
   fireStickToggleText: {
-    color: '#777',
-    fontSize: 12,
-    fontWeight: '500',
+    color: C.textMutedDark,
+    fontSize: FS.sm,
+    fontFamily: Fonts.label,
   },
   fireStickBody: {
     backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 8,
+    borderRadius: R.sm,
     padding: 10,
     gap: 6,
     marginTop: 6,
   },
   fireStickStep: {
-    color: '#888',
-    fontSize: 11,
+    color: C.textMutedDark,
+    fontSize: FS.xs,
     lineHeight: 16,
+    fontFamily: Fonts.body,
   },
   bold: {
-    color: '#bbb',
-    fontWeight: '600',
+    color: C.textSubDark,
+    fontFamily: Fonts.bodyBold,
   },
 
   footnote: {
     flex: 1,
-    color: '#555',
-    fontSize: 11,
+    color: C.textMutedDark,
+    fontSize: FS.xs,
     lineHeight: 16,
+    fontFamily: Fonts.body,
   },
   startBtn: {
-    backgroundColor: '#f5c518',
-    borderRadius: 12,
+    backgroundColor: C.ochre,
+    borderRadius: R.btn,
+    borderWidth: 2,
+    borderColor: C.ink,
     paddingVertical: 13,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 7,
   },
   startBtnText: {
-    color: '#0a0a0a',
-    fontSize: 14,
-    fontWeight: '800',
+    color: C.textOnOchre,
+    fontSize: FS.md,
+    fontFamily: Fonts.display,
   },
 });

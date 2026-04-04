@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
-import { C, R, FS } from '@/constants/theme';
+import { C, R, FS, Fonts, SP } from '@/constants/theme';
 import { BackButton } from '@/components/BackButton';
 import { supabase } from '@/lib/supabase';
 import { Game } from '@/lib/database.types';
@@ -57,35 +57,24 @@ export default function LobbyBrowserScreen() {
         .gt('created_at', tenMinAgo)
         .order('created_at', { ascending: false }) as { data: Game[] | null };
 
-      if (!games || games.length === 0) {
-        setEntries([]);
-        return;
-      }
+      if (!games || games.length === 0) { setEntries([]); return; }
 
       const gameIds = games.map((g) => g.id);
 
-      // Fetch player counts for all games in one query
       const { data: players } = await db
-        .from('players')
-        .select('game_id')
-        .in('game_id', gameIds) as { data: { game_id: string }[] | null };
+        .from('players').select('game_id').in('game_id', gameIds) as { data: { game_id: string }[] | null };
 
       const countByGame: Record<string, number> = {};
       for (const p of players ?? []) {
         countByGame[p.game_id] = (countByGame[p.game_id] ?? 0) + 1;
       }
 
-      // Fetch collection names for collection games
       const collectionIds = [...new Set(games.filter((g) => g.collection_id).map((g) => g.collection_id!))];
       const collectionNames: Record<string, string> = {};
       if (collectionIds.length > 0) {
         const { data: cols } = await db
-          .from('collections')
-          .select('id, name')
-          .in('id', collectionIds) as { data: { id: string; name: string }[] | null };
-        for (const c of cols ?? []) {
-          collectionNames[c.id] = c.name;
-        }
+          .from('collections').select('id, name').in('id', collectionIds) as { data: { id: string; name: string }[] | null };
+        for (const c of cols ?? []) { collectionNames[c.id] = c.name; }
       }
 
       const result: LobbyEntry[] = games
@@ -105,10 +94,7 @@ export default function LobbyBrowserScreen() {
     }
   }
 
-  function handleRefresh() {
-    setRefreshing(true);
-    fetchGames();
-  }
+  function handleRefresh() { setRefreshing(true); fetchGames(); }
 
   function joinGame(code: string) {
     router.push({ pathname: '/local-lobby', params: { joinCode: code } });
@@ -118,9 +104,18 @@ export default function LobbyBrowserScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+
+      {/* Geometric accent */}
+      <View style={styles.accentTopRight} pointerEvents="none" />
+
+      {/* Header */}
       <View style={styles.header}>
         <BackButton onPress={() => router.back()} />
-        <Text style={styles.title}>Join Game</Text>
+        <View style={styles.headerText}>
+          <Text style={styles.sectionLabel}>Online</Text>
+          <Text style={styles.title}>Join Game</Text>
+          <View style={styles.titleUnderline} />
+        </View>
       </View>
 
       <KeyboardAvoidingView
@@ -130,7 +125,7 @@ export default function LobbyBrowserScreen() {
       >
         {loading ? (
           <View style={styles.centered}>
-            <ActivityIndicator color={C.gold} />
+            <ActivityIndicator color={C.ochre} />
           </View>
         ) : (
           <FlatList
@@ -141,7 +136,7 @@ export default function LobbyBrowserScreen() {
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={handleRefresh}
-                tintColor={C.gold}
+                tintColor={C.ochre}
               />
             }
             ListEmptyComponent={
@@ -171,9 +166,12 @@ export default function LobbyBrowserScreen() {
           />
         )}
 
+        {/* Invite code footer */}
         <View style={styles.inviteFooter}>
           <View style={styles.inviteCard}>
-            <Text style={styles.inviteLabel}>Have an invite code?</Text>
+            <View style={styles.inviteCardHeader}>
+              <Text style={styles.inviteLabel}>Have an invite code?</Text>
+            </View>
             <Text style={styles.inviteSub}>Enter the code your host shared with you</Text>
             <View style={styles.inviteRow}>
               <TextInput
@@ -206,72 +204,125 @@ export default function LobbyBrowserScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
   flex: { flex: 1 },
+
+  // Geometric accent
+  accentTopRight: {
+    position: 'absolute', top: -60, right: -60,
+    width: 160, height: 160, borderRadius: 80,
+    backgroundColor: 'rgba(74,158,196,0.07)',
+  },
+
+  // Header
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingRight: 20,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,0.06)',
+    borderBottomWidth: 2,
+    borderBottomColor: C.inkFaint,
+    paddingBottom: SP.sm,
+  },
+  headerText: {
+    paddingHorizontal: SP.lg,
+    paddingTop: SP.xs,
+    gap: 2,
+  },
+  sectionLabel: {
+    fontFamily: Fonts.label,
+    fontSize: FS.xs, letterSpacing: 2.5,
+    textTransform: 'uppercase', color: C.textMuted,
   },
   title: {
-    flex: 1,
-    color: C.textPrimary,
-    fontSize: FS.xl,
-    fontWeight: '900',
+    fontFamily: Fonts.display,
+    fontSize: FS['2xl'], color: C.ink, letterSpacing: 0.5,
   },
+  titleUnderline: {
+    width: 40, height: 2,
+    backgroundColor: C.cerulean, marginTop: 4,
+  },
+
+  // States
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  listContent: { paddingHorizontal: 20, paddingTop: 16, gap: 12, paddingBottom: 24 },
+  listContent: { paddingHorizontal: SP.lg, paddingTop: SP.md, gap: 10, paddingBottom: SP.lg },
   emptyContainer: { flex: 1 },
   emptyState: {
-    flex: 1, justifyContent: 'center', alignItems: 'center', gap: 10, paddingTop: 80,
+    flex: 1, justifyContent: 'center', alignItems: 'center',
+    gap: 8, paddingTop: 80,
   },
   emptyIcon: { fontSize: 48 },
-  emptyText: { color: C.textSub, fontSize: FS.lg, fontWeight: '600' },
-  emptyHint: { color: C.textMuted, fontSize: FS.sm },
-  gameCard: {
-    backgroundColor: C.surface, borderRadius: R.card, padding: 18,
-    flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: C.border,
+  emptyText: {
+    fontFamily: Fonts.bodyBold,
+    color: C.textSub, fontSize: FS.lg,
   },
-  gameCardLeft: { flex: 1, gap: 4 },
-  collectionName: { color: C.textPrimary, fontSize: FS.base, fontWeight: '700' },
-  playerCount: { color: C.textSub, fontSize: FS.sm },
-  joinBtn: {
-    backgroundColor: C.gold, borderRadius: R.btn,
-    paddingHorizontal: 20, paddingVertical: 10,
+  emptyHint: {
+    fontFamily: Fonts.label,
+    color: C.textMuted, fontSize: FS.sm,
   },
-  joinBtnText: { color: C.textOnGold, fontSize: FS.base, fontWeight: '800' },
 
+  // Game card
+  gameCard: {
+    backgroundColor: C.surface,
+    borderRadius: R.card, borderWidth: 2, borderColor: C.ink,
+    paddingHorizontal: SP.md, paddingVertical: 16,
+    flexDirection: 'row', alignItems: 'center',
+  },
+  gameCardLeft: { flex: 1, gap: 3 },
+  collectionName: {
+    fontFamily: Fonts.display,
+    color: C.ink, fontSize: FS.md, letterSpacing: 0.3,
+  },
+  playerCount: {
+    fontFamily: Fonts.label,
+    color: C.textSub, fontSize: FS.sm,
+  },
+  joinBtn: {
+    backgroundColor: C.ochre,
+    borderRadius: R.btn, borderWidth: 2, borderColor: C.ink,
+    paddingHorizontal: 20, paddingVertical: 9,
+  },
+  joinBtnText: {
+    fontFamily: Fonts.display,
+    color: C.ink, fontSize: FS.md, letterSpacing: 0.3,
+  },
+
+  // Invite footer
   inviteFooter: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 20,
+    paddingHorizontal: SP.lg,
+    paddingTop: SP.sm,
+    paddingBottom: SP.md,
   },
   inviteCard: {
-    backgroundColor: C.goldFaint,
-    borderRadius: R.card,
-    borderWidth: 1,
-    borderColor: 'rgba(245,197,24,0.35)',
-    padding: 18,
-    gap: 10,
+    backgroundColor: C.surface,
+    borderRadius: R.card, borderWidth: 2, borderColor: C.ink,
+    padding: SP.md, gap: 10,
+  },
+  inviteCardHeader: {
+    borderBottomWidth: 2,
+    borderBottomColor: C.ochre,
+    paddingBottom: 8,
   },
   inviteLabel: {
-    color: C.gold, fontSize: FS.md, fontWeight: '800',
-    letterSpacing: 0.2,
+    fontFamily: Fonts.display,
+    color: C.ink, fontSize: FS.lg, letterSpacing: 0.3,
   },
   inviteSub: {
+    fontFamily: Fonts.label,
     color: C.textSub, fontSize: FS.sm, marginTop: -4,
   },
   inviteRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
   inviteInput: {
-    flex: 1, backgroundColor: C.surface, borderRadius: R.md,
-    borderWidth: 1, borderColor: 'rgba(245,197,24,0.3)', color: C.textPrimary,
-    fontSize: FS.md, paddingHorizontal: 14, paddingVertical: 12,
-    letterSpacing: 3, fontWeight: '700',
+    flex: 1, backgroundColor: C.bg,
+    borderRadius: R.md, borderWidth: 2, borderColor: C.ink,
+    color: C.textPrimary, fontSize: FS.xl,
+    paddingHorizontal: SP.md, paddingVertical: 10,
+    letterSpacing: 6,
+    fontFamily: Fonts.display,
+    textAlign: 'center',
   },
   inviteJoinBtn: {
-    backgroundColor: C.gold, borderRadius: R.btn,
+    backgroundColor: C.ochre,
+    borderRadius: R.btn, borderWidth: 2, borderColor: C.ink,
     paddingHorizontal: 20, paddingVertical: 12,
   },
   inviteJoinBtnDisabled: { opacity: 0.35 },
-  inviteJoinBtnText: { color: C.textOnGold, fontSize: FS.base, fontWeight: '800' },
+  inviteJoinBtnText: {
+    fontFamily: Fonts.display,
+    color: C.ink, fontSize: FS.md, letterSpacing: 0.3,
+  },
 });

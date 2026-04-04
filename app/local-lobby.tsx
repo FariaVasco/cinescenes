@@ -12,13 +12,13 @@ import {
   Platform,
   BackHandler,
 } from 'react-native';
-import { C, R, FS } from '@/constants/theme';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ScreenOrientation from 'expo-screen-orientation';
+import { C, R, FS, Fonts, SP } from '@/constants/theme';
 import { CinemaButton } from '@/components/CinemaButton';
 import { BackButton } from '@/components/BackButton';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { ClapperboardIcon, FilmReelIcon } from '@/components/CinemaIcons';
 import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
 import { Game, Movie, Player } from '@/lib/database.types';
@@ -64,7 +64,6 @@ export default function LocalLobbyScreen() {
 
   const nameInputRef = useRef<TextInput>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // Keep latest values accessible inside the interval without stale closure
   const gameIdRef = useRef<string | null>(null);
   const isHostRef = useRef(false);
   const navigatedRef = useRef(false);
@@ -81,10 +80,7 @@ export default function LocalLobbyScreen() {
   }, []);
 
   function stopPolling() {
-    if (pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
   }
 
   function startPolling(gameId: string, asHost: boolean) {
@@ -105,7 +101,6 @@ export default function LocalLobbyScreen() {
       if (players) setLocalPlayers(players);
       if (!g) return;
 
-      // Game was cancelled (by host action or pg_cron stale cleanup)
       if (g.status === 'cancelled') {
         navigatedRef.current = true;
         stopPolling();
@@ -117,12 +112,10 @@ export default function LocalLobbyScreen() {
         return;
       }
 
-      // Client-side stale detection (fallback if pg_cron is not available)
       const stale = new Date(g.created_at).getTime() < Date.now() - 30 * 60 * 1000;
       if (g.status === 'lobby' && stale) {
         navigatedRef.current = true;
         stopPolling();
-        // Fire-and-forget — do NOT await so the alert is never blocked by a slow/failing DB call
         if (isHostRef.current) {
           db.from('games').update({ status: 'cancelled' }).eq('id', gId);
         }
@@ -135,7 +128,6 @@ export default function LocalLobbyScreen() {
         return;
       }
 
-      // Non-host: watch for game becoming active
       if (!isHostRef.current && g.status === 'active') {
         navigatedRef.current = true;
         stopPolling();
@@ -154,8 +146,6 @@ export default function LocalLobbyScreen() {
   function initials(name: string): string {
     return name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2);
   }
-
-  // ── Create game ──
 
   async function handleCreateGame() {
     if (!displayName.trim()) return;
@@ -207,8 +197,6 @@ export default function LocalLobbyScreen() {
       setLoading(false);
     }
   }
-
-  // ── Join game ──
 
   async function handleJoinGame() {
     if (!joinCode.trim() || !displayName.trim()) return;
@@ -265,8 +253,6 @@ export default function LocalLobbyScreen() {
     }
   }
 
-  // ── Cancel / Leave lobby ──
-
   async function handleLeaveWaitingRoom() {
     if (localIsHost && localGame) {
       const { error } = await db.from('games').update({ status: 'cancelled' }).eq('id', localGame.id);
@@ -299,48 +285,34 @@ export default function LocalLobbyScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nameEntered, localGame, localIsHost]);
 
-  // ── Start game (host only) ──
-
   async function handleStartGame() {
     if (!localGame || localPlayers.length < 1) return;
     setLoading(true);
     try {
       let firstTurnMovie!: Movie;
-
       const startingMovieIdsList: string[] = [];
 
       if (localGame.game_mode === 'insane') {
-        // Insane Mode: one starting card per player (from TMDb, like classic mode).
-        // Collected into a buffer so we call setActiveMovies once (avoids stale closure).
         const insaneMoviesBuffer: Movie[] = [];
         const usedYears = new Set<number>();
         for (const player of localPlayers) {
           let m: Movie;
           let attempts = 0;
-          do {
-            m = await fetchRandomInsaneMovie(db);
-            attempts++;
-          } while (usedYears.has(m.year) && attempts < 30);
+          do { m = await fetchRandomInsaneMovie(db); attempts++; }
+          while (usedYears.has(m.year) && attempts < 30);
           usedYears.add(m.year);
           startingMovieIdsList.push(m.id);
           insaneMoviesBuffer.push(m);
           await db.from('players').update({ timeline: [m.year], coins: 5 }).eq('id', player.id);
         }
-
-        // First turn movie (the trailer players will watch on turn 1)
         firstTurnMovie = await fetchRandomInsaneMovie(db);
         insaneMoviesBuffer.push(firstTurnMovie);
-        // Add all at once so game.tsx can resolve them without a DB re-fetch
         setActiveMovies([...activeMovies, ...insaneMoviesBuffer]);
       } else {
-        // Classic / Collection: use pre-loaded pool
         let pool: typeof activeMovies;
         if (localGame.game_mode === 'collection' && localGame.collection_id) {
           const { data: col } = await db
-            .from('collections')
-            .select('tag')
-            .eq('id', localGame.collection_id)
-            .single() as { data: { tag: string } | null };
+            .from('collections').select('tag').eq('id', localGame.collection_id).single() as { data: { tag: string } | null };
           pool = col
             ? activeMovies.filter((m) => (m.tags ?? []).includes(col.tag))
             : activeMovies.filter((m) => m.classic_pool === true);
@@ -349,20 +321,15 @@ export default function LocalLobbyScreen() {
         }
         if (pool.length < localPlayers.length + 1) throw new Error('Not enough movies available');
 
-        // Shuffle pool
         for (let i = pool.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
           [pool[i], pool[j]] = [pool[j], pool[i]];
         }
 
-        // Assign one starting card to each player
         for (let i = 0; i < localPlayers.length; i++) {
           const startMovie = pool[i];
           startingMovieIdsList.push(startMovie.id);
-          await db
-            .from('players')
-            .update({ timeline: [startMovie.year], coins: 5 })
-            .eq('id', localPlayers[i].id);
+          await db.from('players').update({ timeline: [startMovie.year], coins: 5 }).eq('id', localPlayers[i].id);
         }
 
         const usedSet = new Set(startingMovieIdsList);
@@ -371,15 +338,8 @@ export default function LocalLobbyScreen() {
       }
 
       const firstPlayer = localPlayers[0];
+      await db.from('games').update({ status: 'active' }).eq('id', localGame.id);
 
-      // Mark game active BEFORE inserting phantom turns so RLS policies (if any) allow the inserts
-      await db
-        .from('games')
-        .update({ status: 'active' })
-        .eq('id', localGame.id);
-
-      // Record each starting card as a completed turn so all devices exclude it from future draws.
-      // Also store in Zustand so the host device has a local backup.
       setStartingMovieIds(startingMovieIdsList);
       for (const [i, movieId] of startingMovieIdsList.entries()) {
         const { error: phantomErr } = await db.from('turns').insert({
@@ -389,9 +349,7 @@ export default function LocalLobbyScreen() {
           status: 'complete',
           winner_id: localPlayers[i].id,
         });
-        if (phantomErr) {
-          console.warn('[LOBBY] phantom turn insert failed:', phantomErr.message, phantomErr.code);
-        }
+        if (phantomErr) console.warn('[LOBBY] phantom turn insert failed:', phantomErr.message, phantomErr.code);
       }
 
       await db.from('turns').insert({
@@ -411,31 +369,39 @@ export default function LocalLobbyScreen() {
     }
   }
 
-  // ── Render ──
+  // ── Choice view ──────────────────────────────────────────────────────────────
 
   if (view === 'choice') {
     return (
       <SafeAreaView style={styles.container}>
+        <View style={styles.accentTopRight} pointerEvents="none" />
         <BackButton onPress={() => router.back()} />
+
         <View style={styles.choiceCenter}>
-          <Text style={styles.title}>Go Digital</Text>
-          <Text style={styles.subtitle}>Up to 10 players — each on their own phone</Text>
+          <View style={styles.choiceHeader}>
+            <Text style={styles.sectionLabel}>Multiplayer</Text>
+            <Text style={styles.title}>Go Digital</Text>
+            <View style={styles.titleUnderline} />
+            <Text style={styles.subtitle}>Up to 10 players — each on their own phone</Text>
+          </View>
+
           <View style={styles.choiceCards}>
             <TouchableOpacity
-              style={styles.choiceCard}
+              style={[styles.choiceCard, styles.choiceCardPrimary]}
               onPress={() => router.push('/mode-select')}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
             >
-              <MaterialCommunityIcons name="plus-circle-outline" size={40} color="#f5c518" />
-              <Text style={styles.choiceCardTitle}>Create Game</Text>
-              <Text style={styles.choiceCardSub}>Share the code with friends</Text>
+              <ClapperboardIcon size={36} color={C.ink} />
+              <Text style={[styles.choiceCardTitle, { color: C.ink }]}>Create Game</Text>
+              <Text style={[styles.choiceCardSub, { color: 'rgba(26,26,26,0.6)' }]}>Share the code with friends</Text>
             </TouchableOpacity>
+
             <TouchableOpacity
-              style={[styles.choiceCard, styles.choiceCardSecondary]}
+              style={styles.choiceCard}
               onPress={() => router.push('/lobby-browser')}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
             >
-              <MaterialCommunityIcons name="login" size={40} color="#f5c518" />
+              <FilmReelIcon size={36} color={C.cerulean} />
               <Text style={styles.choiceCardTitle}>Join Game</Text>
               <Text style={styles.choiceCardSub}>Browse open games or enter an invite code</Text>
             </TouchableOpacity>
@@ -445,31 +411,35 @@ export default function LocalLobbyScreen() {
     );
   }
 
-  // ── Waiting room ──
+  // ── Waiting room ─────────────────────────────────────────────────────────────
+
   if (nameEntered && localGame) {
     return (
       <SafeAreaView style={styles.container}>
         <BackButton
           onPress={handleLeaveWaitingRoom}
-          label={localIsHost ? 'Cancel Game' : 'Leave'}
-          icon={localIsHost ? 'close' : 'chevron-left'}
+          label={localIsHost ? 'Cancel' : 'Leave'}
         />
+
+        {/* Game code block */}
         <View style={styles.waitingHeader}>
           <Text style={styles.waitingLabel}>Game Code</Text>
           <TouchableOpacity
             onPress={() => Clipboard.setString(localGame.game_code)}
-            style={styles.codeRow}
+            style={styles.codeCard}
+            activeOpacity={0.8}
           >
             <Text style={styles.gameCode}>{localGame.game_code}</Text>
-            <MaterialCommunityIcons name="content-copy" size={18} color="#f5c518" />
+            <Text style={styles.copyHint}>tap to copy</Text>
           </TouchableOpacity>
           <Text style={styles.codeHint}>
             {localGame.visibility === 'invite_only'
-              ? '🔒  Invite-only · tap to copy & share'
-              : '🌐  Public · tap to copy & share'}
+              ? '🔒  Invite-only · share the code above'
+              : '🌐  Public · visible in lobby browser'}
           </Text>
         </View>
 
+        {/* Player count / max stepper */}
         <View style={styles.playerCountRow}>
           {localIsHost ? (
             <View style={styles.maxStepperWrap}>
@@ -500,19 +470,18 @@ export default function LocalLobbyScreen() {
           )}
         </View>
 
+        {/* Player list */}
         <ScrollView style={styles.playerList} contentContainerStyle={styles.playerListContent}>
           {localPlayers.map((p, i) => {
             const isHost = i === 0;
             return (
               <View key={p.id} style={styles.playerChip}>
-                <View style={styles.playerChipTop}>
-                  <View style={styles.playerAvatar}>
-                    <Text style={styles.playerAvatarText}>{initials(p.display_name)}</Text>
-                  </View>
-                  <Text style={styles.playerName}>{p.display_name}</Text>
-                  {isHost && <Text style={styles.hostBadge}>host</Text>}
-                  {p.id === localPlayerId && <Text style={styles.youBadge}>you</Text>}
+                <View style={styles.playerAvatar}>
+                  <Text style={styles.playerAvatarText}>{initials(p.display_name)}</Text>
                 </View>
+                <Text style={styles.playerName}>{p.display_name}</Text>
+                {isHost && <View style={styles.hostBadge}><Text style={styles.hostBadgeText}>host</Text></View>}
+                {p.id === localPlayerId && <View style={styles.youBadge}><Text style={styles.youBadgeText}>you</Text></View>}
               </View>
             );
           })}
@@ -525,7 +494,7 @@ export default function LocalLobbyScreen() {
             disabled={localPlayers.length < 1 || loading}
             style={styles.startBtn}
           >
-            {loading ? 'Starting…' : 'START GAME →'}
+            {loading ? 'Starting…' : 'Start Game →'}
           </CinemaButton>
         ) : (
           <View style={styles.waitingForHost}>
@@ -536,13 +505,15 @@ export default function LocalLobbyScreen() {
     );
   }
 
-  // ── Create / Join form ──
+  // ── Create / Join form ───────────────────────────────────────────────────────
+
   const isCreate = view === 'create';
   const canSubmit = displayName.trim().length > 0 && (isCreate || joinCode.trim().length > 0);
   const handleSubmit = isCreate ? handleCreateGame : handleJoinGame;
 
   return (
     <SafeAreaView style={styles.container}>
+      <View style={styles.accentBottomRight} pointerEvents="none" />
       <BackButton onPress={() => setView('choice')} />
 
       <KeyboardAvoidingView
@@ -550,7 +521,11 @@ export default function LocalLobbyScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={0}
       >
-        <Text style={styles.title}>{isCreate ? 'Create Game' : 'Join Game'}</Text>
+        <View style={styles.formHeader}>
+          <Text style={styles.sectionLabel}>{isCreate ? 'New game' : 'Enter game'}</Text>
+          <Text style={styles.title}>{isCreate ? 'Create Game' : 'Join Game'}</Text>
+          <View style={[styles.titleUnderline, { backgroundColor: isCreate ? C.ochre : C.cerulean }]} />
+        </View>
 
         <View style={styles.inputWrapper}>
           <Text style={styles.inputLabel}>Your Name</Text>
@@ -560,13 +535,10 @@ export default function LocalLobbyScreen() {
             value={displayName}
             onChangeText={setDisplayName}
             placeholder="Enter your name"
-            placeholderTextColor="#555"
+            placeholderTextColor={C.textMuted}
             maxLength={20}
             returnKeyType={isCreate ? 'go' : 'next'}
-            onSubmitEditing={() => {
-              if (isCreate) { if (canSubmit && !loading) handleSubmit(); }
-              else { /* focus code input below */ }
-            }}
+            onSubmitEditing={() => { if (isCreate && canSubmit && !loading) handleSubmit(); }}
             autoFocus
           />
         </View>
@@ -575,11 +547,11 @@ export default function LocalLobbyScreen() {
           <View style={styles.inputWrapper}>
             <Text style={styles.inputLabel}>Game Code</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, styles.inputCode]}
               value={joinCode}
               onChangeText={(t) => setJoinCode(t.toUpperCase())}
               placeholder="ABC123"
-              placeholderTextColor="#555"
+              placeholderTextColor={C.textMuted}
               autoCapitalize="characters"
               maxLength={6}
               returnKeyType="go"
@@ -623,7 +595,7 @@ export default function LocalLobbyScreen() {
           size="lg"
           style={styles.actionBtn}
         >
-          {loading ? 'Loading…' : isCreate ? 'CREATE GAME' : 'JOIN GAME'}
+          {loading ? 'Loading…' : isCreate ? 'Create Game' : 'Join Game'}
         </CinemaButton>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -633,99 +605,192 @@ export default function LocalLobbyScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
 
-  choiceCenter: {
-    flex: 1, justifyContent: 'center', alignItems: 'center',
-    paddingHorizontal: 32, gap: 24,
+  // Geometric accents
+  accentTopRight: {
+    position: 'absolute', top: -70, right: -70,
+    width: 180, height: 180, borderRadius: 90,
+    backgroundColor: 'rgba(232,55,42,0.06)',
   },
-  title: { color: C.textPrimary, fontSize: FS['2xl'], fontWeight: '900', textAlign: 'center' },
-  subtitle: { color: C.textSub, fontSize: FS.base, textAlign: 'center' },
-  choiceCards: { width: '100%', gap: 14 },
-  choiceCard: {
-    backgroundColor: C.surface, borderRadius: R.card, padding: 28,
-    alignItems: 'center', gap: 8, borderWidth: 1, borderColor: C.border,
+  accentBottomRight: {
+    position: 'absolute', bottom: -60, right: -60,
+    width: 160, height: 160, borderRadius: 80,
+    backgroundColor: 'rgba(74,158,196,0.07)',
   },
-  choiceCardSecondary: { borderColor: C.goldFaint },
-  choiceBrowseCard: { borderColor: C.gold, backgroundColor: C.goldFaint },
-  choiceCardTitle: { color: C.textPrimary, fontSize: FS.lg, fontWeight: '800' },
-  choiceCardSub: { color: C.textMuted, fontSize: FS.sm },
 
-  formCenter: { flex: 1, justifyContent: 'center', paddingHorizontal: 32, gap: 20 },
+  // Choice view
+  choiceCenter: {
+    flex: 1, justifyContent: 'center',
+    paddingHorizontal: SP.lg, gap: SP.lg,
+  },
+  choiceHeader: { gap: 4 },
+  sectionLabel: {
+    fontFamily: Fonts.label,
+    fontSize: FS.xs, letterSpacing: 2.5,
+    textTransform: 'uppercase', color: C.textMuted,
+  },
+  title: {
+    fontFamily: Fonts.display,
+    fontSize: FS['2xl'], color: C.ink, letterSpacing: 0.5,
+  },
+  titleUnderline: {
+    width: 40, height: 2, backgroundColor: C.ochre, marginTop: 6,
+  },
+  subtitle: {
+    fontFamily: Fonts.body,
+    fontSize: FS.base, color: C.textSub, marginTop: 4,
+  },
+  choiceCards: { gap: SP.md },
+  choiceCard: {
+    backgroundColor: C.surface, borderRadius: R.card,
+    borderWidth: 2, borderColor: C.ink,
+    padding: 28, alignItems: 'center', gap: 8,
+  },
+  choiceCardPrimary: { backgroundColor: C.ochre },
+  choiceCardTitle: {
+    fontFamily: Fonts.display,
+    fontSize: FS.xl, color: C.ink, letterSpacing: 0.5,
+  },
+  choiceCardSub: {
+    fontFamily: Fonts.label,
+    fontSize: FS.sm, color: C.textSub, textAlign: 'center',
+  },
+
+  // Form view
+  formCenter: {
+    flex: 1, justifyContent: 'center',
+    paddingHorizontal: SP.lg, gap: SP.md,
+  },
+  formHeader: { gap: 4, marginBottom: SP.xs },
   inputWrapper: { gap: 6 },
   inputLabel: {
-    color: C.textSub, fontSize: FS.sm, fontWeight: '600',
-    letterSpacing: 0.8, textTransform: 'uppercase',
+    fontFamily: Fonts.label,
+    fontSize: FS.xs, letterSpacing: 1.5,
+    textTransform: 'uppercase', color: C.textSub,
   },
   input: {
-    backgroundColor: C.surface, borderRadius: R.md, borderWidth: 1,
-    borderColor: C.border, color: C.textPrimary, fontSize: FS.md + 1,
-    paddingHorizontal: 16, paddingVertical: 14,
+    fontFamily: Fonts.body,
+    backgroundColor: C.surface, borderRadius: R.md,
+    borderWidth: 2, borderColor: C.ink,
+    color: C.textPrimary, fontSize: FS.md,
+    paddingHorizontal: SP.md, paddingVertical: 14,
   },
-  actionBtn: { marginTop: 8 },
+  inputCode: {
+    letterSpacing: 6, fontFamily: Fonts.display,
+    fontSize: FS.xl, textAlign: 'center',
+  },
+  actionBtn: { marginTop: SP.xs },
   visibilityToggleWrap: { gap: 6 },
   visibilityToggle: {
     flexDirection: 'row', backgroundColor: C.surface,
-    borderRadius: R.md, borderWidth: 1, borderColor: C.border, overflow: 'hidden',
+    borderRadius: R.md, borderWidth: 2, borderColor: C.ink, overflow: 'hidden',
   },
-  visibilityOption: {
-    flex: 1, paddingVertical: 12, alignItems: 'center',
+  visibilityOption: { flex: 1, paddingVertical: 12, alignItems: 'center' },
+  visibilityOptionActive: { backgroundColor: C.ochre },
+  visibilityOptionText: {
+    fontFamily: Fonts.label,
+    color: C.textSub, fontSize: FS.sm,
   },
-  visibilityOptionActive: { backgroundColor: C.gold },
-  visibilityOptionText: { color: C.textSub, fontSize: FS.sm, fontWeight: '700' },
-  visibilityOptionTextActive: { color: C.textOnGold },
-  visibilityHint: { color: C.textMuted, fontSize: FS.sm, textAlign: 'center' },
+  visibilityOptionTextActive: { color: C.textOnOchre },
+  visibilityHint: {
+    fontFamily: Fonts.label,
+    color: C.textMuted, fontSize: FS.sm, textAlign: 'center',
+  },
 
-  waitingHeader: { alignItems: 'center', paddingTop: 24, paddingBottom: 16, gap: 6 },
+  // Waiting room
+  waitingHeader: {
+    alignItems: 'center', paddingTop: SP.lg,
+    paddingBottom: SP.md, paddingHorizontal: SP.lg, gap: 8,
+  },
   waitingLabel: {
-    color: C.textSub, fontSize: FS.sm, fontWeight: '600',
-    letterSpacing: 1, textTransform: 'uppercase',
+    fontFamily: Fonts.label,
+    fontSize: FS.xs, letterSpacing: 2,
+    textTransform: 'uppercase', color: C.textMuted,
   },
-  codeRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  codeCard: {
+    borderWidth: 2, borderColor: C.ink,
+    borderRadius: R.card, backgroundColor: C.surface,
+    paddingHorizontal: SP.xl, paddingVertical: SP.md,
+    alignItems: 'center', gap: 4,
+  },
   gameCode: {
-    color: C.gold, fontSize: 42, fontWeight: '900',
-    letterSpacing: 8, fontVariant: ['tabular-nums'],
+    fontFamily: Fonts.display,
+    color: C.ochre, fontSize: 48,
+    letterSpacing: 10,
   },
-  codeHint: { color: C.textMuted, fontSize: FS.sm },
-  playerCountRow: { alignItems: 'center', paddingVertical: 8 },
-  playerCountText: { color: C.textSub, fontSize: FS.sm },
+  copyHint: {
+    fontFamily: Fonts.label,
+    fontSize: FS.xs, color: C.textMuted, letterSpacing: 1,
+  },
+  codeHint: {
+    fontFamily: Fonts.label,
+    color: C.textMuted, fontSize: FS.sm,
+  },
+  playerCountRow: { alignItems: 'center', paddingVertical: SP.sm },
+  playerCountText: {
+    fontFamily: Fonts.label,
+    color: C.textSub, fontSize: FS.sm,
+  },
   maxStepperWrap: { alignItems: 'center', gap: 4 },
   maxStepperLabel: {
-    color: C.textMuted, fontSize: FS.xs, fontWeight: '600',
-    letterSpacing: 0.8, textTransform: 'uppercase',
+    fontFamily: Fonts.label,
+    color: C.textMuted, fontSize: FS.xs,
+    letterSpacing: 1, textTransform: 'uppercase',
   },
-  maxPlayersStepper: { flexDirection: 'row', alignItems: 'center', gap: 0 },
+  maxPlayersStepper: { flexDirection: 'row', alignItems: 'center' },
   stepperBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  stepperBtnText: { color: C.gold, fontSize: 26, fontWeight: '300', lineHeight: 30 },
-  stepperBtnDisabled: { color: 'rgba(245,197,24,0.2)' },
-  stepperCount: {
-    color: C.textPrimary, fontSize: FS['2xl'], fontWeight: '800',
-    minWidth: 40, textAlign: 'center', fontVariant: ['tabular-nums'],
+  stepperBtnText: {
+    fontFamily: Fonts.display,
+    color: C.ochre, fontSize: 28,
   },
-  playerList: { flex: 1, paddingHorizontal: 24 },
-  playerListContent: { gap: 10, paddingBottom: 16 },
+  stepperBtnDisabled: { color: C.inkFaint },
+  stepperCount: {
+    fontFamily: Fonts.display,
+    color: C.ink, fontSize: FS['2xl'],
+    minWidth: 44, textAlign: 'center',
+  },
+  playerList: { flex: 1, paddingHorizontal: SP.lg },
+  playerListContent: { gap: 10, paddingBottom: SP.md },
   playerChip: {
     backgroundColor: C.surface,
-    borderRadius: R.md, padding: 12, gap: 8, borderWidth: 1, borderColor: C.border,
-  },
-  playerChipTop: {
+    borderRadius: R.md, borderWidth: 2, borderColor: C.ink,
+    paddingHorizontal: SP.md, paddingVertical: 10,
     flexDirection: 'row', alignItems: 'center', gap: 12,
   },
   playerAvatar: {
     width: 36, height: 36, borderRadius: R.full,
-    backgroundColor: C.gold, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: C.ochre, borderWidth: 2, borderColor: C.ink,
+    alignItems: 'center', justifyContent: 'center',
   },
-  playerAvatarText: { color: C.textOnGold, fontSize: FS.sm, fontWeight: '800' },
-  playerName: { color: C.textPrimary, fontSize: FS.base, fontWeight: '600', flex: 1 },
+  playerAvatarText: {
+    fontFamily: Fonts.display,
+    color: C.ink, fontSize: FS.sm,
+  },
+  playerName: {
+    fontFamily: Fonts.bodyBold,
+    color: C.textPrimary, fontSize: FS.base, flex: 1,
+  },
   hostBadge: {
-    color: '#a78bfa', fontSize: FS.xs, fontWeight: '700',
-    backgroundColor: 'rgba(167,139,250,0.12)',
-    paddingHorizontal: 8, paddingVertical: 3, borderRadius: R.xs,
+    backgroundColor: C.cerulean, borderRadius: R.xs,
+    borderWidth: 2, borderColor: C.ink,
+    paddingHorizontal: 8, paddingVertical: 2,
+  },
+  hostBadgeText: {
+    fontFamily: Fonts.label,
+    color: '#fff', fontSize: FS.xs, letterSpacing: 0.5,
   },
   youBadge: {
-    color: C.gold, fontSize: FS.xs, fontWeight: '700',
-    backgroundColor: C.goldFaint,
-    paddingHorizontal: 8, paddingVertical: 3, borderRadius: R.xs,
+    backgroundColor: C.ochre, borderRadius: R.xs,
+    borderWidth: 2, borderColor: C.ink,
+    paddingHorizontal: 8, paddingVertical: 2,
   },
-  startBtn: { margin: 24 },
-  waitingForHost: { margin: 24, paddingVertical: 18, alignItems: 'center' },
-  waitingForHostText: { color: C.textSub, fontSize: FS.base },
+  youBadgeText: {
+    fontFamily: Fonts.label,
+    color: C.ink, fontSize: FS.xs, letterSpacing: 0.5,
+  },
+  startBtn: { marginHorizontal: SP.lg, marginBottom: SP.lg },
+  waitingForHost: { marginHorizontal: SP.lg, marginBottom: SP.lg, paddingVertical: 18, alignItems: 'center' },
+  waitingForHostText: {
+    fontFamily: Fonts.body,
+    color: C.textSub, fontSize: FS.base,
+  },
 });

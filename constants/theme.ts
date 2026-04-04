@@ -1,45 +1,91 @@
 /**
- * Cinescenes Design System Tokens
- * Single source of truth for colors, radii, type scale and spacing.
+ * Cinescenes Design System — Ligne Claire
+ * Single source of truth for colors, radii, typography and spacing.
+ *
+ * Palette naming follows the source material:
+ *   ink        — the universal stroke / outline (#1A1A1A)
+ *   parchment  — warm cream background (#FAFAF7)
+ *   vermillion — brand red  (#E8372A)
+ *   ochre      — brand yellow/gold (#F5C518)
+ *   cerulean   — accent blue (#4A9EC4)
  */
 
-/** Color palette */
+// ─────────────────────────────────────────────────────────────
+// Fonts
+// ─────────────────────────────────────────────────────────────
+export const Fonts = {
+  display:   'Bangers_400Regular',      // headlines, wordmark, big buttons
+  body:      'ComicNeue_400Regular',    // UI body text, names, descriptions
+  bodyBold:  'ComicNeue_700Bold',       // bold body text
+  label:     'PatrickHand_400Regular',  // tags, captions, tracked small text
+} as const;
+
+// ─────────────────────────────────────────────────────────────
+// Colors
+// ─────────────────────────────────────────────────────────────
 export const C = {
-  // ── Backgrounds ──────────────────────────────────────────
-  bg:           '#100a20',   // primary page / screen background
-  surface:      '#1e1630',   // cards, panels, inputs, chips
-  surfaceHigh:  '#2a1f4a',   // modals, elevated panels, card sides
+  // ── Light surfaces (default) ──────────────────────────────
+  bg:           '#FAFAF7',   // parchment cream — app background
+  surface:      '#FFFFFF',   // cards, panels, inputs
+  surfaceHigh:  '#F0EDE4',   // nav bars, footers, secondary surfaces
 
-  // ── Brand ────────────────────────────────────────────────
-  gold:         '#f5c518',
-  goldFaint:    'rgba(245,197,24,0.12)',
-  goldGlow:     'rgba(245,197,24,0.25)',
+  // ── Dark contexts (trailer, scanner, camera) ──────────────
+  inkBg:        '#1A1A1A',   // deep ink — dark screen background
+  inkSurface:   '#2A2A2A',   // dark cards / panels on inkBg
+  inkSurfaceHigh: '#333333', // elevated dark surfaces
 
-  // ── Semantic ─────────────────────────────────────────────
-  danger:       '#e63946',
+  // ── Ligne Claire Palette ──────────────────────────────────
+  vermillion:   '#E8372A',   // secondary buttons, danger, highlights
+  ochre:        '#F5C518',   // primary buttons, coins, score
+  cerulean:     '#4A9EC4',   // informational, observer, focus state
+  leaf:         '#3DAA5C',   // correct answer, positive result
 
-  // ── Text ─────────────────────────────────────────────────
-  textPrimary:  '#ffffff',
-  textSub:      '#a0a0b0',   // secondary / supporting text
-  textMuted:    '#66667a',   // hints, captions, disabled
-  textOnGold:   '#0a0a0a',   // text rendered on gold backgrounds
+  // ── Ink / Stroke ─────────────────────────────────────────
+  ink:          '#1A1A1A',   // the ligne claire stroke — 2px everywhere
+  inkSoft:      'rgba(26,26,26,0.35)',
+  inkFaint:     'rgba(26,26,26,0.12)',
+
+  // ── Text (light surfaces) ────────────────────────────────
+  textPrimary:  '#1A1A1A',
+  textSub:      '#5A5A5A',
+  textMuted:    '#9A9A9A',
+  textOnOchre:  '#1A1A1A',   // text on ochre/yellow backgrounds
+  textOnRed:    '#FFFFFF',   // text on vermillion backgrounds
+  textOnDark:   '#FAFAF7',   // text on inkBg
+
+  // ── Text (dark surfaces) ─────────────────────────────────
+  textPrimaryDark: '#FAFAF7',
+  textSubDark:     '#B0ADA6',
+  textMutedDark:   '#6A6A6A',
 
   // ── Borders ──────────────────────────────────────────────
-  border:       'rgba(255,255,255,0.1)',
-  borderSubtle: 'rgba(255,255,255,0.06)',
+  border:       '#1A1A1A',              // 2px ligne claire stroke
+  borderLight:  'rgba(26,26,26,0.12)',  // hairline dividers (not stroke-weight)
+
+  // ── Legacy aliases (kept for gradual screen migration) ───
+  gold:         '#F5C518',              // → ochre
+  goldFaint:    'rgba(245,197,24,0.10)',
+  goldGlow:     'rgba(245,197,24,0.18)',
+  danger:       '#E8372A',              // → vermillion
+  textOnGold:   '#1A1A1A',             // → textOnOchre
 } as const;
 
-/** Border radius scale */
+// ─────────────────────────────────────────────────────────────
+// Border radius scale
+// ─────────────────────────────────────────────────────────────
 export const R = {
-  xs:   6,    // tiny badges, tags
-  sm:   10,   // small interactive elements
-  md:   12,   // inputs, minor cards
-  btn:  16,   // primary action buttons
-  card: 20,   // cards, panels, bottom sheets
-  full: 999,  // circles / pills
+  xs:    6,    // tags, badges, small chips
+  sm:    10,   // small interactive elements, inputs
+  md:    12,   // standard buttons
+  btn:   12,   // primary action buttons
+  card:  14,   // cards, list items, game tiles
+  sheet: 18,   // bottom sheets, modals, large panels
+  full:  999,  // avatar circles, pill labels
 } as const;
 
-/** Font size scale */
+// ─────────────────────────────────────────────────────────────
+// Font size scale
+// ─────────────────────────────────────────────────────────────
 export const FS = {
   micro:  9,
   xs:    11,
@@ -52,7 +98,9 @@ export const FS = {
   hero:  40,
 } as const;
 
-/** Spacing scale */
+// ─────────────────────────────────────────────────────────────
+// Spacing scale
+// ─────────────────────────────────────────────────────────────
 export const SP = {
   xs:  4,
   sm:  8,
@@ -61,7 +109,26 @@ export const SP = {
   xl:  32,
 } as const;
 
-/** Card background color — linearly interpolated between decade anchors, matching physical cards */
+// ─────────────────────────────────────────────────────────────
+// Typography presets
+// ─────────────────────────────────────────────────────────────
+export const T = {
+  hero:     { fontFamily: Fonts.display, fontSize: FS.hero,   lineHeight: 44 },
+  display:  { fontFamily: Fonts.display, fontSize: FS['2xl'], lineHeight: 34, letterSpacing: 0.5 },
+  title:    { fontFamily: Fonts.display, fontSize: FS.xl,     lineHeight: 29, letterSpacing: 0.5 },
+  subtitle: { fontFamily: Fonts.bodyBold, fontSize: FS.lg,    lineHeight: 25 },
+  body:     { fontFamily: Fonts.body,    fontSize: FS.md,     lineHeight: 24, color: C.textSub },
+  label:    { fontFamily: Fonts.label,   fontSize: FS.base,   lineHeight: 20, letterSpacing: 0.3 },
+  overline: { fontFamily: Fonts.label,   fontSize: FS.xs,     lineHeight: 14, letterSpacing: 2.0, textTransform: 'uppercase' as const, color: C.ochre },
+  caption:  { fontFamily: Fonts.label,   fontSize: FS.sm,     lineHeight: 17, letterSpacing: 0.3, color: C.textMuted },
+  micro:    { fontFamily: Fonts.label,   fontSize: FS.micro,  lineHeight: 12, letterSpacing: 1.5, textTransform: 'uppercase' as const, color: C.textMuted },
+  wordmark: { fontFamily: Fonts.display, letterSpacing: 6,    textTransform: 'uppercase' as const, color: C.ochre },
+} as const;
+
+// ─────────────────────────────────────────────────────────────
+// Card decade colors
+// Background color of movie cards, decade-coded (used on card backs)
+// ─────────────────────────────────────────────────────────────
 const DECADE_COLORS: Record<number, string> = {
   1920: '#3D2B1F', // warm sepia        — silent era
   1930: '#1B3252', // deep navy         — noir / art deco
@@ -102,17 +169,3 @@ export function cardColor(year: number): string {
   const b = Math.round(b1 + (b2 - b1) * t).toString(16).padStart(2, '0');
   return `#${r}${g}${b}`;
 }
-
-/** Named typography presets — mirrors the Figma text-* classes */
-export const T = {
-  hero:      { fontSize: FS.hero,  fontWeight: '900' as const, lineHeight: 44 },
-  display:   { fontSize: FS['2xl'], fontWeight: '900' as const, lineHeight: 34, letterSpacing: 0.3 },
-  title:     { fontSize: FS.xl,    fontWeight: '900' as const, lineHeight: 29, letterSpacing: 0.3 },
-  subtitle:  { fontSize: FS.lg,    fontWeight: '700' as const, lineHeight: 25, letterSpacing: 0.3 },
-  body:      { fontSize: FS.md,    fontWeight: '500' as const, lineHeight: 24, color: C.textSub },
-  label:     { fontSize: FS.base,  fontWeight: '600' as const, lineHeight: 20, letterSpacing: 0.3 },
-  overline:  { fontSize: FS.xs,    fontWeight: '700' as const, lineHeight: 14, letterSpacing: 2.0, textTransform: 'uppercase' as const, color: C.gold },
-  caption:   { fontSize: FS.sm,    fontWeight: '500' as const, lineHeight: 17, letterSpacing: 0.3, color: C.textMuted },
-  micro:     { fontSize: FS.micro, fontWeight: '700' as const, lineHeight: 12, letterSpacing: 1.5, textTransform: 'uppercase' as const, color: C.textMuted },
-  wordmark:  { fontWeight: '900' as const, letterSpacing: 6, textTransform: 'uppercase' as const, color: C.gold },
-} as const;

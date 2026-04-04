@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Animated, View, StyleSheet } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
+import { C } from '@/constants/theme';
 
 interface ChallengeTimerProps {
   seconds: number;
@@ -35,7 +36,7 @@ export function ChallengeTimer({ seconds, onExpire, children, size = 108, barMod
   if (barMode) {
     const barColor = progress.interpolate({
       inputRange: [0, 0.6, 1],
-      outputRange: ['#e63946', '#f5a623', '#555'],
+      outputRange: [C.vermillion, C.ochre, 'rgba(255,255,255,0.15)'],
     });
     const barWidth = progress.interpolate({
       inputRange: [0, 1],
@@ -56,7 +57,7 @@ export function ChallengeTimer({ seconds, onExpire, children, size = 108, barMod
   });
   const strokeColor = progress.interpolate({
     inputRange: [0, 0.6, 1],
-    outputRange: ['#e63946', '#f5a623', '#555'],
+    outputRange: [C.vermillion, C.ochre, 'rgba(255,255,255,0.15)'],
   });
 
   return (
@@ -64,7 +65,7 @@ export function ChallengeTimer({ seconds, onExpire, children, size = 108, barMod
       <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
         <Circle
           cx={size / 2} cy={size / 2} r={radius}
-          stroke="#2a2a3a" strokeWidth={STROKE} fill="none"
+          stroke="rgba(255,255,255,0.10)" strokeWidth={STROKE} fill="none"
         />
         <AnimatedCircle
           cx={size / 2} cy={size / 2} r={radius}
@@ -85,7 +86,7 @@ const styles = StyleSheet.create({
   barTrack: {
     width: '100%',
     height: 3,
-    backgroundColor: '#2a2a3a',
+    backgroundColor: 'rgba(255,255,255,0.10)',
     borderRadius: 2,
     overflow: 'hidden',
   },

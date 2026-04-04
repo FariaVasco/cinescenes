@@ -11,7 +11,7 @@ import {
 import { Snackbar } from 'react-native-paper';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { CinemaButton } from '@/components/CinemaButton';
-import { C, R, FS } from '@/constants/theme';
+import { C, R, FS, Fonts } from '@/constants/theme';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { TrailerPlayer, TrailerPlayerHandle } from '@/components/TrailerPlayer';
@@ -337,8 +337,8 @@ const styles = StyleSheet.create({
   },
   closeButtonText: {
     color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
+    fontFamily: Fonts.label,
+    fontSize: FS.md,
   },
   cornerActions: {
     alignItems: 'flex-end',
@@ -351,25 +351,22 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.55)',
   },
   reportButtonText: {
-    color: '#ccc',
-    fontSize: 13,
-    fontWeight: '500',
+    color: 'rgba(255,255,255,0.65)',
+    fontFamily: Fonts.label,
+    fontSize: FS.sm,
   },
   skipButton: {
     paddingHorizontal: 20,
     paddingVertical: 12,
-    borderRadius: 22,
-    backgroundColor: '#f5c518',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 6,
+    borderRadius: R.card,
+    backgroundColor: C.ochre,
+    borderWidth: 2,
+    borderColor: C.ink,
   },
   skipButtonText: {
-    color: '#0a0a0a',
-    fontSize: 16,
-    fontWeight: '800',
+    color: C.textOnOchre,
+    fontFamily: Fonts.bodyBold,
+    fontSize: FS.md,
     letterSpacing: 0.4,
   },
   pauseOverlay: {
@@ -405,17 +402,17 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   endedTitle: {
-    color: '#fff',
+    color: C.textPrimaryDark,
+    fontFamily: Fonts.display,
     fontSize: 32,
-    fontWeight: '900',
     textAlign: 'center',
     letterSpacing: 1,
   },
   endedSubtitle: {
-    color: '#f5c518',
-    fontSize: 13,
+    color: C.ochre,
+    fontFamily: Fonts.label,
+    fontSize: FS.sm,
     textAlign: 'center',
-    fontWeight: '600',
     letterSpacing: 2.5,
     textTransform: 'uppercase',
   },
@@ -453,11 +450,12 @@ const styles = StyleSheet.create({
   },
   exitTitle: {
     color: C.textPrimary,
+    fontFamily: Fonts.bodyBold,
     fontSize: FS.md,
-    fontWeight: '700',
   },
   exitBody: {
     color: C.textMuted,
+    fontFamily: Fonts.body,
     fontSize: FS.sm,
   },
   exitSheetRight: {
@@ -469,7 +467,9 @@ const styles = StyleSheet.create({
   // Report — 2-column grid panel
   reportSheet: {
     backgroundColor: C.surface,
-    borderRadius: 18,
+    borderRadius: R.card,
+    borderWidth: 2,
+    borderColor: C.ink,
     overflow: 'hidden',
     width: '100%',
     maxWidth: 640,
@@ -480,20 +480,21 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 14,
     paddingHorizontal: 20,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
+    borderBottomWidth: 2,
+    borderBottomColor: C.inkFaint,
   },
   reportTitle: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
+    color: C.textPrimary,
+    fontFamily: Fonts.bodyBold,
+    fontSize: FS.md,
   },
   reportCloseBtn: {
     padding: 4,
   },
   reportCloseText: {
-    color: '#666',
-    fontSize: 16,
+    color: C.textMuted,
+    fontFamily: Fonts.label,
+    fontSize: FS.md,
   },
   reportGrid: {
     flexDirection: 'row',
@@ -504,11 +505,12 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     paddingHorizontal: 20,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,0.07)',
+    borderBottomColor: C.borderLight,
   },
   reportOptionText: {
-    color: '#d0d0d0',
-    fontSize: 13,
+    color: C.textSub,
+    fontFamily: Fonts.body,
+    fontSize: FS.sm,
     lineHeight: 18,
   },
 
@@ -527,18 +529,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   tvTitleText: {
-    color: '#fff',
-    fontSize: 22,
-    fontWeight: '700',
+    color: C.textPrimaryDark,
+    fontFamily: Fonts.bodyBold,
+    fontSize: FS.xl,
     letterSpacing: 0.5,
-    textShadowColor: 'rgba(0,0,0,0.8)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
   },
 
   // ── Snackbar ──
   snack: {
-    backgroundColor: '#1e1630',
+    backgroundColor: C.inkSurface,
     marginBottom: 16,
   },
 });

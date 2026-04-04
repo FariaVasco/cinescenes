@@ -1,20 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-} from 'react-native';
-import { C, R, FS } from '@/constants/theme';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { CastToTVIcon } from '@/components/CinemaIcons';
-import { BackButton } from '@/components/BackButton';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ScreenOrientation from 'expo-screen-orientation';
+import { C, R, FS, Fonts, SP } from '@/constants/theme';
+import { BackButton } from '@/components/BackButton';
+import { CastToTVIcon, ProjectorIcon, CardFlipIcon } from '@/components/CinemaIcons';
+import { CastModal } from '@/components/CastModal';
 import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
-import { CastModal } from '@/components/CastModal';
 
 export default function PlayScreen() {
   const router = useRouter();
@@ -41,48 +35,65 @@ export default function PlayScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Top bar: back ← on left, cast icon on right */}
+
+      {/* Geometric accent */}
+      <View style={styles.accentTopLeft} pointerEvents="none" />
+
+      {/* Top bar */}
       <View style={styles.topBar}>
         <BackButton onPress={() => router.back()} label="" style={{ marginHorizontal: 0, marginTop: 0 }} />
         <TouchableOpacity style={styles.castBtn} onPress={() => setCastModalVisible(true)}>
-          <CastToTVIcon size={20} color="rgba(255,255,255,0.4)" />
+          <CastToTVIcon size={18} color={C.textMuted} />
           <Text style={styles.castBtnLabel}>Cast</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Two main action cards — stacked vertically */}
-      <View style={styles.cardArea}>
-        <View style={styles.cards}>
-          <TouchableOpacity
-            style={[styles.card, styles.cardPrimary]}
-            onPress={() => router.push('/local-lobby')}
-            activeOpacity={0.8}
-          >
-            <MaterialCommunityIcons name="account-group" size={36} color="#0a0a0a" />
-            <Text style={styles.cardTitle}>Go Digital</Text>
-            <Text style={styles.cardSub}>Up to 8 players, no physical cards needed</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.card, styles.cardSecondary]}
-            onPress={() => router.push('/scanner')}
-            activeOpacity={0.8}
-          >
-            <MaterialCommunityIcons name="cards-playing-outline" size={36} color="#f5c518" />
-            <Text style={[styles.cardTitle, styles.cardTitleSecondary]}>Use Your Deck</Text>
-            <Text style={styles.cardSub}>Scan the QR code on your physical cards · rotates to landscape</Text>
-          </TouchableOpacity>
-        </View>
+      {/* Page header */}
+      <View style={styles.header}>
+        <Text style={styles.sectionLabel}>How will you play?</Text>
+        <Text style={styles.title}>Choose your mode</Text>
+        <View style={styles.titleUnderline} />
       </View>
 
-      {/* ── Cast to TV modal ── */}
+      {/* Mode cards */}
+      <View style={styles.cardArea}>
+
+        {/* Primary — Go Digital */}
+        <TouchableOpacity
+          style={[styles.card, styles.cardPrimary]}
+          onPress={() => router.push('/local-lobby')}
+          activeOpacity={0.85}
+        >
+          <View style={styles.cardIconWrap}>
+            <ProjectorIcon size={36} color={C.ink} />
+          </View>
+          <Text style={[styles.cardTitle, styles.cardTitlePrimary]}>Go Digital</Text>
+          <Text style={[styles.cardSub, styles.cardSubPrimary]}>
+            Up to 8 players · no physical cards needed
+          </Text>
+        </TouchableOpacity>
+
+        {/* Secondary — Use Your Deck */}
+        <TouchableOpacity
+          style={[styles.card, styles.cardSecondary]}
+          onPress={() => router.push('/scanner')}
+          activeOpacity={0.85}
+        >
+          <View style={styles.cardIconWrap}>
+            <CardFlipIcon size={36} color={C.vermillion} />
+          </View>
+          <Text style={[styles.cardTitle, styles.cardTitleSecondary]}>Use Your Deck</Text>
+          <Text style={styles.cardSub}>
+            Scan the QR code on your physical cards · rotates to landscape
+          </Text>
+        </TouchableOpacity>
+
+      </View>
+
       <CastModal
         visible={castModalVisible}
         onDismiss={() => setCastModalVisible(false)}
-        onConfirm={() => {
-          setTvMode(true);
-          setCastModalVisible(false);
-        }}
+        onConfirm={() => { setTvMode(true); setCastModalVisible(false); }}
       />
 
     </SafeAreaView>
@@ -93,74 +104,113 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: C.bg,
-    flexDirection: 'column',
   },
+
+  // Geometric accent
+  accentTopLeft: {
+    position: 'absolute',
+    top: -70,
+    left: -70,
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: 'rgba(245,197,24,0.08)',
+  },
+
+  // Top bar
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  cardArea: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    paddingHorizontal: SP.md,
+    paddingVertical: SP.sm,
   },
   castBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: R.btn,
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    paddingVertical: 7,
+    borderRadius: R.full,
+    borderWidth: 2,
+    borderColor: C.inkFaint,
   },
   castBtnLabel: {
-    color: 'rgba(255,255,255,0.4)',
+    fontFamily: Fonts.label,
+    color: C.textMuted,
     fontSize: FS.sm,
-    fontWeight: '600',
   },
 
-  // ── Action cards ──
-  cards: {
-    flexDirection: 'column',
-    gap: 16,
-    paddingHorizontal: 32,
-    width: '100%',
+  // Header
+  header: {
+    paddingHorizontal: SP.lg,
+    paddingTop: SP.sm,
+    paddingBottom: SP.lg,
+    gap: 4,
+  },
+  sectionLabel: {
+    fontFamily: Fonts.label,
+    fontSize: FS.xs,
+    letterSpacing: 2.5,
+    textTransform: 'uppercase',
+    color: C.textMuted,
+  },
+  title: {
+    fontFamily: Fonts.display,
+    fontSize: FS['2xl'],
+    color: C.ink,
+    letterSpacing: 0.5,
+  },
+  titleUnderline: {
+    width: 40,
+    height: 2,
+    backgroundColor: C.ochre,
+    marginTop: 6,
+  },
+
+  // Cards
+  cardArea: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: SP.lg,
+    gap: SP.md,
   },
   card: {
     borderRadius: R.card,
+    borderWidth: 2,
+    borderColor: C.ink,
     padding: 28,
     alignItems: 'center',
-    gap: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    elevation: 8,
+    gap: 8,
   },
   cardPrimary: {
-    backgroundColor: C.gold,
+    backgroundColor: C.ochre,
   },
   cardSecondary: {
     backgroundColor: C.surface,
-    borderWidth: 1,
-    borderColor: C.border,
+  },
+  cardIconWrap: {
+    marginBottom: 4,
   },
   cardTitle: {
-    fontSize: FS.lg + 1,
-    fontWeight: '900',
-    color: C.textOnGold,
-    letterSpacing: 0.4,
+    fontFamily: Fonts.display,
+    fontSize: FS.xl + 2,
+    letterSpacing: 0.5,
+  },
+  cardTitlePrimary: {
+    color: C.ink,
   },
   cardTitleSecondary: {
-    color: C.gold,
+    color: C.ink,
   },
   cardSub: {
+    fontFamily: Fonts.label,
     fontSize: FS.sm,
-    color: C.textMuted,
-    letterSpacing: 0.3,
+    color: C.textSub,
     textAlign: 'center',
+    lineHeight: 18,
+  },
+  cardSubPrimary: {
+    color: 'rgba(26,26,26,0.6)',
   },
 });
