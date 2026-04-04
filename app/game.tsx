@@ -113,9 +113,14 @@ export default function GameScreen() {
   const nextTurnInProgress = useRef(false);
   const [nextTurnPending, setNextTurnPending] = useState(false);
   const challengeDecisionMade = useRef(false);
+  // Mirrors challengeConfirmed state for use inside poll closures (state is stale in closures).
+  const challengeConfirmedRef = useRef(false);
   // Set to true while a local turn/placement write is in-flight so the poll doesn't
   // overwrite our optimistic state with stale DB data before the write lands.
   const pendingTurnWrite = useRef(false);
+  // Floor for myTimeline: set when we win a card so the interval poll can't briefly
+  // show a timeline missing the just-won card while the DB write is still in-flight.
+  const myTimelineFloorRef = useRef<number[] | null>(null);
   const [showBetReveal, setShowBetReveal] = useState(false);
   const [betRevealCount, setBetRevealCount] = useState(0);
   const betRevealTriggered = useRef(false);
@@ -311,6 +316,8 @@ export default function GameScreen() {
     betRevealTimerRef.current = setTimeout(tick, 1000);
     return () => { if (betRevealTimerRef.current) { clearTimeout(betRevealTimerRef.current); betRevealTimerRef.current = null; } };
   }, [showBetReveal]);
+
+  useEffect(() => { challengeConfirmedRef.current = challengeConfirmed; }, [challengeConfirmed]);
 
   // Lock the Reveal button for 5.5 s after challenging starts
   // (gives everyone the challenge window + buffer before reveal is allowed)
@@ -567,6 +574,7 @@ export default function GameScreen() {
           nextTurnInProgress.current = false;
           setNextTurnPending(false);
           challengeDecisionMade.current = false;
+          challengeConfirmedRef.current = false;
           betRevealTriggered.current = false;
           if (betRevealTimerRef.current) { clearTimeout(betRevealTimerRef.current); betRevealTimerRef.current = null; }
           setShowBetReveal(false);
@@ -590,9 +598,12 @@ export default function GameScreen() {
       if (cData) {
         setLocalChallenges(cData);
         setChallenges(cData);
-        // Sync my own challenge in case it arrived from DB
-        const mine = cData.find((c) => c.challenger_id === myPlayerId);
-        if (mine) setMyChallenge(mine);
+        // Sync my own challenge in case it arrived from DB.
+        // Don't overwrite while challengeConfirmed=true and DB still shows interval_index=-1:
+        // the DB write from handleConfirmChallengeInterval may not have landed yet, and
+        // reverting to -1 here would leave the interval unregistered if the write later fails.
+        const mine = cData.find((c: Challenge) => c.challenger_id === myPlayerId);
+        if (mine && (!challengeConfirmedRef.current || mine.interval_index >= 0)) setMyChallenge(mine);
       }
 
       // Always sync fresh player data (catches coin changes during challenging phase
@@ -794,10 +805,18 @@ export default function GameScreen() {
   }
 
   async function handleConfirmChallengeInterval() {
-    if (!myChallenge || challengeInterval === null) return;
+    if (!myChallenge || myChallenge.id === 'pending' || challengeInterval === null) return;
+    const savedChallenge = myChallenge;
     setMyChallenge({ ...myChallenge, interval_index: challengeInterval });
     setChallengeConfirmed(true);
-    db.from('challenges').update({ interval_index: challengeInterval }).eq('id', myChallenge.id);
+    const { error } = await (db.from('challenges')
+      .update({ interval_index: challengeInterval })
+      .eq('id', myChallenge.id) as Promise<{ error: any }>);
+    if (error) {
+      // Roll back so the user can retry (gap stays selected, ✓ reappears)
+      setMyChallenge(savedChallenge);
+      setChallengeConfirmed(false);
+    }
   }
 
   async function handleWithdrawChallenge() {
@@ -1030,11 +1049,7 @@ export default function GameScreen() {
       if (activeCorrect) winnerId = ct.active_player_id;
       else if (winningChallenger) winnerId = winningChallenger.challenger_id;
 
-      // Fire-and-forget: write winner_id on the current turn so every device can later
-      // reconstruct exact player→movie mappings. Idempotent same-value writes.
-      if (winnerId) {
-        db.from('turns').update({ winner_id: winnerId }).eq('id', ct.id);
-      }
+      // winner_id is written later (alongside timeline) — see below.
 
       // Sync myMoviePairs BEFORE the cross-device guard — this ensures that even when
       // another device processes the turn first (and we return early below), our local
@@ -1088,6 +1103,7 @@ export default function GameScreen() {
         if (winner) {
           winnerNewTimeline = [...winner.timeline, movie.year].sort((a, b) => a - b);
           updatedPlayers = playersAfterRefunds.map(p => p.id === winnerId ? { ...p, timeline: winnerNewTimeline! } : p);
+          if (winnerId === myPlayerId) myTimelineFloorRef.current = winnerNewTimeline;
 
           // Game over — winner reached the target card count
           if (winnerNewTimeline.length >= WIN_CARDS) {
@@ -1163,13 +1179,18 @@ export default function GameScreen() {
       nextTurnInProgress.current = false;
       setNextTurnPending(false);
 
-      // Await the timeline write before firing poll. poll() fetches freshPlayers
-      // concurrently — if the timeline write is still in-flight when poll reads the
-      // players table, it will return the old timeline and wipe the won card from
-      // the display. Keeping this await ensures the year is committed before poll
-      // sees the players row. Spinner already cleared above so UX remains fast.
-      if (winnerId && winnerNewTimeline) {
-        await db.from('players').update({ timeline: winnerNewTimeline }).eq('id', winnerId);
+      // Await winner_id + timeline writes in parallel before firing poll.
+      // winner_id must be committed before poll so observer background queries
+      // (eq('winner_id', activePlayerId)) always see the just-won card. Running
+      // both writes together adds no extra latency vs awaiting timeline alone.
+      if (winnerId) {
+        await Promise.all([
+          db.from('turns').update({ winner_id: winnerId }).eq('id', ct.id),
+          winnerNewTimeline
+            ? db.from('players').update({ timeline: winnerNewTimeline }).eq('id', winnerId)
+            : Promise.resolve(),
+        ]);
+        if (winnerId === myPlayerId) myTimelineFloorRef.current = null;
       }
       // Fire-and-forget: sync all devices.
       poll();
@@ -1226,8 +1247,12 @@ export default function GameScreen() {
   // Host = first player by created_at (matches local-lobby ordering)
   const amHost = players.length > 0 && players[0].id === myPlayerId;
 
-  // My own timeline (for "my timeline" modal and drawing phase display)
-  const myTimeline = (players.find(p => p.id === myPlayerId)?.timeline ?? []).slice().sort((a, b) => a - b);
+  // My own timeline (for "my timeline" modal and drawing phase display).
+  // Use myTimelineFloorRef as a floor so the interval poll can't briefly show a
+  // timeline missing a just-won card while the DB write is still in-flight.
+  const _rawMyTimeline = (players.find(p => p.id === myPlayerId)?.timeline ?? []).slice().sort((a, b) => a - b);
+  const _floor = myTimelineFloorRef.current;
+  const myTimeline = (_floor && _floor.length > _rawMyTimeline.length) ? _floor : _rawMyTimeline;
 
   // Helper: look up the correct movie for slot i in a year array using the given pairs
   // (handles duplicate years like two 2025 films). Pass myMoviePairs for own timeline,

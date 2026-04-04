@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -124,13 +124,8 @@ export default function ScannerScreen() {
         </View>
       </SafeAreaView>
 
-      {/* Exit confirmation modal */}
-      <Modal
-        visible={showExitDialog}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowExitDialog(false)}
-      >
+      {/* Exit confirmation overlay */}
+      {showExitDialog && (
         <TouchableOpacity
           style={styles.modalBackdrop}
           activeOpacity={1}
@@ -154,15 +149,10 @@ export default function ScannerScreen() {
             </View>
           </TouchableOpacity>
         </TouchableOpacity>
-      </Modal>
+      )}
 
-      {/* Error modal */}
-      <Modal
-        visible={!!error}
-        transparent
-        animationType="fade"
-        onRequestClose={() => dismissError(false)}
-      >
+      {/* Error overlay */}
+      {!!error && (
         <TouchableOpacity
           style={styles.modalBackdrop}
           activeOpacity={1}
@@ -181,7 +171,7 @@ export default function ScannerScreen() {
             </View>
           </TouchableOpacity>
         </TouchableOpacity>
-      </Modal>
+      )}
     </View>
   );
 }
@@ -304,7 +294,7 @@ const styles = StyleSheet.create({
   },
   // ── Modals (landscape-optimised) ──
   modalBackdrop: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.72)',
     justifyContent: 'center',
     alignItems: 'center',
