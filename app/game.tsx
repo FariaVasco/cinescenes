@@ -1402,12 +1402,6 @@ export default function GameScreen() {
         <TouchableOpacity style={styles.castStartBtn} onPress={() => { setTvMode(true); setCastVisible(false); }}>
           <Text style={styles.castStartBtnText}>Start Playing →</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.castLaunchTvBtn}
-          onPress={() => { setCastVisible(false); if (game?.id) router.push(`/tv?id=${game.id}` as any); }}
-        >
-          <Text style={styles.castLaunchTvBtnText}>Open TV Screen →</Text>
-        </TouchableOpacity>
       </View>
     </TouchableOpacity>
   ) : null;
@@ -4120,19 +4114,6 @@ const styles = StyleSheet.create({
     color: C.textOnOchre,
     fontFamily: Fonts.display,
     fontSize: FS.base,
-  },
-  castLaunchTvBtn: {
-    borderRadius: R.btn,
-    paddingVertical: 12,
-    alignItems: 'center',
-    backgroundColor: C.surfaceHigh,
-    borderWidth: 1,
-    borderColor: C.inkFaint,
-  },
-  castLaunchTvBtnText: {
-    color: C.textSub,
-    fontFamily: Fonts.label,
-    fontSize: FS.sm,
   },
   castAirPlayRow: {
     flexDirection: 'row',
