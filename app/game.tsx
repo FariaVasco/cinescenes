@@ -3672,7 +3672,8 @@ const styles = StyleSheet.create({
   // ── Report modal ──
   modalBackdrop: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.72)',
-    justifyContent: 'center', alignItems: 'center', padding: 28,
+    justifyContent: 'center', alignItems: 'center',
+    paddingVertical: 20, paddingHorizontal: 52,
   },
   reportSheet: { backgroundColor: C.surface, borderRadius: R.card, overflow: 'hidden', width: '100%', maxWidth: 640 },
   reportHeader: {

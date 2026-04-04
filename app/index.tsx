@@ -171,6 +171,6 @@ const styles = StyleSheet.create({
     gap: SP.sm,
   },
   fullWidth: {
-    width: '100%',
+    alignSelf: 'stretch',
   },
 });
