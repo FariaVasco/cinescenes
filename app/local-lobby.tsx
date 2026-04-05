@@ -23,7 +23,8 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import { C, R, FS, Fonts, SP } from '@/constants/theme';
 import { CinemaButton } from '@/components/CinemaButton';
 import { BackButton } from '@/components/BackButton';
-import { ClapperboardIcon, FilmReelIcon } from '@/components/CinemaIcons';
+const lcClapperboard = require('../assets/lc-clapperboard.png');
+const lcMovieTicket  = require('../assets/lc-movie-ticket.png');
 import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
 import { Game, Movie, Player } from '@/lib/database.types';
@@ -396,7 +397,7 @@ export default function LocalLobbyScreen() {
               onPress={() => router.push('/mode-select')}
               activeOpacity={0.85}
             >
-              <ClapperboardIcon size={36} color={C.ink} />
+              <Image source={lcClapperboard} style={{ width: 40, height: 40, resizeMode: 'contain' }} />
               <Text style={[styles.choiceCardTitle, { color: C.ink }]}>Create Game</Text>
               <Text style={[styles.choiceCardSub, { color: 'rgba(26,26,26,0.6)' }]}>Share the code with friends</Text>
             </TouchableOpacity>
@@ -406,7 +407,7 @@ export default function LocalLobbyScreen() {
               onPress={() => router.push('/lobby-browser')}
               activeOpacity={0.85}
             >
-              <FilmReelIcon size={36} color={C.cerulean} />
+              <Image source={lcMovieTicket} style={{ width: 40, height: 40, resizeMode: 'contain' }} />
               <Text style={styles.choiceCardTitle}>Join Game</Text>
               <Text style={styles.choiceCardSub}>Browse open games or enter an invite code</Text>
             </TouchableOpacity>
@@ -703,7 +704,7 @@ const styles = StyleSheet.create({
   visibilityHintRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 6,
   },
-  visibilityHintIcon: { width: 14, height: 14 },
+  visibilityHintIcon: { width: 18, height: 18 },
   visibilityHint: {
     fontFamily: Fonts.label,
     color: C.textMuted, fontSize: FS.sm,

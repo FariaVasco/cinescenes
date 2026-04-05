@@ -42,6 +42,10 @@ async function main() {
   const dryRun = args.includes('--dry-run');
   const limitArg = args.indexOf('--limit');
   const limit = limitArg !== -1 ? parseInt(args[limitArg + 1], 10) : Infinity;
+  const yearFromArg = args.indexOf('--year-from');
+  const yearToArg   = args.indexOf('--year-to');
+  const yearFrom = yearFromArg !== -1 ? parseInt(args[yearFromArg + 1], 10) : null;
+  const yearTo   = yearToArg   !== -1 ? parseInt(args[yearToArg   + 1], 10) : null;
 
   const env = loadEnv();
   const supabaseUrl = env.EXPO_PUBLIC_SUPABASE_URL;
@@ -50,11 +54,10 @@ async function main() {
 
   const supabase = createClient(supabaseUrl, env.SUPABASE_SERVICE_KEY);
 
-  const { data: movies, error } = await supabase
-    .from('movies')
-    .select('id, title, year')
-    .is('tmdb_id', null)
-    .order('year', { ascending: true });
+  let query = supabase.from('movies').select('id, title, year').is('tmdb_id', null);
+  if (yearFrom) query = query.gte('year', yearFrom);
+  if (yearTo)   query = query.lte('year', yearTo);
+  const { data: movies, error } = await query.order('year', { ascending: true });
 
   if (error) { console.error('Supabase error:', error.message); process.exit(1); }
   if (!movies?.length) { console.log('✅  All movies already have tmdb_id set.'); return; }

@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { C, R, FS, Fonts, SP } from '@/constants/theme';
 import { BackButton } from '@/components/BackButton';
-import { CastToTVIcon, ProjectorIcon, CardFlipIcon } from '@/components/CinemaIcons';
+import { CastToTVIcon } from '@/components/CinemaIcons';
+
+const lcFilmStrip   = require('@/assets/lc-film-strip.png');
+const lcMysteryCard = require('@/assets/lc-mystery-card.png');
 import { CastModal } from '@/components/CastModal';
 import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
@@ -65,7 +68,7 @@ export default function PlayScreen() {
           activeOpacity={0.85}
         >
           <View style={styles.cardIconWrap}>
-            <ProjectorIcon size={36} color={C.ink} />
+            <Image source={lcFilmStrip} style={{ width: 40, height: 40, resizeMode: 'contain' }} />
           </View>
           <Text style={[styles.cardTitle, styles.cardTitlePrimary]}>Go Digital</Text>
           <Text style={[styles.cardSub, styles.cardSubPrimary]}>
@@ -80,7 +83,7 @@ export default function PlayScreen() {
           activeOpacity={0.85}
         >
           <View style={styles.cardIconWrap}>
-            <CardFlipIcon size={36} color={C.vermillion} />
+            <Image source={lcMysteryCard} style={{ width: 40, height: 40, resizeMode: 'contain' }} />
           </View>
           <Text style={[styles.cardTitle, styles.cardTitleSecondary]}>Use Your Deck</Text>
           <Text style={styles.cardSub}>

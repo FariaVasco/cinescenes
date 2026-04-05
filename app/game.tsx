@@ -1443,7 +1443,7 @@ export default function GameScreen() {
             {amActive ? (
               <TouchableOpacity style={styles.primaryBtn} onPress={handleLetsDraw}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <Image source={lcDirectorsChair} style={{ width: 24, height: 24 }} />
+                  <Image source={lcDirectorsChair} style={{ width: 30, height: 30 }} />
                   <Text style={styles.primaryBtnText}>Let's Guess</Text>
                 </View>
               </TouchableOpacity>
@@ -2376,7 +2376,7 @@ function GameOverScreen({ winner, players, myId }: { winner: Player; players: Pl
         {/* ── Left panel: trophy + winner info + button ── */}
         <View style={styles.gameOverLeft}>
           <Animated.View style={{ transform: [{ scale: scaleAnim }], opacity: opacityAnim }}>
-            <Image source={lcTrophy} style={{ width: 96, height: 96, resizeMode: 'contain' }} />
+            <Image source={lcTrophy} style={{ width: 96, height: 96, resizeMode: 'contain' }} tintColor={C.ochre} />
           </Animated.View>
 
           <Text style={styles.gameOverLabel}>GAME OVER</Text>
