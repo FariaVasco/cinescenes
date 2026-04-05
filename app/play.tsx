@@ -68,7 +68,7 @@ export default function PlayScreen() {
           activeOpacity={0.85}
         >
           <View style={styles.cardIconWrap}>
-            <Image source={lcFilmStrip} style={{ width: 40, height: 40, resizeMode: 'contain' }} />
+            <Image source={lcFilmStrip} style={{ width: 56, height: 56, resizeMode: 'contain' }} />
           </View>
           <Text style={[styles.cardTitle, styles.cardTitlePrimary]}>Go Digital</Text>
           <Text style={[styles.cardSub, styles.cardSubPrimary]}>
@@ -83,7 +83,7 @@ export default function PlayScreen() {
           activeOpacity={0.85}
         >
           <View style={styles.cardIconWrap}>
-            <Image source={lcCard} style={{ width: 40, height: 40, resizeMode: 'contain' }} />
+            <Image source={lcCard} style={{ width: 56, height: 56, resizeMode: 'contain' }} />
           </View>
           <Text style={[styles.cardTitle, styles.cardTitleSecondary]}>Use Your Deck</Text>
           <Text style={styles.cardSub}>

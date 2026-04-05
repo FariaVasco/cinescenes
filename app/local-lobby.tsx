@@ -397,7 +397,7 @@ export default function LocalLobbyScreen() {
               onPress={() => router.push('/mode-select')}
               activeOpacity={0.85}
             >
-              <Image source={lcClapperboard} style={{ width: 40, height: 40, resizeMode: 'contain' }} />
+              <Image source={lcClapperboard} style={{ width: 56, height: 56, resizeMode: 'contain' }} />
               <Text style={[styles.choiceCardTitle, { color: C.ink }]}>Create Game</Text>
               <Text style={[styles.choiceCardSub, { color: 'rgba(26,26,26,0.6)' }]}>Share the code with friends</Text>
             </TouchableOpacity>
@@ -407,7 +407,7 @@ export default function LocalLobbyScreen() {
               onPress={() => router.push('/lobby-browser')}
               activeOpacity={0.85}
             >
-              <Image source={lcMovieTicket} style={{ width: 40, height: 40, resizeMode: 'contain' }} />
+              <Image source={lcMovieTicket} style={{ width: 56, height: 56, resizeMode: 'contain' }} />
               <Text style={styles.choiceCardTitle}>Join Game</Text>
               <Text style={styles.choiceCardSub}>Browse open games or enter an invite code</Text>
             </TouchableOpacity>

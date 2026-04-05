@@ -1443,7 +1443,7 @@ export default function GameScreen() {
             {amActive ? (
               <TouchableOpacity style={styles.primaryBtn} onPress={handleLetsDraw}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <Image source={lcDirectorsChair} style={{ width: 30, height: 30 }} />
+                  <Image source={lcDirectorsChair} style={{ width: 44, height: 44 }} />
                   <Text style={styles.primaryBtnText}>Let's Guess</Text>
                 </View>
               </TouchableOpacity>
@@ -2975,7 +2975,7 @@ function GameIntroScreen({
             activeOpacity={0.75}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <Image source={require('../assets/lc-spinning-wheel.png')} style={{ width: 28, height: 28 }} />
+              <Image source={require('../assets/lc-spinning-wheel.png')} style={{ width: 40, height: 40 }} />
               <Text style={introStyles.spinBtnText}>Let's spin!</Text>
             </View>
           </TouchableOpacity>
