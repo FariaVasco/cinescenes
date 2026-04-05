@@ -2975,7 +2975,7 @@ function GameIntroScreen({
             activeOpacity={0.75}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <Image source={require('../assets/lc-mystery-card.png')} style={{ width: 28, height: 28 }} />
+              <Image source={require('../assets/lc-spinning-wheel.png')} style={{ width: 28, height: 28 }} />
               <Text style={introStyles.spinBtnText}>Let's spin!</Text>
             </View>
           </TouchableOpacity>

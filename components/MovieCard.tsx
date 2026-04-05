@@ -1,7 +1,7 @@
 import { useEffect, useImperativeHandle, forwardRef, useRef } from 'react';
 import { View, Text, Image, Animated, StyleSheet } from 'react-native';
 import { Movie } from '@/lib/database.types';
-import { cardColor, Fonts } from '@/constants/theme';
+import { cardColor, Fonts, C } from '@/constants/theme';
 
 const lcMysteryCard = require('@/assets/lc-mystery-card.png');
 
@@ -21,8 +21,8 @@ export function CardBack({ width, height, outlined = false }: CardSizeProps) {
   const pad = Math.max(5, width * 0.09);
 
   return (
-    <View style={[s.shell, { width, height, borderRadius: radius }, outlined && s.shellOutlined]}>
-      {/* Outer gold border frame */}
+    <View style={[s.shell, s.backShell, { width, height, borderRadius: radius }, outlined && s.shellOutlined]}>
+      {/* Outer ink border frame */}
       <View style={[s.frame1, { top: pad, left: pad, right: pad, bottom: pad, borderRadius: radius * 0.55 }]} />
       {/* Inner hairline frame */}
       <View style={[s.frame2, {
@@ -33,8 +33,8 @@ export function CardBack({ width, height, outlined = false }: CardSizeProps) {
       {/* Centre emblem */}
       <Image
         source={lcMysteryCard}
-        style={{ width: Math.max(36, width * 0.58), height: Math.max(36, width * 0.58), resizeMode: 'contain' }}
-        tintColor='rgba(245,197,24,0.75)'
+        style={{ width: Math.max(36, width * 0.58), height: Math.max(36, width * 0.58) }}
+        resizeMode="contain"
       />
     </View>
   );
@@ -147,26 +147,30 @@ const GOLD = 'rgba(245,197,24,';
 
 const s = StyleSheet.create({
   shell: {
-    backgroundColor: '#0d0820',
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
   },
+  backShell: {
+    backgroundColor: C.bg,
+    borderWidth: 2,
+    borderColor: C.ink,
+  },
   shellOutlined: {
     borderWidth: 2,
-    borderColor: 'rgba(245,197,24,0.45)',
+    borderColor: C.ink,
   },
-  // Outer gold border frame (absolute inset)
+  // Outer ink border frame (absolute inset)
   frame1: {
     position: 'absolute',
     borderWidth: 1.5,
-    borderColor: `${GOLD}0.5)`,
+    borderColor: 'rgba(26,26,26,0.15)',
   },
   // Inner hairline frame
   frame2: {
     position: 'absolute',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: `${GOLD}0.22)`,
+    borderColor: 'rgba(26,26,26,0.08)',
   },
   emblem: {
     alignItems: 'center',
