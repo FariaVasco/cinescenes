@@ -13,6 +13,9 @@
 import Svg, {
   Circle, Line, Path, Rect, G,
 } from 'react-native-svg';
+import {
+  ArrowLeft, X, ChevronRight, Check, Play, Eye, EyeOff, Users,
+} from 'lucide-react-native';
 import { C } from '@/constants/theme';
 
 // ── Shared prop type ──────────────────────────────────────────────────────────
@@ -228,4 +231,39 @@ export function DecoStar({ size = 64, opacity = 0.08, light = false }: DecoProps
       />
     </Svg>
   );
+}
+
+// ── Tier 3 — Functional icons via Lucide ──────────────────────────────────────
+// Same IconProps interface. strokeWidth fixed at 2 to match ligne claire style.
+
+export function ArrowLeftIcon({ size = 24, color = C.ink, opacity = 1 }: IconProps) {
+  return <ArrowLeft size={size} color={color} opacity={opacity} strokeWidth={2} />;
+}
+
+export function CloseIcon({ size = 24, color = C.ink, opacity = 1 }: IconProps) {
+  return <X size={size} color={color} opacity={opacity} strokeWidth={2} />;
+}
+
+export function ChevronRightIcon({ size = 24, color = C.ink, opacity = 1 }: IconProps) {
+  return <ChevronRight size={size} color={color} opacity={opacity} strokeWidth={2} />;
+}
+
+export function CheckIcon({ size = 24, color = C.ink, opacity = 1 }: IconProps) {
+  return <Check size={size} color={color} opacity={opacity} strokeWidth={2.5} />;
+}
+
+export function PlayIcon({ size = 24, color = C.ink, opacity = 1 }: IconProps) {
+  return <Play size={size} color={color} opacity={opacity} strokeWidth={2} />;
+}
+
+export function EyeIcon({ size = 24, color = C.ink, opacity = 1 }: IconProps) {
+  return <Eye size={size} color={color} opacity={opacity} strokeWidth={2} />;
+}
+
+export function EyeOffIcon({ size = 24, color = C.ink, opacity = 1 }: IconProps) {
+  return <EyeOff size={size} color={color} opacity={opacity} strokeWidth={2} />;
+}
+
+export function PeopleIcon({ size = 24, color = C.ink, opacity = 1 }: IconProps) {
+  return <Users size={size} color={color} opacity={opacity} strokeWidth={2} />;
 }
