@@ -16,7 +16,7 @@ import {
 
 const lcCrown    = require('../assets/lc-crown.png');
 const lcLock     = require('../assets/lc-lock.png');
-const lcGlobePin = require('../assets/lc-globe-pin.png');
+const lcGlobePin = require('../assets/lc-globe.png');
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ScreenOrientation from 'expo-screen-orientation';
