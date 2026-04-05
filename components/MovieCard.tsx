@@ -2,6 +2,7 @@ import { useEffect, useImperativeHandle, forwardRef, useRef } from 'react';
 import { View, Text, Animated, StyleSheet } from 'react-native';
 import { Movie } from '@/lib/database.types';
 import { cardColor, Fonts } from '@/constants/theme';
+import { CinescenesMark } from '@/components/CinescenesMark';
 
 export { cardColor as getCardColor };
 
@@ -29,13 +30,7 @@ export function CardBack({ width, height, outlined = false }: CardSizeProps) {
       }]} />
 
       {/* Centre emblem */}
-      <View style={s.emblem}>
-        <Text style={[s.star, { fontSize: Math.max(8, width * 0.1) }]}>✦</Text>
-        <Text style={[s.word, { fontSize: Math.max(7, width * 0.105), letterSpacing: Math.max(2, width * 0.04) }]}>CINE</Text>
-        <View style={[s.rule, { width: width * 0.36 }]} />
-        <Text style={[s.word, { fontSize: Math.max(7, width * 0.105), letterSpacing: Math.max(1, width * 0.02) }]}>SCENES</Text>
-        <Text style={[s.star, { fontSize: Math.max(8, width * 0.1) }]}>✦</Text>
-      </View>
+      <CinescenesMark size={Math.max(36, width * 0.55)} squareBackground />
     </View>
   );
 }
