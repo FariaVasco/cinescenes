@@ -25,7 +25,7 @@ export function CardBack({ width, height, outlined = false }: CardSizeProps) {
       <Image
         source={lcMysteryCard}
         style={{ width, height, borderRadius: radius }}
-        resizeMode="contain"
+        resizeMode="stretch"
       />
     </View>
   );
