@@ -8,7 +8,7 @@ import { BackButton } from '@/components/BackButton';
 import { CastToTVIcon } from '@/components/CinemaIcons';
 
 const lcFilmStrip   = require('@/assets/lc-film-strip.png');
-const lcMysteryCard = require('@/assets/lc-mystery-card.png');
+const lcCard        = require('@/assets/lc-card.png');
 import { CastModal } from '@/components/CastModal';
 import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
@@ -83,7 +83,7 @@ export default function PlayScreen() {
           activeOpacity={0.85}
         >
           <View style={styles.cardIconWrap}>
-            <Image source={lcMysteryCard} style={{ width: 40, height: 40, resizeMode: 'contain' }} />
+            <Image source={lcCard} style={{ width: 40, height: 40, resizeMode: 'contain' }} />
           </View>
           <Text style={[styles.cardTitle, styles.cardTitleSecondary]}>Use Your Deck</Text>
           <Text style={styles.cardSub}>
