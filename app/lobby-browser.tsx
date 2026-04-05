@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 import {
   View,
   Text,
+  Image,
   TouchableOpacity,
   FlatList,
   TextInput,
@@ -17,6 +18,8 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import { C, R, FS, Fonts, SP } from '@/constants/theme';
 import { BackButton } from '@/components/BackButton';
 import { supabase } from '@/lib/supabase';
+
+const lcClapperboard = require('@/assets/lc-clapperboard.png');
 import { Game } from '@/lib/database.types';
 
 const db = supabase as unknown as { from: (t: string) => any };
@@ -141,7 +144,7 @@ export default function LobbyBrowserScreen() {
             }
             ListEmptyComponent={
               <View style={styles.emptyState}>
-                <Text style={styles.emptyIcon}>🎬</Text>
+                <Image source={lcClapperboard} style={styles.emptyIcon} resizeMode="contain" />
                 <Text style={styles.emptyText}>No open games right now</Text>
                 <Text style={styles.emptyHint}>Pull to refresh</Text>
               </View>
@@ -245,7 +248,7 @@ const styles = StyleSheet.create({
     flex: 1, justifyContent: 'center', alignItems: 'center',
     gap: 8, paddingTop: 80,
   },
-  emptyIcon: { fontSize: 48 },
+  emptyIcon: { width: 64, height: 64 },
   emptyText: {
     fontFamily: Fonts.bodyBold,
     color: C.textSub, fontSize: FS.lg,
