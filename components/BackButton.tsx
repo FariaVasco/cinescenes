@@ -1,5 +1,6 @@
-import { TouchableOpacity, Text, StyleSheet, View } from 'react-native';
+import { TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { C, FS, R, Fonts } from '@/constants/theme';
+import { ArrowLeftIcon } from '@/components/CinemaIcons';
 
 type Props = {
   onPress: () => void;
@@ -19,7 +20,7 @@ export function BackButton({ onPress, label = 'Back', style, dark = false }: Pro
       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
       activeOpacity={0.65}
     >
-      <Text style={[styles.arrow, { color: textColor }]}>←</Text>
+      <ArrowLeftIcon size={18} color={textColor} />
       {label ? <Text style={[styles.label, { color: textColor }]}>{label}</Text> : null}
     </TouchableOpacity>
   );
@@ -37,10 +38,6 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     marginHorizontal: 16,
     marginTop: 6,
-  },
-  arrow: {
-    fontSize: FS.base,
-    fontFamily: Fonts.label,
   },
   label: {
     fontFamily: Fonts.label,
