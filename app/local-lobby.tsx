@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
+  Image,
   TouchableOpacity,
   TextInput,
   ScrollView,
@@ -12,6 +13,10 @@ import {
   Platform,
   BackHandler,
 } from 'react-native';
+
+const lcCrown    = require('../assets/lc-crown.png');
+const lcLock     = require('../assets/lc-lock.png');
+const lcGlobePin = require('../assets/lc-globe-pin.png');
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ScreenOrientation from 'expo-screen-orientation';
@@ -480,7 +485,7 @@ export default function LocalLobbyScreen() {
                   <Text style={styles.playerAvatarText}>{initials(p.display_name)}</Text>
                 </View>
                 <Text style={styles.playerName}>{p.display_name}</Text>
-                {isHost && <View style={styles.hostBadge}><Text style={styles.hostBadgeText}>host</Text></View>}
+                {isHost && <Image source={lcCrown} style={styles.hostCrownIcon} />}
                 {p.id === localPlayerId && <View style={styles.youBadge}><Text style={styles.youBadgeText}>you</Text></View>}
               </View>
             );
@@ -581,11 +586,15 @@ export default function LocalLobbyScreen() {
                 </Text>
               </TouchableOpacity>
             </View>
-            <Text style={styles.visibilityHint}>
-              {visibility === 'invite_only'
-                ? '🔒  Private · join by code only'
-                : '🌐  Public · open to everyone'}
-            </Text>
+            <View style={styles.visibilityHintRow}>
+              <Image
+                source={visibility === 'invite_only' ? lcLock : lcGlobePin}
+                style={styles.visibilityHintIcon}
+              />
+              <Text style={styles.visibilityHint}>
+                {visibility === 'invite_only' ? 'Private · join by code only' : 'Public · open to everyone'}
+              </Text>
+            </View>
           </View>
         )}
 
@@ -691,9 +700,13 @@ const styles = StyleSheet.create({
     color: C.textSub, fontSize: FS.sm,
   },
   visibilityOptionTextActive: { color: C.textOnOchre },
+  visibilityHintRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 6,
+  },
+  visibilityHintIcon: { width: 14, height: 14 },
   visibilityHint: {
     fontFamily: Fonts.label,
-    color: C.textMuted, fontSize: FS.sm, textAlign: 'center',
+    color: C.textMuted, fontSize: FS.sm,
   },
 
   // Waiting room
@@ -769,15 +782,7 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.bodyBold,
     color: C.textPrimary, fontSize: FS.base, flex: 1,
   },
-  hostBadge: {
-    backgroundColor: C.cerulean, borderRadius: R.xs,
-    borderWidth: 2, borderColor: C.ink,
-    paddingHorizontal: 8, paddingVertical: 2,
-  },
-  hostBadgeText: {
-    fontFamily: Fonts.label,
-    color: '#fff', fontSize: FS.xs, letterSpacing: 0.5,
-  },
+  hostCrownIcon: { width: 20, height: 20 },
   youBadge: {
     backgroundColor: C.ochre, borderRadius: R.xs,
     borderWidth: 2, borderColor: C.ink,

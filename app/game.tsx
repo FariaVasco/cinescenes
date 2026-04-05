@@ -38,6 +38,12 @@ import { CardBack, CardFront } from '@/components/MovieCard';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { AirPlayButton } from 'airplay-picker';
 
+const lcTrophy        = require('../assets/lc-trophy.png');
+const lcDirectorsChair = require('../assets/lc-directors-chair.png');
+const lcPopcorn       = require('../assets/lc-popcorn.png');
+const lcLightning     = require('../assets/lc-lightning.png');
+const lcStarburst     = require('../assets/lc-starburst.png');
+
 const REPORT_OPTIONS = [
   { id: 'spoiler',       label: '🎬  Title or info is revealed in the clip' },
   { id: 'unavailable',   label: '📺  Video won\'t load or keeps buffering'  },
@@ -1436,7 +1442,10 @@ export default function GameScreen() {
           <View style={styles.drawingCTAArea}>
             {amActive ? (
               <TouchableOpacity style={styles.primaryBtn} onPress={handleLetsDraw}>
-                <Text style={styles.primaryBtnText}>Let's Guess 🎬</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <Image source={lcDirectorsChair} style={{ width: 24, height: 24 }} />
+                  <Text style={styles.primaryBtnText}>Let's Guess</Text>
+                </View>
               </TouchableOpacity>
             ) : (
               <Text style={styles.drawingWaitingText}>{activePlayer?.display_name} is thinking…</Text>
@@ -1717,7 +1726,7 @@ export default function GameScreen() {
         <View style={styles.endedOverlay}>
           <SafeAreaView style={styles.endedInner} edges={['top', 'bottom']}>
             <View style={styles.endedCenter}>
-              <Text style={styles.endedTitle}>🎬</Text>
+              <Image source={lcPopcorn} style={styles.endedTitleIcon} />
               <Text style={styles.endedWaiting}>
                 {hostPlayer?.display_name} is watching the trailer…
               </Text>
@@ -2367,15 +2376,7 @@ function GameOverScreen({ winner, players, myId }: { winner: Player; players: Pl
         {/* ── Left panel: trophy + winner info + button ── */}
         <View style={styles.gameOverLeft}>
           <Animated.View style={{ transform: [{ scale: scaleAnim }], opacity: opacityAnim }}>
-            <Svg width={64} height={64} viewBox="0 0 96 96">
-              <Circle cx={48} cy={48} r={46} fill="rgba(245,197,24,0.12)" />
-              <Circle cx={48} cy={48} r={38} fill="none" stroke="rgba(245,197,24,0.35)" strokeWidth={1.5} />
-              <Path d="M34 28 L62 28 L58 56 Q48 62 38 56 Z" fill="none" stroke="#f5c518" strokeWidth={3} strokeLinejoin="round" />
-              <Path d="M34 32 Q24 32 24 42 Q24 50 34 50" fill="none" stroke="#f5c518" strokeWidth={2.5} strokeLinecap="round" />
-              <Path d="M62 32 Q72 32 72 42 Q72 50 62 50" fill="none" stroke="#f5c518" strokeWidth={2.5} strokeLinecap="round" />
-              <Path d="M40 56 L38 64 L58 64 L56 56" fill="none" stroke="#f5c518" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
-              <Path d="M33 68 L63 68" stroke="#f5c518" strokeWidth={3} strokeLinecap="round" />
-            </Svg>
+            <Image source={lcTrophy} style={{ width: 96, height: 96, resizeMode: 'contain' }} />
           </Animated.View>
 
           <Text style={styles.gameOverLabel}>GAME OVER</Text>
@@ -2509,7 +2510,11 @@ function RevealResult({
 
   return (
     <Animated.View style={[styles.revealToast, { transform: [{ translateY: slideAnim }] }]}>
-      <Text style={styles.revealToastIcon}>{icon}</Text>
+      {icon === '🎯'
+        ? <Image source={lcStarburst}  style={styles.revealToastIconImg} />
+        : icon === '⚡'
+        ? <Image source={lcLightning}  style={styles.revealToastIconImg} />
+        : <Text style={styles.revealToastIcon}>{icon}</Text>}
       <View style={styles.revealToastBody}>
         <Text style={styles.revealToastHeadline} numberOfLines={1}>
           {resultName
@@ -3534,6 +3539,7 @@ const styles = StyleSheet.create({
     borderColor: C.ink,
   },
   revealToastIcon: { fontSize: 28 },
+  revealToastIconImg: { width: 32, height: 32, resizeMode: 'contain' },
   revealToastBody: { flex: 1, gap: 2 },
   revealToastHeadline: {
     color: C.textPrimary,
@@ -3655,6 +3661,7 @@ const styles = StyleSheet.create({
   endedInner: { flex: 1, justifyContent: 'space-between', padding: 20 },
   endedCenter: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 10 },
   endedTitle: { color: C.textPrimaryDark, fontFamily: Fonts.display, fontSize: 32, textAlign: 'center', letterSpacing: 1 },
+  endedTitleIcon: { width: 72, height: 72, resizeMode: 'contain' },
   endedSubtitle: {
     color: C.ochre, fontFamily: Fonts.label, fontSize: FS.sm, textAlign: 'center',
     letterSpacing: 2.5, textTransform: 'uppercase',
