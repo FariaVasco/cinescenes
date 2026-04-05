@@ -8,7 +8,6 @@ const lcMysteryCard = require('@/assets/lc-mystery-card.png');
 export { cardColor as getCardColor };
 
 // ── CardBack ─────────────────────────────────────────────────────────────────
-// Classy typographic design — pure View/Text, no SVG overhead.
 
 interface CardSizeProps {
   width: number;
@@ -16,15 +15,20 @@ interface CardSizeProps {
   outlined?: boolean;
 }
 
+// How much to overscan the PNG to clip its transparent padding.
+// The actual card drawing occupies roughly the inner 70% of the PNG —
+// scaling by 1/0.70 ≈ 1.43 pushes the transparent edges outside the
+// shell's overflow:hidden boundary, so only the drawn card is visible.
+const BACK_SCALE = 1.45;
+
 export function CardBack({ width, height, outlined = false }: CardSizeProps) {
   const radius = Math.max(6, width * 0.08);
-  const pad = Math.max(5, width * 0.09);
 
   return (
     <View style={[s.shell, s.backShell, { width, height, borderRadius: radius }, outlined && s.shellOutlined]}>
       <Image
         source={lcMysteryCard}
-        style={{ width, height, borderRadius: radius }}
+        style={{ width: width * BACK_SCALE, height: height * BACK_SCALE }}
         resizeMode="stretch"
       />
     </View>
