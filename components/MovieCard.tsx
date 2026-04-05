@@ -22,18 +22,9 @@ export function CardBack({ width, height, outlined = false }: CardSizeProps) {
 
   return (
     <View style={[s.shell, s.backShell, { width, height, borderRadius: radius }, outlined && s.shellOutlined]}>
-      {/* Outer ink border frame */}
-      <View style={[s.frame1, { top: pad, left: pad, right: pad, bottom: pad, borderRadius: radius * 0.55 }]} />
-      {/* Inner hairline frame */}
-      <View style={[s.frame2, {
-        top: pad + 4, left: pad + 4, right: pad + 4, bottom: pad + 4,
-        borderRadius: radius * 0.3,
-      }]} />
-
-      {/* Centre emblem */}
       <Image
         source={lcMysteryCard}
-        style={{ width: Math.max(36, width * 0.58), height: Math.max(36, width * 0.58) }}
+        style={{ width, height, borderRadius: radius }}
         resizeMode="contain"
       />
     </View>
