@@ -1,8 +1,9 @@
 import { useEffect, useImperativeHandle, forwardRef, useRef } from 'react';
-import { View, Text, Animated, StyleSheet } from 'react-native';
+import { View, Text, Image, Animated, StyleSheet } from 'react-native';
 import { Movie } from '@/lib/database.types';
 import { cardColor, Fonts } from '@/constants/theme';
-import { CinescenesMark } from '@/components/CinescenesMark';
+
+const lcMysteryCard = require('@/assets/lc-mystery-card.png');
 
 export { cardColor as getCardColor };
 
@@ -30,7 +31,11 @@ export function CardBack({ width, height, outlined = false }: CardSizeProps) {
       }]} />
 
       {/* Centre emblem */}
-      <CinescenesMark size={Math.max(36, width * 0.55)} squareBackground />
+      <Image
+        source={lcMysteryCard}
+        style={{ width: Math.max(36, width * 0.58), height: Math.max(36, width * 0.58), resizeMode: 'contain' }}
+        tintColor='rgba(245,197,24,0.75)'
+      />
     </View>
   );
 }
