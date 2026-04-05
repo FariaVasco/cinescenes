@@ -9,6 +9,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { C, R, FS, Fonts } from '@/constants/theme';
+import { CloseIcon } from '@/components/CinemaIcons';
 
 interface CastModalProps {
   visible: boolean;
@@ -37,7 +38,7 @@ export function CastModal({ visible, onDismiss, onConfirm }: CastModalProps) {
               <Text style={styles.headerTitle}>Cast to TV</Text>
             </View>
             <TouchableOpacity onPress={onDismiss} style={styles.closeBtn}>
-              <Text style={styles.closeText}>✕</Text>
+              <CloseIcon size={18} color={C.textMutedDark} />
             </TouchableOpacity>
           </View>
 

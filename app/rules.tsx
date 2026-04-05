@@ -23,6 +23,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { C, R, FS, Fonts, SP } from '@/constants/theme';
 import { CinemaButton } from '@/components/CinemaButton';
+import { ArrowLeftIcon } from '@/components/CinemaIcons';
 
 const STEPS = [
   {
@@ -122,7 +123,7 @@ export default function RulesScreen() {
           onPress={() => router.back()}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Text style={styles.backArrow}>←</Text>
+          <ArrowLeftIcon size={20} color={C.textSub} />
         </TouchableOpacity>
 
         <Text style={styles.headerTitle}>How to Play</Text>

@@ -37,6 +37,7 @@ import { ChallengeTimer } from '@/components/ChallengeTimer';
 import { CardBack, CardFront } from '@/components/MovieCard';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { AirPlayButton } from 'airplay-picker';
+import { CloseIcon, PlayIcon } from '@/components/CinemaIcons';
 
 const lcTrophy        = require('../assets/lc-trophy.png');
 const lcDirectorsChair = require('../assets/lc-directors-chair.png');
@@ -1392,7 +1393,7 @@ export default function GameScreen() {
         <View style={styles.castSheetHeader}>
           <Text style={styles.castSheetTitle}>📺  Cast to TV</Text>
           <TouchableOpacity onPress={() => setCastVisible(false)} style={styles.castCloseBtn}>
-            <Text style={styles.castCloseBtnText}>✕</Text>
+            <CloseIcon size={18} color={C.textSub} />
           </TouchableOpacity>
         </View>
         {Platform.OS === 'ios' ? (
@@ -1845,7 +1846,7 @@ export default function GameScreen() {
             activeOpacity={1}
             onPress={() => { setUserPaused(false); trailerRef.current?.resume(); }}
           >
-            <Text style={styles.pauseIcon}>▶</Text>
+            <PlayIcon size={72} color='rgba(255,255,255,0.9)' />
           </TouchableOpacity>
         )}
 
@@ -1860,7 +1861,7 @@ export default function GameScreen() {
               <View style={styles.reportHeader}>
                 <Text style={styles.reportTitle}>What's wrong?</Text>
                 <TouchableOpacity onPress={() => { setShowReportDialog(false); trailerRef.current?.resume(); }} style={styles.reportCloseBtn}>
-                  <Text style={styles.reportCloseText}>✕</Text>
+                  <CloseIcon size={18} color={C.textMuted} />
                 </TouchableOpacity>
               </View>
               <View style={styles.reportGrid}>

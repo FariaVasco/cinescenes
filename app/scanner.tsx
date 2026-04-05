@@ -7,6 +7,7 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import { supabase } from '@/lib/supabase';
 import { useAppStore } from '@/store/useAppStore';
 import { C, R, FS, Fonts } from '@/constants/theme';
+import { CloseIcon } from '@/components/CinemaIcons';
 
 type ErrorInfo = { title: string; body: string };
 
@@ -118,7 +119,7 @@ export default function ScannerScreen() {
 
       <SafeAreaView style={styles.ui}>
         <TouchableOpacity style={styles.closeButton} onPress={() => setShowExitDialog(true)}>
-          <Text style={styles.closeButtonText}>✕</Text>
+          <CloseIcon size={18} color='#fff' />
         </TouchableOpacity>
         <View style={styles.hint}>
           <Text style={styles.hintText}>Align QR code with the frame</Text>

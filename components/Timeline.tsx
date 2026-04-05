@@ -11,6 +11,7 @@ import {
 import { Movie } from '@/lib/database.types';
 import { C, R, FS, Fonts } from '@/constants/theme';
 import { FlippingMovieCard, CardBack, CardFront } from '@/components/MovieCard';
+import { CheckIcon, CloseIcon } from '@/components/CinemaIcons';
 
 interface ChallengerCoin {
   interval: number;
@@ -296,7 +297,7 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
         <View key={`gap-${index}`} ref={activeGapRef} style={styles.activeGap}>
           <View style={styles.cardPlaceholder}>
             <TouchableOpacity style={styles.confirmCheckmark} onPress={onConfirm} activeOpacity={0.7}>
-              <Text style={styles.confirmCheckmarkText}>✓</Text>
+              <CheckIcon size={18} color='rgba(245,197,24,0.9)' />
             </TouchableOpacity>
           </View>
         </View>
@@ -307,7 +308,7 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
     if (blockedIntervals?.includes(index)) {
       return (
         <View key={`gap-${index}`} style={styles.gapBlocked}>
-          <Text style={styles.gapBlockedText}>✕</Text>
+          <CloseIcon size={12} color='rgba(230,57,70,0.45)' />
         </View>
       );
     }

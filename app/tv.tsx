@@ -11,6 +11,7 @@ import { computeValidIntervals, computeSeqChallengeState } from '@/lib/game-logi
 import { Challenge, Movie, Player, Turn } from '@/lib/database.types';
 import { TrailerPlayer } from '@/components/TrailerPlayer';
 import { FlippingMovieCard } from '@/components/MovieCard';
+import { CloseIcon } from '@/components/CinemaIcons';
 
 const db = supabase as unknown as { from: (t: string) => any };
 
@@ -313,7 +314,7 @@ export default function TVScreen() {
 function TvExitButton({ onPress }: { onPress: () => void }) {
   return (
     <TouchableOpacity style={styles.exitBtn} onPress={onPress}>
-      <Text style={styles.exitBtnText}>✕</Text>
+      <CloseIcon size={18} color='#fff' />
     </TouchableOpacity>
   );
 }

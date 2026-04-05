@@ -11,6 +11,7 @@ import {
 import { Snackbar } from 'react-native-paper';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { CinemaButton } from '@/components/CinemaButton';
+import { CloseIcon, PlayIcon } from '@/components/CinemaIcons';
 import { C, R, FS, Fonts } from '@/constants/theme';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -156,11 +157,11 @@ export default function TrailerScreen() {
                 delayLongPress={500}
                 onLongPress={() => setShowExitDialog(true)}
               >
-                <Text style={styles.closeButtonText}>✕</Text>
+                <CloseIcon size={18} color='#fff' />
               </Pressable>
             ) : (
               <TouchableOpacity style={styles.closeButton} onPress={() => setShowExitDialog(true)}>
-                <Text style={styles.closeButtonText}>✕</Text>
+                <CloseIcon size={18} color='#fff' />
               </TouchableOpacity>
             )}
 
@@ -194,7 +195,7 @@ export default function TrailerScreen() {
               activeOpacity={1}
               onPress={handleTapToggle}
             >
-              <Text style={styles.pauseIcon}>▶</Text>
+              <PlayIcon size={72} color='rgba(255,255,255,0.9)' />
             </TouchableOpacity>
           )}
         </>
@@ -206,7 +207,7 @@ export default function TrailerScreen() {
           <SafeAreaView style={styles.endedInner} edges={['top', 'bottom']}>
             <View style={styles.endedTopRow}>
               <TouchableOpacity style={styles.closeButton} onPress={() => setShowExitDialog(true)}>
-                <Text style={styles.closeButtonText}>✕</Text>
+                <CloseIcon size={18} color='#fff' />
               </TouchableOpacity>
             </View>
 
@@ -278,7 +279,7 @@ export default function TrailerScreen() {
             <View style={styles.reportHeader}>
               <Text style={styles.reportTitle}>What's wrong?</Text>
               <TouchableOpacity onPress={() => setShowReportDialog(false)} style={styles.reportCloseBtn}>
-                <Text style={styles.reportCloseText}>✕</Text>
+                <CloseIcon size={18} color={C.textMuted} />
               </TouchableOpacity>
             </View>
             <View style={styles.reportGrid}>
