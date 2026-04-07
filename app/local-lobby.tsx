@@ -783,7 +783,7 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.bodyBold,
     color: C.textPrimary, fontSize: FS.base, flex: 1,
   },
-  hostCrownIcon: { width: 20, height: 20 },
+  hostCrownIcon: { width: 32, height: 32 },
   youBadge: {
     backgroundColor: C.ochre, borderRadius: R.xs,
     borderWidth: 2, borderColor: C.ink,

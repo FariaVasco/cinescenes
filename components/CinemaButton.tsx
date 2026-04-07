@@ -89,8 +89,8 @@ const s = StyleSheet.create({
 
 const sizeStyle = StyleSheet.create({
   sm: { paddingHorizontal: 16, paddingVertical:  8, borderRadius: R.md  },
-  md: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: R.btn },
-  lg: { paddingHorizontal: 32, paddingVertical: 16, borderRadius: R.btn },
+  md: { paddingHorizontal: 18, paddingVertical:  8, borderRadius: R.btn },
+  lg: { paddingHorizontal: 24, paddingVertical: 10, borderRadius: R.btn },
 });
 
 const sizeLabel = StyleSheet.create({

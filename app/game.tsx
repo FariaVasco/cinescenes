@@ -44,6 +44,8 @@ const lcDirectorsChair = require('../assets/lc-directors-chair.png');
 const lcPopcorn       = require('../assets/lc-popcorn.png');
 const lcLightning     = require('../assets/lc-lightning.png');
 const lcStarburst     = require('../assets/lc-starburst.png');
+const lcFilmReel      = require('../assets/lc-film-reel.png');
+const lcHourglass     = require('../assets/lc-hourglass.png');
 
 const REPORT_OPTIONS = [
   { id: 'spoiler',       label: '🎬  Title or info is revealed in the clip' },
@@ -1444,12 +1446,15 @@ export default function GameScreen() {
             {amActive ? (
               <TouchableOpacity style={styles.primaryBtn} onPress={handleLetsDraw}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <Image source={lcDirectorsChair} style={{ width: 44, height: 44 }} />
+                  <Image source={lcPopcorn} style={{ width: 56, height: 56 }} />
                   <Text style={styles.primaryBtnText}>Let's Guess</Text>
                 </View>
               </TouchableOpacity>
             ) : (
-              <Text style={styles.drawingWaitingText}>{activePlayer?.display_name} is thinking…</Text>
+              <View style={styles.drawingWaitingRow}>
+                <Image source={lcHourglass} style={styles.waitingHourglassIcon} tintColor={C.textSubDark} />
+                <Text style={styles.drawingWaitingText}>{activePlayer?.display_name} is thinking…</Text>
+              </View>
             )}
           </View>
 
@@ -1480,11 +1485,16 @@ export default function GameScreen() {
         <SafeAreaView style={styles.container}>
           <View style={styles.gameArea}>
             <Animated.View style={styles.timelineAreaFull}>
-              <Text style={styles.placePrompt}>
-                {amActive
-                  ? (selectedInterval === null ? 'Where does it belong?' : 'Confirm your pick')
-                  : `Waiting for ${activePlayer?.display_name}…`}
-              </Text>
+              {amActive ? (
+                <Text style={styles.placePrompt}>
+                  {selectedInterval === null ? 'Where does it belong?' : 'Confirm your pick'}
+                </Text>
+              ) : (
+                <View style={styles.placePromptRow}>
+                  <Image source={lcHourglass} style={styles.waitingHourglassIcon} tintColor={C.textSubDark} />
+                  <Text style={styles.placePromptText}>{`Waiting for ${activePlayer?.display_name}…`}</Text>
+                </View>
+              )}
               <Timeline
                 ref={amActive ? timelineRef : undefined}
                 timeline={timeline}
@@ -1514,9 +1524,10 @@ export default function GameScreen() {
           <SafeAreaView style={styles.container}>
             <View style={styles.gameArea}>
               <View style={styles.timelineAreaFull}>
-                <Text style={styles.placePrompt}>
-                  Waiting for {activePlayer?.display_name} to place the card…
-                </Text>
+                <View style={styles.placePromptRow}>
+                  <Image source={lcHourglass} style={styles.waitingHourglassIcon} tintColor={C.textSubDark} />
+                  <Text style={styles.placePromptText}>Waiting for {activePlayer?.display_name} to place the card…</Text>
+                </View>
                 <Timeline
                   timeline={timeline}
                   interactive={false}
@@ -1582,25 +1593,31 @@ export default function GameScreen() {
             ) : (
               <View style={keyboardVisible ? styles.guessKeyboardPanel : styles.guessMainRow}>
                 <View style={keyboardVisible ? styles.guessInputsStack : styles.guessLeftPanel}>
-                  <TextInput
-                    style={styles.guessInput}
-                    placeholder="Movie title…"
-                    placeholderTextColor={C.textMuted}
-                    value={movieGuess}
-                    onChangeText={setMovieGuess}
-                    autoCorrect={false}
-                    returnKeyType="next"
-                  />
-                  <TextInput
-                    style={styles.guessInput}
-                    placeholder="Director name…"
-                    placeholderTextColor={C.textMuted}
-                    value={directorGuess}
-                    onChangeText={setDirectorGuess}
-                    autoCorrect={false}
-                    returnKeyType="done"
-                    onSubmitEditing={() => Keyboard.dismiss()}
-                  />
+                  <View style={styles.guessInputRow}>
+                    <Image source={lcFilmReel} style={styles.guessInputIcon} />
+                    <TextInput
+                      style={[styles.guessInput, { flex: 1 }]}
+                      placeholder="Movie title…"
+                      placeholderTextColor={C.textMuted}
+                      value={movieGuess}
+                      onChangeText={setMovieGuess}
+                      autoCorrect={false}
+                      returnKeyType="next"
+                    />
+                  </View>
+                  <View style={styles.guessInputRow}>
+                    <Image source={lcDirectorsChair} style={styles.guessInputIcon} />
+                    <TextInput
+                      style={[styles.guessInput, { flex: 1 }]}
+                      placeholder="Director name…"
+                      placeholderTextColor={C.textMuted}
+                      value={directorGuess}
+                      onChangeText={setDirectorGuess}
+                      autoCorrect={false}
+                      returnKeyType="done"
+                      onSubmitEditing={() => Keyboard.dismiss()}
+                    />
+                  </View>
                 </View>
 
                 {keyboardVisible ? (
@@ -2003,7 +2020,10 @@ export default function GameScreen() {
               hideFloatingCard
             />
             {badgeText && (
-              <View style={styles.challengeBadge} pointerEvents="none">
+              <View style={[styles.challengeBadge, badgeText.includes('Waiting') && styles.challengeBadgeRow]} pointerEvents="none">
+                {badgeText.includes('Waiting') && (
+                  <Image source={lcHourglass} style={styles.waitingHourglassIcon} tintColor='rgba(255,255,255,0.7)' />
+                )}
                 <Text style={styles.challengeBadgeText}>{badgeText}</Text>
               </View>
             )}
@@ -2477,7 +2497,7 @@ function SuspenseOverlay({
   );
 }
 
-// ── Reveal result toast (drops in from top) ──────────────────────────────────
+// ── Reveal result banner (slides up from bottom) ─────────────────────────────
 
 function RevealResult({
   icon,
@@ -2498,7 +2518,7 @@ function RevealResult({
   nextPending: boolean;
   countdown: number;
 }) {
-  const slideAnim = useRef(new Animated.Value(-100)).current;
+  const slideAnim = useRef(new Animated.Value(120)).current;
 
   useEffect(() => {
     Animated.spring(slideAnim, {
@@ -2509,36 +2529,43 @@ function RevealResult({
     }).start();
   }, []);
 
+  const iconNode = icon === '🎯'
+    ? <Image source={lcStarburst} style={styles.resultBannerIconImg} />
+    : icon === '⚡'
+    ? <Image source={lcLightning} style={styles.resultBannerIconImg} />
+    : <Text style={styles.resultBannerIconEmoji}>{icon}</Text>;
+
   return (
-    <Animated.View style={[styles.revealToast, { transform: [{ translateY: slideAnim }] }]}>
-      {icon === '🎯'
-        ? <Image source={lcStarburst}  style={styles.revealToastIconImg} />
-        : icon === '⚡'
-        ? <Image source={lcLightning}  style={styles.revealToastIconImg} />
-        : <Text style={styles.revealToastIcon}>{icon}</Text>}
-      <View style={styles.revealToastBody}>
-        <Text style={styles.revealToastHeadline} numberOfLines={1}>
-          {resultName
-            ? <><Text style={styles.revealToastHL}>{resultName}</Text>{' '}{resultText}</>
-            : resultText}
-        </Text>
-        {subLines.length > 0 && (
-          <Text style={styles.revealToastSub} numberOfLines={1}>{subLines[0]}</Text>
+    <Animated.View style={[styles.resultBanner, { transform: [{ translateY: slideAnim }] }]}>
+      <View style={styles.resultBannerRow}>
+        {iconNode}
+        <View style={styles.resultBannerText}>
+          {resultName ? (
+            <>
+              <Text style={styles.resultBannerName} numberOfLines={1}>{resultName}</Text>
+              <Text style={styles.resultBannerVerb}>{resultText}</Text>
+            </>
+          ) : (
+            <Text style={styles.resultBannerVerb}>{resultText}</Text>
+          )}
+          {subLines.length > 0 && (
+            <Text style={styles.resultBannerSub} numberOfLines={1}>{subLines[0]}</Text>
+          )}
+        </View>
+        {showNext ? (
+          <TouchableOpacity style={styles.resultBannerBtn} onPress={onNext} activeOpacity={0.85} disabled={nextPending}>
+            {nextPending
+              ? <ActivityIndicator size="small" color={C.textSub} />
+              : <Text style={styles.resultBannerBtnText}>Next →</Text>}
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.resultBannerCountdown}>
+            {countdown <= 0
+              ? <ActivityIndicator size="small" color={C.textSub} />
+              : <Text style={styles.resultBannerCountdownText}>{countdown}</Text>}
+          </View>
         )}
       </View>
-      {showNext ? (
-        <TouchableOpacity style={styles.revealToastBtn} onPress={onNext} activeOpacity={0.85} disabled={nextPending}>
-          {nextPending
-            ? <ActivityIndicator size="small" color={C.textSub} />
-            : <Text style={styles.revealToastBtnText}>Next →</Text>}
-        </TouchableOpacity>
-      ) : (
-        <View style={styles.revealToastCountdown}>
-          {countdown <= 0
-            ? <ActivityIndicator size="small" color={C.textSub} />
-            : <Text style={styles.revealToastCountdownText}>{countdown}</Text>}
-        </View>
-      )}
     </Animated.View>
   );
 }
@@ -3261,11 +3288,22 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
     alignItems: 'center',
   },
+  drawingWaitingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
   drawingWaitingText: {
     color: C.textSubDark,
     fontFamily: Fonts.label,
     fontSize: FS.sm,
     textAlign: 'center',
+  },
+  waitingHourglassIcon: {
+    width: 16,
+    height: 16,
+    resizeMode: 'contain',
   },
   drawingMySection: {
     maxHeight: 110,
@@ -3296,7 +3334,7 @@ const styles = StyleSheet.create({
     borderWidth: 2, borderColor: C.ink,
   },
   avatarLargeText: { color: C.textOnOchre, fontFamily: Fonts.display, fontSize: FS.xl },
-  primaryBtn: { backgroundColor: C.ochre, borderRadius: R.btn, borderWidth: 2, borderColor: C.ink, paddingHorizontal: 32, paddingVertical: 14 },
+  primaryBtn: { backgroundColor: C.ochre, borderRadius: R.btn, borderWidth: 2, borderColor: C.ink, paddingHorizontal: 24, paddingVertical: 10 },
   primaryBtnText: { color: C.textOnOchre, fontFamily: Fonts.display, fontSize: FS.md },
   phaseLabel: { color: C.textSubDark, fontFamily: Fonts.label, fontSize: FS.base, textAlign: 'center' },
   tapHint: { color: C.textMutedDark, fontFamily: Fonts.label, fontSize: FS.sm, textAlign: 'center', marginTop: 4, minHeight: 32 },
@@ -3310,6 +3348,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
+  placePromptRow: {
+    position: 'absolute',
+    top: 10,
+    left: 0,
+    right: 0,
+    zIndex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+  },
   placePrompt: {
     position: 'absolute',
     top: 10,
@@ -3320,6 +3369,11 @@ const styles = StyleSheet.create({
     fontSize: FS.sm,
     textAlign: 'center',
     zIndex: 1,
+  },
+  placePromptText: {
+    color: C.textSubDark,
+    fontFamily: Fonts.label,
+    fontSize: FS.sm,
   },
   placingBottomStrip: {
     backgroundColor: C.inkSurface,
@@ -3422,6 +3476,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 6,
   },
+  challengeBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   challengeBadgeText: {
     color: 'rgba(255,255,255,0.8)',
     fontFamily: Fonts.label,
@@ -3523,33 +3582,49 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
 
-  // ── Reveal result toast ──
-  revealToast: {
+  // ── Reveal result banner ──
+  resultBanner: {
     position: 'absolute',
-    top: 10,
-    left: 16,
-    right: 16,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: C.ink,
+    borderTopLeftRadius: R.card,
+    borderTopRightRadius: R.card,
+    borderTopWidth: 3,
+    borderLeftWidth: 2,
+    borderRightWidth: 2,
+    borderColor: C.ochre,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 16,
+  },
+  resultBannerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    backgroundColor: C.surface,
-    borderRadius: R.card,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderWidth: 2,
-    borderColor: C.ink,
+    gap: 12,
   },
-  revealToastIcon: { fontSize: 28 },
-  revealToastIconImg: { width: 32, height: 32, resizeMode: 'contain' },
-  revealToastBody: { flex: 1, gap: 2 },
-  revealToastHeadline: {
-    color: C.textPrimary,
+  resultBannerIconImg: { width: 36, height: 36, resizeMode: 'contain' },
+  resultBannerIconEmoji: { fontSize: 32 },
+  resultBannerText: { flex: 1, gap: 1 },
+  resultBannerName: {
+    color: C.ochre,
+    fontFamily: Fonts.display,
+    fontSize: FS.xl,
+    letterSpacing: 0.3,
+  },
+  resultBannerVerb: {
+    color: C.textPrimaryDark,
     fontFamily: Fonts.bodyBold,
-    fontSize: FS.base,
+    fontSize: FS.sm,
   },
-  revealToastHL: { color: C.ochre, fontFamily: Fonts.display },
-  revealToastSub: { color: C.textSub, fontFamily: Fonts.label, fontSize: FS.xs },
-  revealToastBtn: {
+  resultBannerSub: {
+    color: 'rgba(255,255,255,0.45)',
+    fontFamily: Fonts.label,
+    fontSize: FS.xs,
+    marginTop: 2,
+  },
+  resultBannerBtn: {
     backgroundColor: C.ochre,
     borderRadius: R.btn,
     borderWidth: 2,
@@ -3558,13 +3633,13 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     alignItems: 'center',
   },
-  revealToastBtnText: { color: C.textOnOchre, fontFamily: Fonts.display, fontSize: FS.sm, letterSpacing: 0.3 },
-  revealToastCountdown: {
+  resultBannerBtnText: { color: C.textOnOchre, fontFamily: Fonts.display, fontSize: FS.sm, letterSpacing: 0.3 },
+  resultBannerCountdown: {
     width: 36, height: 36, borderRadius: 18,
-    borderWidth: 2, borderColor: C.inkFaint,
+    borderWidth: 2, borderColor: 'rgba(255,255,255,0.25)',
     alignItems: 'center', justifyContent: 'center',
   },
-  revealToastCountdownText: { color: C.textSub, fontFamily: Fonts.bodyBold, fontSize: FS.base },
+  resultBannerCountdownText: { color: 'rgba(255,255,255,0.65)', fontFamily: Fonts.bodyBold, fontSize: FS.base },
   challengerTransitionOverlay: {
     position: 'absolute',
     top: 0,
@@ -3807,6 +3882,12 @@ const styles = StyleSheet.create({
   bonusCoinHint: {
     color: C.ochre, fontFamily: Fonts.label, fontSize: FS.xs,
     textAlign: 'center', letterSpacing: 0.5, textTransform: 'uppercase',
+  },
+  guessInputRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+  },
+  guessInputIcon: {
+    width: 28, height: 28, resizeMode: 'contain',
   },
   guessInput: {
     backgroundColor: 'rgba(255,255,255,0.07)',
