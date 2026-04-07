@@ -398,7 +398,7 @@ async function main() {
   const { data: movies, error } = await supabase
     .from('movies')
     .select('id, title, year, director')
-    .eq('active', true)
+    .eq('scan_status', 'validated')
     .order('year', { ascending: true });
 
   if (error) { console.error('Supabase error:', error.message); process.exit(1); }
