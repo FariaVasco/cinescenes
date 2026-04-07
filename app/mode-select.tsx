@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Modal,
-  ScrollView, ActivityIndicator,
+  ScrollView, ActivityIndicator, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -11,18 +11,28 @@ import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
 import { presentCustomerCenter, checkPremium } from '@/lib/revenuecat';
 import { Collection } from '@/lib/database.types';
-import { DecoFilmReel, DecoClapperboard, DecoStar } from '@/components/CinemaIcons';
 import { CinemaButton } from '@/components/CinemaButton';
 import { BackButton } from '@/components/BackButton';
 import { PaywallSheet } from '@/components/PaywallSheet';
 
+const lcFilmReel     = require('@/assets/lc-film-reel.png');
+const lcClapperboard = require('@/assets/lc-clapperboard.png');
+const lcPopcorn      = require('@/assets/lc-popcorn.png');
+const lcSpotlight    = require('@/assets/lc-spotlight.png');
+const lcFilmStrip    = require('@/assets/lc-film-strip.png');
+const lcTrophy       = require('@/assets/lc-trophy.png');
+const lcLightning    = require('@/assets/lc-lightning.png');
+
 const db = supabase as unknown as { from: (t: string) => any };
 
 const DECOS = [
-  { Component: DecoFilmReel,     size: 96,  top: '3%',  right: '3%',  rotate: '12deg',  opacity: 0.05 },
-  { Component: DecoClapperboard, size: 80,  top: '5%',  left: '2%',   rotate: '-8deg',  opacity: 0.05 },
-  { Component: DecoStar,         size: 44,  top: '60%', left: '5%',   rotate: '20deg',  opacity: 0.06 },
-  { Component: DecoFilmReel,     size: 68,  top: '72%', right: '4%',  rotate: '-14deg', opacity: 0.05 },
+  { src: lcFilmReel,     size: 96, top: '3%',  right: '3%',  rotate: '12deg'  },
+  { src: lcClapperboard, size: 80, top: '5%',  left: '2%',   rotate: '-8deg'  },
+  { src: lcPopcorn,      size: 44, top: '55%', left: '4%',   rotate: '20deg'  },
+  { src: lcFilmReel,     size: 68, top: '72%', right: '4%',  rotate: '-14deg' },
+  { src: lcSpotlight,    size: 60, top: '38%', right: '5%',  rotate: '-6deg'  },
+  { src: lcTrophy,       size: 52, top: '84%', left: '10%',  rotate: '8deg'   },
+  { src: lcFilmStrip,    size: 56, top: '20%', left: '3%',   rotate: '4deg'   },
 ];
 
 export default function ModeSelectScreen() {
@@ -125,13 +135,13 @@ export default function ModeSelectScreen() {
   return (
     <SafeAreaView style={styles.container}>
       {/* Decorative background */}
-      {DECOS.map(({ Component, size, top, left, right, rotate, opacity }, i) => (
+      {DECOS.map(({ src, size, top, left, right, rotate }, i) => (
         <View
           key={i}
           style={{ position: 'absolute', top: top as any, left: left as any, right: right as any, transform: [{ rotate }] }}
           pointerEvents="none"
         >
-          <Component size={size} opacity={opacity} />
+          <Image source={src} style={{ width: size, height: size, resizeMode: 'contain', opacity: 0.1 }} />
         </View>
       ))}
 
@@ -167,7 +177,8 @@ export default function ModeSelectScreen() {
           <View style={styles.modeRow}>
             <Text style={styles.modeName}>Insane Mode</Text>
             <View style={styles.premiumBadge}>
-              <Text style={styles.premiumBadgeText}>★ PREMIUM</Text>
+              <Image source={lcLightning} style={styles.premiumBadgeIcon} />
+              <Text style={styles.premiumBadgeText}>PREMIUM</Text>
             </View>
           </View>
           <Text style={styles.modeSub}>Every movie ever made · Unverified trailers</Text>
@@ -245,7 +256,7 @@ export default function ModeSelectScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: C.bg },
+  container: { flex: 1, backgroundColor: C.surfaceHigh },
 
   topBar: {
     flexDirection: 'row',
@@ -270,7 +281,7 @@ const styles = StyleSheet.create({
     gap: SP.xs,
   },
   overline: { ...T.overline },
-  heading: { ...T.display, color: C.textPrimary, textAlign: 'center' },
+  heading: { ...T.display, color: C.textPrimary, textAlign: 'center', alignSelf: 'stretch' },
 
   // Mode cards
   modeCard: {
@@ -303,11 +314,15 @@ const styles = StyleSheet.create({
   freeBadgeText: { ...T.micro, color: '#4ade80' },
 
   premiumBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     backgroundColor: C.goldFaint,
     borderRadius: R.xs,
     paddingHorizontal: SP.sm,
     paddingVertical: 3,
   },
+  premiumBadgeIcon: { width: 12, height: 12, resizeMode: 'contain' },
   premiumBadgeText: { ...T.micro, color: C.gold },
 
   soonBadge: {

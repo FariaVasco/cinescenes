@@ -44,7 +44,7 @@ export default function PlayScreen() {
 
       {/* Top bar */}
       <View style={styles.topBar}>
-        <BackButton onPress={() => router.back()} label="" style={{ marginHorizontal: 0, marginTop: 0 }} />
+        <BackButton onPress={() => router.back()} style={{ marginHorizontal: 0, marginTop: 0 }} />
         <TouchableOpacity style={styles.castBtn} onPress={() => setCastModalVisible(true)}>
           <CastToTVIcon size={18} color={C.textMuted} />
           <Text style={styles.castBtnLabel}>Cast</Text>

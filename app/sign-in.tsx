@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Platform, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { C, T, SP } from '@/constants/theme';
@@ -7,13 +7,21 @@ import { useAuth } from '@/hooks/useAuth';
 import { CinescenesLogo } from '@/components/CinescenesLogo';
 import { CinemaButton } from '@/components/CinemaButton';
 import { BackButton } from '@/components/BackButton';
-import { DecoFilmReel, DecoClapperboard, DecoStar } from '@/components/CinemaIcons';
+
+const lcCoin        = require('@/assets/lc-coin.png');
+const lcStarburst   = require('@/assets/lc-starburst.png');
+const lcLightning   = require('@/assets/lc-lightning.png');
+const lcHourglass   = require('@/assets/lc-hourglass.png');
+const lcMysteryCard = require('@/assets/lc-mystery-card.png');
+const lcTrophy      = require('@/assets/lc-trophy.png');
 
 const DECOS = [
-  { Component: DecoClapperboard, size: 72,  top: '6%',  left: '4%',   rotate: '-12deg', opacity: 0.06 },
-  { Component: DecoFilmReel,     size: 88,  top: '5%',  right: '5%',  rotate: '8deg',   opacity: 0.07 },
-  { Component: DecoStar,         size: 52,  top: '70%', left: '6%',   rotate: '15deg',  opacity: 0.06 },
-  { Component: DecoFilmReel,     size: 76,  top: '76%', right: '4%',  rotate: '-10deg', opacity: 0.06 },
+  { src: lcCoin,        size: 88, top: '4%',  right: '4%',  rotate: '10deg'  },
+  { src: lcStarburst,   size: 60, top: '8%',  left: '5%',   rotate: '-15deg' },
+  { src: lcLightning,   size: 56, top: '42%', left: '3%',   rotate: '-8deg'  },
+  { src: lcHourglass,   size: 64, top: '70%', right: '5%',  rotate: '12deg'  },
+  { src: lcMysteryCard, size: 72, top: '78%', left: '8%',   rotate: '-6deg'  },
+  { src: lcTrophy,      size: 52, top: '30%', right: '6%',  rotate: '18deg'  },
 ];
 
 export default function SignInScreen() {
@@ -51,13 +59,13 @@ export default function SignInScreen() {
   return (
     <SafeAreaView style={styles.container}>
       {/* Decorative background */}
-      {DECOS.map(({ Component, size, top, left, right, rotate, opacity }, i) => (
+      {DECOS.map(({ src, size, top, left, right, rotate }, i) => (
         <View
           key={i}
           style={{ position: 'absolute', top: top as any, left: left as any, right: right as any, transform: [{ rotate }] }}
           pointerEvents="none"
         >
-          <Component size={size} opacity={opacity} />
+          <Image source={src} style={{ width: size, height: size, resizeMode: 'contain', opacity: 0.1 }} />
         </View>
       ))}
 
@@ -96,7 +104,7 @@ export default function SignInScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: C.bg,
+    backgroundColor: C.surfaceHigh,
   },
   content: {
     flex: 1,

@@ -23,7 +23,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { C, R, FS, Fonts, SP } from '@/constants/theme';
 import { CinemaButton } from '@/components/CinemaButton';
-import { ArrowLeftIcon } from '@/components/CinemaIcons';
+import { BackButton } from '@/components/BackButton';
 
 const STEPS = [
   {
@@ -118,13 +118,10 @@ export default function RulesScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backBtn}
+        <BackButton
           onPress={() => router.back()}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <ArrowLeftIcon size={20} color={C.textSub} />
-        </TouchableOpacity>
+          style={{ marginHorizontal: 0, marginTop: 0 }}
+        />
 
         <Text style={styles.headerTitle}>How to Play</Text>
 
