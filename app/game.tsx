@@ -1610,14 +1610,14 @@ export default function GameScreen() {
                   <Text style={styles.bonusVoiceResultSub}>{voiceResult.director || '—'}</Text>
                   <View style={styles.bonusVoiceResultBtns}>
                     <TouchableOpacity style={styles.bonusVoiceRetryBtn} onPress={() => { voiceStateRef.current = 'idle'; setVoiceState('idle'); setVoiceResult(null); setMovieGuess(''); setDirectorGuess(''); }} activeOpacity={0.7}>
-                      <Text style={styles.bonusVoiceRetryText}>↩ Retry</Text>
+                      <Text style={styles.bonusVoiceRetryText}>Retry</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.bonusVoiceRetryBtn} onPress={() => {
                       setMovieGuess(voiceResult.movie ?? '');
                       setDirectorGuess(voiceResult.director ?? '');
                       voiceStateRef.current = 'idle'; setVoiceState('idle'); setVoiceResult(null);
                     }} activeOpacity={0.7}>
-                      <Text style={styles.bonusVoiceRetryText}>✎ Edit</Text>
+                      <Text style={styles.bonusVoiceRetryText}>Edit</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={[styles.bonusVoiceAcceptBtn, { flex: 1 }]} onPress={() => {
                       setMovieGuess(voiceResult.movie ?? '');
@@ -1625,7 +1625,7 @@ export default function GameScreen() {
                       voiceStateRef.current = 'idle'; setVoiceState('idle'); setVoiceResult(null);
                       closeBonus();
                     }} activeOpacity={0.7}>
-                      <Text style={styles.bonusVoiceAcceptText}>✓ Confirm</Text>
+                      <Text style={styles.bonusVoiceAcceptText}>Confirm</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
