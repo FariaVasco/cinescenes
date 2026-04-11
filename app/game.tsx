@@ -24,7 +24,7 @@ import { C, R, FS, Fonts } from '@/constants/theme';
 import { scanTranscript, phoneticMatch, fuzzyMatch, computeCorrectInterval, computeValidIntervals } from '@/lib/game-logic';
 import { llmExtractGuess } from '@/lib/llm-voice';
 import { fetchRandomInsaneMovie, searchDirector } from '@/lib/tmdb-insane';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Snackbar } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
@@ -37,7 +37,7 @@ import { ChallengeTimer } from '@/components/ChallengeTimer';
 import { CardBack, CardFront } from '@/components/MovieCard';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { AirPlayButton } from 'airplay-picker';
-import { CloseIcon, PlayIcon } from '@/components/CinemaIcons';
+import { CloseIcon, PlayIcon, CastToTVIcon } from '@/components/CinemaIcons';
 
 const lcTrophy        = require('../assets/lc-trophy.png');
 const lcDirectorsChair = require('../assets/lc-directors-chair.png');
@@ -46,6 +46,7 @@ const lcLightning     = require('../assets/lc-lightning.png');
 const lcStarburst     = require('../assets/lc-starburst.png');
 const lcFilmReel      = require('../assets/lc-film-reel.png');
 const lcHourglass     = require('../assets/lc-hourglass.png');
+const lcCoin          = require('../assets/lc-coin.png');
 
 const REPORT_OPTIONS = [
   { id: 'spoiler',       label: '🎬  Title or info is revealed in the clip' },
@@ -65,6 +66,7 @@ const WIN_CARDS = 10;
 
 export default function GameScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const {
     game,
     activeMovies,
@@ -81,6 +83,7 @@ export default function GameScreen() {
   const [players, setLocalPlayers] = useState<Player[]>(storePlayers);
   const [currentTurn, setLocalTurn] = useState<Turn | null>(null);
   const [challenges, setLocalChallenges] = useState<Challenge[]>([]);
+  const { width: screenWidth } = useWindowDimensions();
   const [trailerEnded, setTrailerEnded] = useState(false);
   const [canSkipTrailer, setCanSkipTrailer] = useState(true);
   const skipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -95,6 +98,8 @@ export default function GameScreen() {
   const [trailerKey, setTrailerKey] = useState(0);
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
   const [castVisible, setCastVisible] = useState(false);
+  const [bonusPanelOpen, setBonusPanelOpen] = useState(false);
+  const [scoreBarH, setScoreBarH] = useState(48);
 
   const [selectedInterval, setSelectedInterval] = useState<number | null>(null);
   const [hasPassed, setHasPassed] = useState(false);
@@ -114,6 +119,7 @@ export default function GameScreen() {
   const challengerTransitionOpacity = useRef(new Animated.Value(0)).current;
   const challengePanelY = useRef(new Animated.Value(200)).current;
   const leftPanelFade = useRef(new Animated.Value(1)).current;
+  const bonusPanelAnim = useRef(new Animated.Value(0)).current;
   const [flyVisible, setFlyVisible] = useState(false);
   const [flyStart, setFlyStart] = useState({ x: 0, y: 0 });
   const floatingCardRef = useRef<any>(null);
@@ -347,7 +353,7 @@ export default function GameScreen() {
     const amActive = myPlayerId === currentTurn?.active_player_id;
     const amHost = players.length > 0 && players[0].id === myPlayerId;
     if (trailerEnded && !readyToPlace && amActive) {
-      stopPolling();
+      setReadyToPlace(true); // skip guess screen — panel lives on placement screen
     } else if (trailerEnded && !readyToPlace && !amActive && amHost
         && game?.visibility !== 'public'
         && currentTurn?.placed_interval === null) {
@@ -597,6 +603,9 @@ export default function GameScreen() {
           voiceStateRef.current = 'idle';
           setVoiceState('idle');
           setVoiceError('');
+          setVoiceResult(null);
+          setBonusPanelOpen(false);
+          bonusPanelAnim.setValue(0);
         }
       }
 
@@ -1007,6 +1016,25 @@ export default function GameScreen() {
     }
   }
 
+  function openBonus() {
+    setBonusPanelOpen(true);
+    Animated.spring(bonusPanelAnim, { toValue: 1, useNativeDriver: true, tension: 80, friction: 12 }).start();
+  }
+  function closeBonus() {
+    Keyboard.dismiss();
+    Animated.timing(bonusPanelAnim, { toValue: 0, duration: 180, useNativeDriver: true }).start(() => setBonusPanelOpen(false));
+  }
+  function handleReplayBonus() {
+    setBonusPanelOpen(false);
+    bonusPanelAnim.setValue(0);
+    Keyboard.dismiss();
+    setHasReplayed(true);
+    setReadyToPlace(false);
+    setTrailerEnded(false);
+    setUserPaused(false);
+    setTrailerKey(k => k + 1);
+  }
+
   async function handleNextTurn() {
     // Guard: prevent double-tap on this device
     if (nextTurnInProgress.current) return;
@@ -1415,6 +1443,12 @@ export default function GameScreen() {
     </TouchableOpacity>
   ) : null;
 
+  const castFab = (amHost && game?.visibility !== 'public') ? (
+    <TouchableOpacity style={[styles.castFab, { top: insets.top + 14 }]} onPress={() => setCastVisible(true)} activeOpacity={0.8}>
+      <CastToTVIcon size={16} color="rgba(255,255,255,0.75)" />
+    </TouchableOpacity>
+  ) : null;
+
   // ── DRAWING ──
   if (currentTurn.status === 'drawing') {
     const drawingTimeline = amActive ? myTimeline : timeline;
@@ -1446,7 +1480,7 @@ export default function GameScreen() {
             {amActive ? (
               <TouchableOpacity style={styles.primaryBtn} onPress={handleLetsDraw}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <Image source={lcPopcorn} style={{ width: 56, height: 56 }} />
+                  <Image source={lcPopcorn} style={{ width: 28, height: 28 }} />
                   <Text style={styles.primaryBtnText}>Let's Guess</Text>
                 </View>
               </TouchableOpacity>
@@ -1466,9 +1500,10 @@ export default function GameScreen() {
           )}
         </View>
 
-        <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} onCast={amHost && game?.visibility !== 'public' ? () => setCastVisible(true) : undefined} />
+        <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} />
         {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} />}
         {leaveModal}
+        {castFab}
         {castOverlay}
       </SafeAreaView>
     );
@@ -1481,14 +1516,24 @@ export default function GameScreen() {
 
     // ── Timeline (after trailer + ready) ──
     if (readyToPlace) {
+      const bonusEntered = !!(movieGuess.trim() || directorGuess.trim());
+      const bonusScale = bonusPanelAnim.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] });
+
       return (
         <SafeAreaView style={styles.container}>
           <View style={styles.gameArea}>
             <Animated.View style={styles.timelineAreaFull}>
               {amActive ? (
-                <Text style={styles.placePrompt}>
-                  {selectedInterval === null ? 'Where does it belong?' : 'Confirm your pick'}
-                </Text>
+                <>
+                  <Text style={styles.placePrompt}>
+                    {selectedInterval === null ? 'Where does it belong?' : 'Confirm your pick'}
+                  </Text>
+                  {!hasReplayed && (
+                    <TouchableOpacity onPress={handleReplayBonus} style={styles.replayLink} activeOpacity={0.7}>
+                      <Text style={styles.replayLinkText}>↺ Replay</Text>
+                    </TouchableOpacity>
+                  )}
+                </>
               ) : (
                 <View style={styles.placePromptRow}>
                   <Image source={lcHourglass} style={styles.waitingHourglassIcon} tintColor={C.textSubDark} />
@@ -1501,7 +1546,7 @@ export default function GameScreen() {
                 currentCardMovie={amActive ? (movie ?? undefined) : undefined}
                 interactive={amActive}
                 selectedInterval={amActive ? selectedInterval : null}
-                onIntervalSelect={amActive ? setSelectedInterval : () => {}}
+                onIntervalSelect={amActive ? (i) => { setSelectedInterval(i); if (bonusPanelOpen) closeBonus(); } : () => {}}
                 onConfirm={amActive ? handleAnimatedConfirm : () => {}}
                 placedMovies={placedMovies}
                 hideFloatingCard
@@ -1509,17 +1554,142 @@ export default function GameScreen() {
             </Animated.View>
           </View>
 
-          <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} onCast={amHost && game?.visibility !== 'public' ? () => setCastVisible(true) : undefined} />
+          <View onLayout={e => setScoreBarH(e.nativeEvent.layout.height)}>
+            <ScoreBar
+              players={players} myId={myPlayerId}
+              onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined}
+            />
+          </View>
+
+          {/* ── Bonus FABs — floats above ScoreBar, last child → on top ── */}
+          {amActive && (
+            <View style={[styles.bonusFabColumn, { bottom: scoreBarH + insets.bottom + 12 }]}>
+              {/* Coin FAB row — with first-turn tooltip to the left */}
+              <View style={styles.bonusFabMainRow}>
+                {myTimeline.length <= 1 && !bonusEntered && !bonusPanelOpen && (
+                  <View style={styles.bonusFabTip}>
+                    <Text style={styles.bonusFabTipText}>Guess title &amp; director for a bonus coin</Text>
+                    <Text style={styles.bonusFabTipArrow}>›</Text>
+                  </View>
+                )}
+                <TouchableOpacity
+                  style={[styles.bonusFab, bonusEntered && styles.bonusFabDone]}
+                  onPress={bonusPanelOpen ? closeBonus : openBonus}
+                  activeOpacity={0.85}
+                >
+                  {bonusEntered
+                    ? <Text style={styles.bonusFabCheck}>✓</Text>
+                    : <Image source={lcCoin} style={styles.bonusFabIcon} />
+                  }
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {/* ── Bonus overlay — right-side panel, anchored above the FAB ── */}
+          {amActive && bonusPanelOpen && (
+            <Animated.View
+              style={[styles.bonusOverlay, {
+                bottom: scoreBarH + insets.bottom + 62,
+                opacity: bonusPanelAnim,
+                transform: [{ scale: bonusScale }],
+              }]}
+            >
+              {/* Header */}
+              <View style={styles.bonusOverlayHeader}>
+                <Text style={styles.bonusOverlayTitle}>🪙  Name the movie</Text>
+                <TouchableOpacity onPress={closeBonus} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <CloseIcon size={14} color={C.textSubDark} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Body: voice result OR inputs */}
+              {voiceState === 'result' && voiceResult ? (
+                <View style={styles.bonusVoiceResultStack}>
+                  <Text style={styles.bonusVoiceResultTitle}>{voiceResult.movie || '—'}</Text>
+                  <Text style={styles.bonusVoiceResultSub}>{voiceResult.director || '—'}</Text>
+                  <View style={styles.bonusVoiceResultBtns}>
+                    <TouchableOpacity style={styles.bonusVoiceRetryBtn} onPress={() => { voiceStateRef.current = 'idle'; setVoiceState('idle'); setVoiceResult(null); setMovieGuess(''); setDirectorGuess(''); }} activeOpacity={0.7}>
+                      <Text style={styles.bonusVoiceRetryText}>↩ Retry</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.bonusVoiceRetryBtn} onPress={() => {
+                      setMovieGuess(voiceResult.movie ?? '');
+                      setDirectorGuess(voiceResult.director ?? '');
+                      voiceStateRef.current = 'idle'; setVoiceState('idle'); setVoiceResult(null);
+                    }} activeOpacity={0.7}>
+                      <Text style={styles.bonusVoiceRetryText}>✎ Edit</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.bonusVoiceAcceptBtn, { flex: 1 }]} onPress={() => {
+                      setMovieGuess(voiceResult.movie ?? '');
+                      setDirectorGuess(voiceResult.director ?? '');
+                      voiceStateRef.current = 'idle'; setVoiceState('idle'); setVoiceResult(null);
+                      closeBonus();
+                    }} activeOpacity={0.7}>
+                      <Text style={styles.bonusVoiceAcceptText}>✓ Confirm</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : voiceState === 'recording' ? (
+                <View style={styles.bonusVoiceRecordColumn}>
+                  <View style={styles.waveformRow}>
+                    {waveformBars.map((anim, i) => (
+                      <Animated.View key={i} style={[styles.waveformBar, { transform: [{ scaleY: anim }] }]} />
+                    ))}
+                  </View>
+                  <TouchableOpacity style={styles.voiceStopBtn} onPress={stopVoice} activeOpacity={0.75}>
+                    <View style={styles.voiceStopSquare} />
+                  </TouchableOpacity>
+                </View>
+              ) : voiceState === 'processing' ? (
+                <View style={styles.bonusVoiceRecordColumn}>
+                  <ActivityIndicator color={C.ochre} size="small" />
+                  <Text style={styles.bonusInputPlaceholder}>Processing…</Text>
+                </View>
+              ) : (
+                <View style={styles.bonusInputsStack}>
+                  <TextInput
+                    style={styles.bonusInput}
+                    placeholder="Movie title…"
+                    placeholderTextColor={C.textMutedDark}
+                    value={movieGuess}
+                    onChangeText={setMovieGuess}
+                    autoCorrect={false}
+                    returnKeyType="next"
+                  />
+                  <View style={styles.bonusInputDirectorRow}>
+                    <TextInput
+                      style={[styles.bonusInput, { flex: 1 }]}
+                      placeholder="Director…"
+                      placeholderTextColor={C.textMutedDark}
+                      value={directorGuess}
+                      onChangeText={setDirectorGuess}
+                      autoCorrect={false}
+                      returnKeyType="done"
+                    />
+                    <TouchableOpacity style={styles.bonusMicBtn} onPress={startVoice} activeOpacity={0.75}>
+                      <Text style={styles.bonusMicIcon}>🎤</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {voiceState === 'error' && (
+                    <TouchableOpacity onPress={() => { voiceStateRef.current = 'idle'; setVoiceState('idle'); setVoiceError(''); }} activeOpacity={0.7}>
+                      <Text style={styles.bonusVoiceRetryText}>⚠ Retry</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+            </Animated.View>
+          )}
+
           {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} />}
           {leaveModal}
-        {castOverlay}
+          {castFab}
+          {castOverlay}
         </SafeAreaView>
       );
     }
 
-    // ── Trailer ended — intermediate screen ──
-    if (trailerEnded) {
-      if (!amActive) {
+    // ── Trailer ended — observer waiting screen ──
+    if (trailerEnded && !amActive) {
         return (
           <SafeAreaView style={styles.container}>
             <View style={styles.gameArea}>
@@ -1542,7 +1712,7 @@ export default function GameScreen() {
             {!hasReplayed && (
               <View style={[styles.placingBottomStrip, { paddingHorizontal: 24, paddingVertical: 12 }]}>
                 <TouchableOpacity
-                  style={[styles.guessReplayBtn, { alignSelf: 'stretch' }]}
+                  style={{ alignSelf: 'stretch', paddingVertical: 10, borderRadius: R.sm, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', alignItems: 'center' }}
                   onPressIn={() => {
                     setHasReplayed(true);
                     setTrailerEnded(false);
@@ -1551,190 +1721,19 @@ export default function GameScreen() {
                   }}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.guessReplayText}>↺ Replay trailer</Text>
+                  <Text style={{ color: C.textSubDark, fontFamily: Fonts.label, fontSize: FS.sm }}>↺ Replay trailer</Text>
                 </TouchableOpacity>
               </View>
             )}
-            <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} onCast={amHost && game?.visibility !== 'public' ? () => setCastVisible(true) : undefined} />
+            <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} />
             {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} />}
             {leaveModal}
+            {castFab}
             {castOverlay}
           </SafeAreaView>
         );
       }
 
-      return (
-        <SafeAreaView style={styles.guessScreen} edges={['top', 'bottom', 'left', 'right']}>
-          <KeyboardAvoidingView
-            style={{ flex: 1 }}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          >
-            {/* Header — hidden when keyboard is up or in result state */}
-            {!keyboardVisible && voiceState !== 'result' && (
-              <View style={styles.guessHeader}>
-                <Text style={styles.guessTitle}>What year is this movie from?</Text>
-                <Text style={styles.guessSubtitle}>BONUS COIN — NAME THE MOVIE + DIRECTOR</Text>
-              </View>
-            )}
-
-            {/* Main area: result cards or inputs+voice */}
-            {voiceState === 'result' ? (
-              <View style={styles.guessResultArea}>
-                <Text style={styles.guessResultLabel}>We heard:</Text>
-                <View style={styles.guessResultCard}>
-                  <Text style={styles.guessResultIcon}>🎬</Text>
-                  <Text style={styles.guessResultText}>{voiceResult?.movie || "(couldn't catch the movie)"}</Text>
-                </View>
-                <View style={styles.guessResultCard}>
-                  <Text style={styles.guessResultIcon}>🎬</Text>
-                  <Text style={styles.guessResultText}>{voiceResult?.director || "(couldn't catch the director)"}</Text>
-                </View>
-              </View>
-            ) : (
-              <View style={keyboardVisible ? styles.guessKeyboardPanel : styles.guessMainRow}>
-                <View style={keyboardVisible ? styles.guessInputsStack : styles.guessLeftPanel}>
-                  <View style={styles.guessInputRow}>
-                    <Image source={lcFilmReel} style={styles.guessInputIcon} />
-                    <TextInput
-                      style={[styles.guessInput, { flex: 1 }]}
-                      placeholder="Movie title…"
-                      placeholderTextColor={C.textMuted}
-                      value={movieGuess}
-                      onChangeText={setMovieGuess}
-                      autoCorrect={false}
-                      returnKeyType="next"
-                    />
-                  </View>
-                  <View style={styles.guessInputRow}>
-                    <Image source={lcDirectorsChair} style={styles.guessInputIcon} />
-                    <TextInput
-                      style={[styles.guessInput, { flex: 1 }]}
-                      placeholder="Director name…"
-                      placeholderTextColor={C.textMuted}
-                      value={directorGuess}
-                      onChangeText={setDirectorGuess}
-                      autoCorrect={false}
-                      returnKeyType="done"
-                      onSubmitEditing={() => Keyboard.dismiss()}
-                    />
-                  </View>
-                </View>
-
-                {keyboardVisible ? (
-                  <TouchableOpacity style={styles.guessDoneBtn} onPress={() => Keyboard.dismiss()} activeOpacity={0.8}>
-                    <Text style={styles.guessDoneBtnText}>Done ✓</Text>
-                  </TouchableOpacity>
-                ) : null}
-
-                {!keyboardVisible && <View style={styles.guessDivider} />}
-
-                {!keyboardVisible && (
-                  <View style={styles.guessRightPanel}>
-                    {voiceState === 'idle' ? (
-                      <TouchableOpacity style={styles.voiceMicBtn} onPress={startVoice} activeOpacity={0.75}>
-                        <Text style={styles.voiceMicIcon}>🎤</Text>
-                        <Text style={styles.voiceMicText}>Say the movie and director</Text>
-                      </TouchableOpacity>
-                    ) : voiceState === 'recording' ? (
-                      <View style={styles.voiceRecordingView}>
-                        <View style={styles.waveformRow}>
-                          {waveformBars.map((anim, i) => (
-                            <Animated.View
-                              key={i}
-                              style={[styles.waveformBar, { transform: [{ scaleY: anim }] }]}
-                            />
-                          ))}
-                        </View>
-                        <TouchableOpacity style={styles.voiceStopBtn} onPress={stopVoice} activeOpacity={0.75}>
-                          <View style={styles.voiceStopSquare} />
-                        </TouchableOpacity>
-                      </View>
-                    ) : voiceState === 'processing' ? (
-                      <View style={styles.voiceMicBtn}>
-                        <ActivityIndicator color={C.gold} size="small" />
-                        <Text style={styles.voiceMicText}>Processing…</Text>
-                      </View>
-                    ) : (
-                      <View style={styles.voiceErrorBox}>
-                        <Text style={styles.voiceErrorText}>{voiceError}</Text>
-                        <TouchableOpacity onPress={() => { voiceStateRef.current = 'idle'; setVoiceState('idle'); setVoiceError(''); }}>
-                          <Text style={styles.voiceRetryText}>Try again</Text>
-                        </TouchableOpacity>
-                      </View>
-                    )}
-                  </View>
-                )}
-              </View>
-            )}
-
-            {/* Footer: Replay + Place buttons (keyboard hidden only) */}
-            {!keyboardVisible && (
-              <View style={styles.guessFooter}>
-                {voiceState === 'result' ? (
-                  <>
-                    <TouchableOpacity
-                      style={styles.guessRetryBtn}
-                      onPress={() => {
-                        if (voiceResult?.movie) setMovieGuess(voiceResult.movie);
-                        if (voiceResult?.director) setDirectorGuess(voiceResult.director);
-                        voiceStateRef.current = 'idle';
-                        setVoiceState('idle');
-                        setVoiceResult(null);
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={styles.guessRetryText}>↩ Try again</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.guessPlaceBtn, { flex: 2 }]}
-                      onPressIn={() => {
-                        setMovieGuess(voiceResult?.movie ?? '');
-                        setDirectorGuess(voiceResult?.director ?? '');
-                        setReadyToPlace(true);
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={styles.guessPlaceText}>Looks right →</Text>
-                    </TouchableOpacity>
-                  </>
-                ) : (
-                  <>
-                    {!hasReplayed && (
-                      <TouchableOpacity
-                        style={styles.guessReplayBtn}
-                        onPressIn={() => {
-                          setHasReplayed(true);
-                          setTrailerEnded(false);
-                          setUserPaused(false);
-                          setTrailerKey(k => k + 1);
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={styles.guessReplayText}>↺ Replay</Text>
-                      </TouchableOpacity>
-                    )}
-                    <TouchableOpacity
-                      style={[
-                        styles.guessPlaceBtn,
-                        { flex: 2 },
-                        (voiceState === 'recording' || voiceState === 'processing') && styles.guessPlaceBtnDisabled,
-                      ]}
-                      onPressIn={() => setReadyToPlace(true)}
-                      activeOpacity={0.7}
-                      disabled={voiceState === 'recording' || voiceState === 'processing'}
-                    >
-                      <Text style={styles.guessPlaceText}>Place it →</Text>
-                    </TouchableOpacity>
-                  </>
-                )}
-              </View>
-            )}
-          </KeyboardAvoidingView>
-          {leaveModal}
-        {castOverlay}
-        </SafeAreaView>
-      );
-    }
 
     // ── Non-host observers in private games: show waiting screen ──
     // (Active player always falls through to the trailer block so they get controls)
@@ -1751,6 +1750,7 @@ export default function GameScreen() {
             </View>
           </SafeAreaView>
           {leaveModal}
+        {castFab}
         {castOverlay}
         </View>
       );
@@ -1902,6 +1902,7 @@ export default function GameScreen() {
           {snackMessage}
         </Snackbar>
         {leaveModal}
+        {castFab}
         {castOverlay}
         {showBetReveal && currentTurn && (
           <BetRevealOverlay
@@ -2062,9 +2063,10 @@ export default function GameScreen() {
           )}
         </View>
 
-        <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} onCast={amHost && game?.visibility !== 'public' ? () => setCastVisible(true) : undefined} />
+        <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} />
         {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} />}
         {leaveModal}
+        {castFab}
         {castOverlay}
       </SafeAreaView>
     );
@@ -2222,7 +2224,7 @@ export default function GameScreen() {
             />
           )}
         </View>
-        <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} onCast={amHost && game?.visibility !== 'public' ? () => setCastVisible(true) : undefined} />
+        <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} />
         {/* Suspense overlay — full-screen, covers timeline + scorebar */}
         {revealPhase === 'suspense' && (
           <SuspenseOverlay
@@ -2233,6 +2235,7 @@ export default function GameScreen() {
         {winnerId === myPlayerId && revealPhase === 'result' && <ConfettiBurst />}
         {showMyTimelineSheet && <MyTimelineSheet timeline={revealMyTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} />}
         {leaveModal}
+        {castFab}
         {castOverlay}
       </SafeAreaView>
     );
@@ -2333,7 +2336,7 @@ function MyTimelineSheet({ timeline, cards, onClose }: {
   );
 }
 
-function ScoreBar({ players, myId, onOpenTimeline, onCast }: { players: Player[]; myId: string | null; onOpenTimeline?: () => void; onCast?: () => void }) {
+function ScoreBar({ players, myId, onOpenTimeline }: { players: Player[]; myId: string | null; onOpenTimeline?: () => void }) {
   return (
     <View style={styles.scoreBarRow}>
       <ScrollView
@@ -2354,11 +2357,6 @@ function ScoreBar({ players, myId, onOpenTimeline, onCast }: { players: Player[]
       {onOpenTimeline && (
         <TouchableOpacity onPress={onOpenTimeline} style={styles.scoreBarTimelineBtn} activeOpacity={0.75}>
           <Text style={styles.scoreBarTimelineBtnText}>🎞</Text>
-        </TouchableOpacity>
-      )}
-      {onCast && (
-        <TouchableOpacity onPress={onCast} style={styles.scoreBarCastBtn} activeOpacity={0.75}>
-          <Text style={styles.scoreBarCastBtnText}>📺</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -3285,7 +3283,7 @@ const styles = StyleSheet.create({
   },
   drawingCTAArea: {
     paddingHorizontal: 32,
-    paddingVertical: 18,
+    paddingVertical: 10,
     alignItems: 'center',
   },
   drawingWaitingRow: {
@@ -3333,7 +3331,7 @@ const styles = StyleSheet.create({
     backgroundColor: C.ochre, alignItems: 'center', justifyContent: 'center',
     borderWidth: 2, borderColor: C.ink,
   },
-  avatarLargeText: { color: C.textOnOchre, fontFamily: Fonts.display, fontSize: FS.xl },
+  avatarLargeText: { color: C.textOnOchre, fontFamily: Fonts.display, fontSize: FS.xl, lineHeight: FS.xl, includeFontPadding: false },
   primaryBtn: { backgroundColor: C.ochre, borderRadius: R.btn, borderWidth: 2, borderColor: C.ink, paddingHorizontal: 24, paddingVertical: 10 },
   primaryBtnText: { color: C.textOnOchre, fontFamily: Fonts.display, fontSize: FS.md },
   phaseLabel: { color: C.textSubDark, fontFamily: Fonts.label, fontSize: FS.base, textAlign: 'center' },
@@ -3896,24 +3894,108 @@ const styles = StyleSheet.create({
     color: C.textPrimaryDark, fontFamily: Fonts.body, fontSize: FS.base,
   },
 
-  // ── Landscape guess screen (trailer ended, active player) ──
-  guessScreen: { flex: 1, backgroundColor: C.inkBg },
-  guessHeader: { paddingHorizontal: 20, paddingVertical: 10, gap: 4 },
-  guessTitle: { color: C.textPrimaryDark, fontFamily: Fonts.display, fontSize: FS.lg, letterSpacing: 0.3 },
-  guessSubtitle: { color: C.ochre, fontFamily: Fonts.label, fontSize: FS.xs, letterSpacing: 2.5, textTransform: 'uppercase' },
-  guessMainRow: { flex: 1, flexDirection: 'row', paddingHorizontal: 20, paddingBottom: 8, gap: 16 },
-  guessLeftPanel: { flex: 1.2, justifyContent: 'center', gap: 10 },
-  // Keyboard-visible layout: stacked inputs + Done button on right
-  guessKeyboardPanel: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, gap: 12 },
-  guessInputsStack: { flex: 1, gap: 10 },
-  guessDoneBtn: {
-    backgroundColor: C.ochre, borderRadius: R.btn, borderWidth: 2, borderColor: C.ink,
-    paddingHorizontal: 20, paddingVertical: 14, alignSelf: 'center',
+  // ── Bonus overlay (FAB popup) ──
+  bonusOverlay: {
+    position: 'absolute', right: 20, width: 220,
+    backgroundColor: C.inkSurface,
+    borderRadius: R.sheet,
+    borderWidth: 1.5, borderColor: C.ochre,
+    elevation: 20,
+    shadowColor: '#000', shadowOffset: { width: 0, height: -3 }, shadowOpacity: 0.4, shadowRadius: 10,
+    paddingHorizontal: 14, paddingVertical: 10,
+    gap: 8,
   },
-  guessDoneBtnText: { color: C.textOnOchre, fontFamily: Fonts.bodyBold, fontSize: FS.base },
-  guessDivider: { width: 1, alignSelf: 'stretch', backgroundColor: C.border, marginVertical: 8 },
-  guessRightPanel: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  guessFooter: { flexDirection: 'row', paddingHorizontal: 20, paddingBottom: 16, gap: 10 },
+  bonusOverlayHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+  },
+  bonusOverlayTitle: { color: C.ochre, fontFamily: Fonts.label, fontSize: FS.xs, letterSpacing: 1.5, textTransform: 'uppercase' },
+  bonusOverlayActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  bonusOverlayReplayBtn: { paddingVertical: 2 },
+  bonusOverlayReplayText: { color: C.textSubDark, fontFamily: Fonts.label, fontSize: FS.sm },
+  bonusInputsStack: { gap: 6 },
+  bonusInputDirectorRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  bonusInput: {
+    height: 34,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: R.sm, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
+    paddingHorizontal: 10,
+    color: C.textPrimaryDark, fontFamily: Fonts.body, fontSize: FS.sm,
+  },
+  bonusMicBtn: {
+    width: 34, height: 34, borderRadius: R.sm,
+    backgroundColor: 'rgba(245,197,24,0.10)',
+    borderWidth: 1, borderColor: 'rgba(245,197,24,0.35)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  bonusMicIcon: { fontSize: 16 },
+  bonusVoiceRecordColumn: {
+    alignItems: 'center', gap: 10, paddingVertical: 6,
+  },
+  bonusVoiceResultStack: {
+    gap: 6,
+  },
+  bonusVoiceResultTitle: {
+    color: C.textPrimaryDark, fontFamily: Fonts.bodyBold, fontSize: FS.sm,
+  },
+  bonusVoiceResultSub: {
+    color: C.textSubDark, fontFamily: Fonts.body, fontSize: FS.sm,
+    marginBottom: 2,
+  },
+  bonusVoiceResultBtns: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: 6,
+  },
+  bonusVoiceRetryBtn: {
+    paddingHorizontal: 10, paddingVertical: 8,
+    borderRadius: R.sm, backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+  },
+  bonusVoiceRetryText: { color: C.textSubDark, fontFamily: Fonts.label, fontSize: FS.sm },
+  bonusVoiceAcceptBtn: {
+    paddingHorizontal: 10, paddingVertical: 8,
+    borderRadius: R.sm, backgroundColor: C.ochre,
+    alignItems: 'center',
+  },
+  bonusVoiceAcceptText: { color: C.textOnOchre, fontFamily: Fonts.bodyBold, fontSize: FS.sm },
+  bonusInputPlaceholder: { color: C.textMutedDark, fontFamily: Fonts.body, fontSize: FS.sm },
+  // ── Bonus FAB ──
+  bonusFabColumn: {
+    position: 'absolute', right: 20,
+    flexDirection: 'column-reverse', alignItems: 'flex-end', gap: 8,
+  },
+  bonusFabMainRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+  },
+  replayLink: {
+    position: 'absolute', top: 8, left: 12, zIndex: 2,
+    paddingVertical: 4, paddingHorizontal: 8,
+  },
+  replayLinkText: {
+    color: C.textMutedDark, fontFamily: Fonts.label, fontSize: FS.sm,
+  },
+  bonusFabTip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: C.inkSurface,
+    borderRadius: R.full, borderWidth: 1, borderColor: 'rgba(245,197,24,0.3)',
+    paddingHorizontal: 10, paddingVertical: 5,
+  },
+  bonusFabTipText: {
+    color: C.textSubDark, fontFamily: Fonts.label, fontSize: FS.xs,
+  },
+  bonusFabTipArrow: {
+    color: C.ochre, fontFamily: Fonts.bodyBold, fontSize: FS.sm,
+  },
+  bonusFab: {
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: C.inkSurface,
+    borderWidth: 2, borderColor: C.ochre,
+    alignItems: 'center', justifyContent: 'center',
+    elevation: 10,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.4, shadowRadius: 6,
+  },
+  bonusFabDone: { borderColor: C.leaf, backgroundColor: 'rgba(61,170,92,0.15)' },
+  bonusFabIcon: { width: 24, height: 24, resizeMode: 'contain' },
+  bonusFabCheck: { color: C.leaf, fontFamily: Fonts.bodyBold, fontSize: FS.md, includeFontPadding: false },
   voiceMicBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 10, paddingVertical: 14, borderRadius: R.card,
@@ -3956,13 +4038,6 @@ const styles = StyleSheet.create({
   voiceUnavailableText: {
     color: C.textMutedDark, fontFamily: Fonts.body, fontSize: FS.sm, textAlign: 'center',
   },
-  guessReplayBtn: {
-    flex: 1, height: 52, borderRadius: R.card,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 2, borderColor: 'rgba(255,255,255,0.18)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  guessReplayText: { color: C.textSubDark, fontFamily: Fonts.label, fontSize: FS.base },
   guessPlaceBtn: {
     flex: 1, height: 52, backgroundColor: C.ochre, borderRadius: R.card,
     borderWidth: 2, borderColor: C.ink,
@@ -3970,10 +4045,6 @@ const styles = StyleSheet.create({
   },
   guessPlaceText: {
     color: C.textOnOchre, fontFamily: Fonts.display, fontSize: FS.md, letterSpacing: 0.4,
-  },
-  guessPlaceBtnDisabled: { opacity: 0.35 },
-  guessResultArea: {
-    flex: 1, justifyContent: 'center', alignItems: 'stretch', paddingHorizontal: 32, gap: 14,
   },
   guessResultLabel: {
     color: C.textSubDark, fontFamily: Fonts.label, fontSize: FS.xs,
@@ -4155,16 +4226,14 @@ const styles = StyleSheet.create({
   scoreBarTimelineBtnText: {
     fontSize: 18,
   },
-  scoreBarCastBtn: {
-    paddingHorizontal: 12,
-    paddingBottom: 6,
-    alignSelf: 'stretch',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    borderLeftWidth: 1,
-    borderLeftColor: 'rgba(255,255,255,0.10)',
+  castFab: {
+    position: 'absolute', right: 20,
+    width: 34, height: 34, borderRadius: 17,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center', justifyContent: 'center',
+    zIndex: 10,
   },
-  scoreBarCastBtnText: { fontSize: 18 },
   castSheet: {
     backgroundColor: C.surface,
     borderRadius: R.card,
