@@ -1552,9 +1552,6 @@ export default function GameScreen() {
             <Animated.View style={styles.timelineAreaFull}>
               {amActive ? (
                 <>
-                  <Text style={styles.placePrompt}>
-                    {selectedInterval === null ? 'Where does it belong?' : 'Confirm your pick'}
-                  </Text>
                   {!hasReplayed && (
                     <TouchableOpacity onPress={handleReplayBonus} style={styles.replayLink} activeOpacity={0.7}>
                       <Text style={styles.replayLinkText}>↺ Replay</Text>
@@ -1562,7 +1559,7 @@ export default function GameScreen() {
                   )}
                   {selectedInterval === null && (
                     <View style={styles.timelineHourglassRow}>
-                      <HourglassTimer durationMs={30000} size={40} onExpire={handlePlacementTimeout} />
+                      <HourglassTimer durationMs={30000} size={40} onExpire={handlePlacementTimeout} label="to place the card in the timeline" />
                     </View>
                   )}
                 </>

@@ -150,9 +150,10 @@ interface HourglassTimerProps {
   durationMs: number;
   onExpire?: () => void;
   size?: number;
+  label?: string;
 }
 
-export function HourglassTimer({ durationMs, onExpire, size = 80 }: HourglassTimerProps) {
+export function HourglassTimer({ durationMs, onExpire, size = 80, label }: HourglassTimerProps) {
   const [progress, setProgress] = useState(0);
   const firedRef = useRef(false);
   const shakeAnim = useRef(new Animated.Value(0)).current;
@@ -206,7 +207,7 @@ export function HourglassTimer({ durationMs, onExpire, size = 80 }: HourglassTim
     <Animated.View style={[hStyles.wrap, { transform: [{ translateX: shakeAnim }] }]}>
       <AnimatedHourglass durationMs={durationMs} progress={progress} size={size} urgent={urgent} />
       <Text style={[hStyles.secs, { fontSize: Math.max(10, size * 0.22), color: urgent ? VERMILLION : OCHRE }]}>
-        {secsLeft}s
+        {secsLeft}s{label ? ` ${label}` : ''}
       </Text>
     </Animated.View>
   );
@@ -214,5 +215,5 @@ export function HourglassTimer({ durationMs, onExpire, size = 80 }: HourglassTim
 
 const hStyles = StyleSheet.create({
   wrap: { alignItems: 'center', gap: 2 },
-  secs: { fontFamily: Fonts.display, lineHeight: 16 },
+  secs: { fontFamily: Fonts.display, lineHeight: 16, textAlign: 'center' },
 });
