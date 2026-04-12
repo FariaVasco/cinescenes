@@ -48,12 +48,20 @@ export function CardFront({ movie, width, height }: CardFrontProps) {
   return (
     <View style={[s.shell, { width, height, borderRadius: radius, backgroundColor: bg }]}>
 
-      {/* Director — top label zone (x 23%–77%, y 17%–28%) */}
+      {/* PNG frame — rendered first so text sits on top of the film strip */}
+      <Image
+        source={lcCardFront}
+        style={{ position: 'absolute', top: 0, left: 0, width, height }}
+        resizeMode="stretch"
+        pointerEvents="none"
+      />
+
+      {/* Director — between the two chairs (x 29%–71%, y 11%–25%) */}
       <View style={[s.frontZone, {
-        top: height * 0.17,
-        left: width * 0.23,
-        width: width * 0.54,
-        height: height * 0.11,
+        top: height * 0.11,
+        left: width * 0.29,
+        width: width * 0.42,
+        height: height * 0.14,
       }]}>
         <Text
           style={[s.frontDirector, { fontSize: Math.max(6, width * 0.10) }]}
@@ -65,12 +73,12 @@ export function CardFront({ movie, width, height }: CardFrontProps) {
         </Text>
       </View>
 
-      {/* Year — middle frame zone (x 28%–72%, y 32%–68%) */}
+      {/* Year — large transparent center (x 15%–85%, y 33%–68%) */}
       <View style={[s.frontZone, {
-        top: height * 0.32,
-        left: width * 0.28,
-        width: width * 0.44,
-        height: height * 0.36,
+        top: height * 0.33,
+        left: width * 0.15,
+        width: width * 0.70,
+        height: height * 0.35,
       }]}>
         <Text
           style={[s.frontYear, { fontSize: Math.max(12, width * 0.26) }]}
@@ -81,12 +89,12 @@ export function CardFront({ movie, width, height }: CardFrontProps) {
         </Text>
       </View>
 
-      {/* Title — bottom label zone (x 23%–77%, y 75%–88%) */}
+      {/* Title — inside the film strip (x 8%–92%, y 77%–91%) */}
       <View style={[s.frontZone, {
-        top: height * 0.75,
-        left: width * 0.23,
-        width: width * 0.54,
-        height: height * 0.13,
+        top: height * 0.77,
+        left: width * 0.08,
+        width: width * 0.84,
+        height: height * 0.14,
       }]}>
         <Text
           style={[s.frontTitle, { fontSize: Math.max(7, width * 0.10) }]}
@@ -98,13 +106,6 @@ export function CardFront({ movie, width, height }: CardFrontProps) {
         </Text>
       </View>
 
-      {/* PNG frame overlay — must be RGBA (transparent bg) to show card colour beneath */}
-      <Image
-        source={lcCardFront}
-        style={{ position: 'absolute', top: 0, left: 0, width, height }}
-        resizeMode="stretch"
-        pointerEvents="none"
-      />
     </View>
   );
 }
