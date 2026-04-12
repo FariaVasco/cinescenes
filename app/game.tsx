@@ -1535,8 +1535,8 @@ export default function GameScreen() {
                     </TouchableOpacity>
                   )}
                   {selectedInterval === null && (
-                    <View style={styles.placeHourglassOverlay} pointerEvents="none">
-                      <HourglassTimer durationMs={30000} size={44} />
+                    <View style={styles.timelineHourglassRow}>
+                      <HourglassTimer durationMs={30000} size={40} />
                     </View>
                   )}
                 </>
@@ -2013,8 +2013,8 @@ export default function GameScreen() {
         <View style={styles.gameArea}>
           <Animated.View style={styles.timelineAreaFull}>
             {isPickingInterval && (
-              <View style={styles.pickerHourglassOverlay} pointerEvents="none">
-                <HourglassTimer durationMs={15000} size={44} />
+              <View style={styles.timelineHourglassRow}>
+                <HourglassTimer durationMs={15000} size={40} />
               </View>
             )}
             <Timeline
@@ -3316,18 +3316,10 @@ const styles = StyleSheet.create({
     height: 16,
     resizeMode: 'contain',
   },
-  // Animated hourglass overlays
-  placeHourglassOverlay: {
-    position: 'absolute',
-    bottom: 10,
-    right: 12,
-    zIndex: 2,
-  },
-  pickerHourglassOverlay: {
-    position: 'absolute',
-    bottom: 10,
-    right: 12,
-    zIndex: 2,
+  // Animated hourglass — in-flow above the timeline
+  timelineHourglassRow: {
+    alignItems: 'center',
+    paddingBottom: 6,
   },
   challengeHourglassRow: {
     alignItems: 'center',

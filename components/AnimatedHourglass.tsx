@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Path, Rect, Circle, Defs, ClipPath, G, Line } from 'react-native-svg';
+import { Fonts } from '@/constants/theme';
 
 interface AnimatedHourglassProps {
   durationMs: number;
@@ -167,5 +169,17 @@ export function HourglassTimer({ durationMs, onExpire, size = 80 }: HourglassTim
     return () => clearInterval(id);
   }, []); // run once on mount
 
-  return <AnimatedHourglass durationMs={durationMs} progress={progress} size={size} />;
+  const secsLeft = Math.ceil((1 - progress) * durationMs / 1000);
+
+  return (
+    <View style={hStyles.wrap}>
+      <AnimatedHourglass durationMs={durationMs} progress={progress} size={size} />
+      <Text style={[hStyles.secs, { fontSize: Math.max(10, size * 0.22) }]}>{secsLeft}s</Text>
+    </View>
+  );
 }
+
+const hStyles = StyleSheet.create({
+  wrap: { alignItems: 'center', gap: 2 },
+  secs: { color: '#F5C518', fontFamily: Fonts.display, lineHeight: 16 },
+});
