@@ -785,6 +785,18 @@ export default function GameScreen() {
     pendingTurnWrite.current = false;
   }
 
+  async function handlePlacementTimeout() {
+    const ct = currentTurnRef.current ?? currentTurn;
+    if (!ct || ct.status !== 'placing' || ct.placed_interval !== null) return;
+    const optimistic = { ...ct, placed_interval: -1, status: 'challenging' as const };
+    pendingTurnWrite.current = true;
+    setLocalTurn(optimistic);
+    setCurrentTurn(optimistic);
+    currentTurnRef.current = optimistic;
+    await db.from('turns').update({ placed_interval: -1, status: 'challenging' }).eq('id', ct.id);
+    pendingTurnWrite.current = false;
+  }
+
   async function handleChallenge() {
     if (!currentTurn || myChallenge) return;
     if (challengeDecisionMade.current) return;
@@ -1536,7 +1548,7 @@ export default function GameScreen() {
                   )}
                   {selectedInterval === null && (
                     <View style={styles.timelineHourglassRow}>
-                      <HourglassTimer durationMs={30000} size={40} />
+                      <HourglassTimer durationMs={30000} size={40} onExpire={handlePlacementTimeout} />
                     </View>
                   )}
                 </>
