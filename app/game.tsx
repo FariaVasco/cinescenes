@@ -1715,7 +1715,7 @@ export default function GameScreen() {
                 />
               </View>
             </View>
-            {!hasReplayed && (
+            {amActive && !hasReplayed && (
               <View style={[styles.placingBottomStrip, { paddingHorizontal: 24, paddingVertical: 12 }]}>
                 <TouchableOpacity
                   style={{ alignSelf: 'stretch', paddingVertical: 10, borderRadius: R.sm, backgroundColor: 'rgba(255,255,255,0.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', alignItems: 'center' }}
