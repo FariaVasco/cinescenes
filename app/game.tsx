@@ -3320,13 +3320,13 @@ const styles = StyleSheet.create({
   placeHourglassOverlay: {
     position: 'absolute',
     top: 2,
-    right: 12,
+    left: 12,
     zIndex: 2,
   },
   pickerHourglassOverlay: {
     position: 'absolute',
     top: 2,
-    right: 12,
+    left: 12,
     zIndex: 2,
   },
   challengeHourglassRow: {

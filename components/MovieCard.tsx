@@ -89,11 +89,11 @@ export function CardFront({ movie, width, height }: CardFrontProps) {
         </Text>
       </View>
 
-      {/* Title — inside the film strip (x 8%–92%, y 77%–91%) */}
+      {/* Title — inside the film strip (x 14%–86%, y 77%–91%) */}
       <View style={[s.frontZone, {
         top: height * 0.77,
-        left: width * 0.08,
-        width: width * 0.84,
+        left: width * 0.14,
+        width: width * 0.72,
         height: height * 0.14,
       }]}>
         <Text

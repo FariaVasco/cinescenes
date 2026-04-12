@@ -95,7 +95,7 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
     // Pre-expand slot to full size immediately so the layout settles before we measure.
     // This ensures the overlay card's anchor is the slot's true final position regardless
     // of how many cards are in the timeline.
-    insertSlotWidth.setValue(80);
+    insertSlotWidth.setValue(96);
     insertSlotMargin.setValue(24);
     const t = setTimeout(() => {
       const runAnim = () => {
@@ -140,7 +140,7 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
   const trashTy  = trashAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -180] });
   const trashRot = trashAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '50deg'] });
   const trashOp  = trashAnim.interpolate({ inputRange: [0, 0.4, 1], outputRange: [1, 0.9, 0] });
-  const trashCollapseWidth  = collapseAnim.interpolate({ inputRange: [0, 1], outputRange: [80, 0] });
+  const trashCollapseWidth  = collapseAnim.interpolate({ inputRange: [0, 1], outputRange: [96, 0] });
   const trashCollapseMargin = collapseAnim.interpolate({ inputRange: [0, 1], outputRange: [24, 0] });
 
   useEffect(() => {
@@ -203,8 +203,8 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
   // Auto-scroll to the placed card slot when switching to non-interactive mode
   useEffect(() => {
     if (!interactive && placedInterval !== null && placedInterval !== undefined) {
-      // Each card is ~80px wide, each gap ~28px; estimate offset
-      const CARD_W = 80;
+      // Each card is ~96px wide, each gap ~28px; estimate offset
+      const CARD_W = 96;
       const GAP_W = 28;
       const PADDING = 16;
       // placedInterval gaps before it, and placedInterval cards before it
@@ -228,16 +228,16 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
             // Animation complete — card rests in slot at full size
             return (
               <View key={`gap-${index}`} style={{ marginHorizontal: 24 }}>
-                <CardFront movie={revealingMovie} width={80} height={100} />
+                <CardFront movie={revealingMovie} width={96} height={120} />
               </View>
             );
           }
           if (insertOverlay) {
             // Slot already at full size (card is in the overlay flying in)
-            return <View key={`gap-${index}`} style={{ width: 80, height: 100, marginHorizontal: 24 }} />;
+            return <View key={`gap-${index}`} style={{ width: 96, height: 120, marginHorizontal: 24 }} />;
           }
           // Before animation: slot pre-expanded to full size for accurate position measurement
-          return <View key={`gap-${index}`} ref={insertSlotRef} style={{ width: 80, height: 100, marginHorizontal: 24 }} />;
+          return <View key={`gap-${index}`} ref={insertSlotRef} style={{ width: 96, height: 120, marginHorizontal: 24 }} />;
         }
         if (trashAfter) {
           // Trash: card flies up-right (via absolute overlay), then slot collapses
@@ -252,7 +252,7 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
               {/* Card only shown here until the overlay takes over */}
               {!trashOverlay && (
                 <View ref={trashCardRef}>
-                  <CardFront movie={revealingMovie} width={80} height={100} />
+                  <CardFront movie={revealingMovie} width={96} height={120} />
                 </View>
               )}
             </Animated.View>
@@ -261,14 +261,14 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
         // Default (active player's flip phase): FlippingMovieCard with autoFlip
         return (
           <View key={`gap-${index}`} style={{ marginHorizontal: 24 }}>
-            <FlippingMovieCard movie={revealingMovie} width={80} height={100} autoFlip />
+            <FlippingMovieCard movie={revealingMovie} width={96} height={120} autoFlip />
           </View>
         );
       }
       return (
         <View key={`gap-${index}`} style={styles.placedMarkerWrap}>
           <Text style={styles.placedMarkerLabel}>{placedLabel}</Text>
-          <CardBack width={80} height={100} outlined />
+          <CardBack width={96} height={120} outlined />
         </View>
       );
     }
@@ -334,7 +334,7 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
     // so find(m => m.year === year) would return the wrong movie when two cards share a year.
     const movie = placedMovies?.[idx];
     if (movie) {
-      return <CardFront key={`card-${idx}`} movie={movie} width={80} height={100} />;
+      return <CardFront key={`card-${idx}`} movie={movie} width={96} height={120} />;
     }
     return (
       <View key={`card-${idx}`} style={styles.card}>
@@ -355,7 +355,7 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
 
   // If no interval selected in interactive mode, show the card back at end (unless floating in parent)
   if (interactive && selectedInterval === null && !hideFloatingCard) {
-    items.push(<CardBack key="unknown-pending" width={80} height={100} outlined />);
+    items.push(<CardBack key="unknown-pending" width={96} height={120} outlined />);
   }
 
   return (
@@ -385,7 +385,7 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
             ],
           }}
         >
-          <CardFront movie={revealingMovie} width={80} height={100} />
+          <CardFront movie={revealingMovie} width={96} height={120} />
         </Animated.View>
       )}
       {/* Trash overlay — rendered outside the ScrollView so it isn't clipped */}
@@ -400,7 +400,7 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
             transform: [{ translateX: trashTx }, { translateY: trashTy }, { rotate: trashRot }],
           }}
         >
-          <CardFront movie={revealingMovie} width={80} height={100} />
+          <CardFront movie={revealingMovie} width={96} height={120} />
         </Animated.View>
       )}
     </View>
@@ -421,8 +421,8 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   card: {
-    width: 80,
-    height: 100,
+    width: 96,
+    height: 120,
     backgroundColor: C.inkSurface,
     borderRadius: R.md,
     borderWidth: 2,
@@ -445,7 +445,7 @@ const styles = StyleSheet.create({
   },
   placedMarkerWrap: {
     marginHorizontal: 24,
-    height: 100,
+    height: 120,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -461,7 +461,7 @@ const styles = StyleSheet.create({
   },
   coinWrap: {
     marginHorizontal: 6,
-    height: 100,
+    height: 120,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
@@ -491,13 +491,14 @@ const styles = StyleSheet.create({
     color: C.ochre,
     fontSize: FS.xs,
     fontFamily: Fonts.display,
+    lineHeight: FS.xs, includeFontPadding: false,
   },
   gapSpacer: {
     width: 20,
   },
   gapBlocked: {
     width: 28,
-    height: 100,
+    height: 120,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -508,7 +509,7 @@ const styles = StyleSheet.create({
   },
   gapTap: {
     width: 32,
-    height: 100,
+    height: 120,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -530,23 +531,23 @@ const styles = StyleSheet.create({
     includeFontPadding: false,
   },
   activeGap: {
-    width: 80,
-    height: 100,
+    width: 96,
+    height: 120,
     marginHorizontal: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },
   insertGap: {
-    width: 80,
-    height: 100,
+    width: 96,
+    height: 120,
     marginHorizontal: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },
   // Dashed card placeholder shown when a gap is selected
   cardPlaceholder: {
-    width: 80,
-    height: 100,
+    width: 96,
+    height: 120,
     borderRadius: R.md,
     borderWidth: 1.5,
     borderColor: 'rgba(245,197,24,0.6)',
