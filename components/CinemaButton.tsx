@@ -76,6 +76,7 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: C.ink,
+    overflow: 'visible',
   },
   disabled: {
     opacity: 0.35,
@@ -84,6 +85,7 @@ const s = StyleSheet.create({
     fontFamily: Fonts.display,
     textAlign: 'center',
     letterSpacing: 0.5,
+    paddingHorizontal: 6,
   },
 });
 

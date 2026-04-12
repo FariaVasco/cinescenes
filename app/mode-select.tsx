@@ -4,7 +4,7 @@ import {
   ScrollView, ActivityIndicator, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { C, R, T, SP, Fonts, FS } from '@/constants/theme';
 import { useAppStore } from '@/store/useAppStore';
@@ -22,6 +22,8 @@ const lcSpotlight    = require('@/assets/lc-spotlight.png');
 const lcFilmStrip    = require('@/assets/lc-film-strip.png');
 const lcTrophy       = require('@/assets/lc-trophy.png');
 const lcLightning    = require('@/assets/lc-lightning.png');
+const lcLock         = require('@/assets/lc-lock.png');
+const lcGlobePin     = require('@/assets/lc-globe.png');
 
 const db = supabase as unknown as { from: (t: string) => any };
 
@@ -37,11 +39,15 @@ const DECOS = [
 
 export default function ModeSelectScreen() {
   const router = useRouter();
+  const { displayName } = useLocalSearchParams<{ displayName?: string }>();
   const {
     authUser, isPremium, setIsPremium,
-    setSelectedGameMode, setSelectedCollectionId,
+    setSelectedGameMode, setSelectedCollectionId, setSelectedVisibility,
+    selectedCollectionId,
   } = useAppStore();
 
+  const [localMode, setLocalMode] = useState<'classic' | 'collection' | 'insane'>('classic');
+  const [localVisibility, setLocalVisibility] = useState<'invite_only' | 'public'>('invite_only');
   const [paywallVisible, setPaywallVisible] = useState(false);
   const [paywallPendingMode, setPaywallPendingMode] = useState<'collection' | 'insane'>('collection');
   const [collectionPickerVisible, setCollectionPickerVisible] = useState(false);
@@ -68,41 +74,7 @@ export default function ModeSelectScreen() {
     setLoadingCollections(false);
   }
 
-  function handleStandard() {
-    setSelectedGameMode('classic');
-    setSelectedCollectionId(null);
-    router.replace({ pathname: '/local-lobby', params: { startView: 'create' } });
-  }
-
-  async function handleCollections() {
-    if (!authUser) {
-      router.push('/sign-in?returnTo=mode-select');
-      return;
-    }
-    if (!isPremium) {
-      setPaywallPendingMode('collection');
-      setPaywallVisible(true);
-      return;
-    }
-    setCollectionPickerVisible(true);
-  }
-
-  async function handlePaywallPurchased() {
-    setPaywallVisible(false);
-    const premium = await checkPremium();
-    setIsPremium(premium);
-    if (premium) {
-      if (paywallPendingMode === 'insane') {
-        setSelectedGameMode('insane');
-        setSelectedCollectionId(null);
-        router.replace({ pathname: '/local-lobby', params: { startView: 'create' } });
-      } else {
-        setCollectionPickerVisible(true);
-      }
-    }
-  }
-
-  async function handleInsaneMode() {
+  async function handleInsaneTap() {
     if (!authUser) {
       router.push('/sign-in?returnTo=mode-select');
       return;
@@ -112,9 +84,20 @@ export default function ModeSelectScreen() {
       setPaywallVisible(true);
       return;
     }
-    setSelectedGameMode('insane');
-    setSelectedCollectionId(null);
-    router.replace({ pathname: '/local-lobby', params: { startView: 'create' } });
+    setLocalMode('insane');
+  }
+
+  async function handlePaywallPurchased() {
+    setPaywallVisible(false);
+    const premium = await checkPremium();
+    setIsPremium(premium);
+    if (premium) {
+      if (paywallPendingMode === 'insane') {
+        setLocalMode('insane');
+      } else {
+        setCollectionPickerVisible(true);
+      }
+    }
   }
 
   async function handleAccount() {
@@ -122,10 +105,20 @@ export default function ModeSelectScreen() {
   }
 
   function handleSelectCollection(col: Collection) {
-    setSelectedGameMode('collection');
     setSelectedCollectionId(col.id);
+    setLocalMode('collection');
     setCollectionPickerVisible(false);
-    router.replace({ pathname: '/local-lobby', params: { startView: 'create' } });
+  }
+
+  function handleCreateGame() {
+    if (localMode === 'collection' && !selectedCollectionId) {
+      setCollectionPickerVisible(true);
+      return;
+    }
+    setSelectedGameMode(localMode);
+    if (localMode !== 'collection') setSelectedCollectionId(null);
+    setSelectedVisibility(localVisibility);
+    router.replace({ pathname: '/local-lobby', params: { startView: 'create', displayName: displayName ?? '' } });
   }
 
   const collectionSubtitle = collections.length > 0
@@ -157,29 +150,43 @@ export default function ModeSelectScreen() {
 
       <View style={styles.content}>
         <View style={styles.headerGroup}>
-          <Text style={styles.overline}>DIGITAL MODE</Text>
+          <Text style={styles.overline}>GAME SETUP</Text>
           <Text style={styles.heading}>Choose a Mode</Text>
         </View>
 
         {/* Classic */}
-        <TouchableOpacity style={styles.modeCard} onPress={handleStandard} activeOpacity={0.8}>
+        <TouchableOpacity
+          style={[styles.modeCard, localMode === 'classic' && styles.modeCardSelected]}
+          onPress={() => setLocalMode('classic')}
+          activeOpacity={0.8}
+        >
           <View style={styles.modeRow}>
             <Text style={styles.modeName}>Classic</Text>
             <View style={styles.freeBadge}>
               <Text style={styles.freeBadgeText}>FREE</Text>
             </View>
+            {localMode === 'classic' && (
+              <View style={styles.checkBadge}><Text style={styles.checkBadgeText}>✓</Text></View>
+            )}
           </View>
           <Text style={styles.modeSub}>500+ curated movies · Safe trailers, no spoilers</Text>
         </TouchableOpacity>
 
         {/* Insane Mode */}
-        <TouchableOpacity style={[styles.modeCard, styles.modeCardPremium]} onPress={handleInsaneMode} activeOpacity={0.8}>
+        <TouchableOpacity
+          style={[styles.modeCard, styles.modeCardPremium, localMode === 'insane' && styles.modeCardSelected]}
+          onPress={handleInsaneTap}
+          activeOpacity={0.8}
+        >
           <View style={styles.modeRow}>
             <Text style={styles.modeName}>Insane Mode</Text>
             <View style={styles.premiumBadge}>
               <Image source={lcLightning} style={styles.premiumBadgeIcon} />
               <Text style={styles.premiumBadgeText}>PREMIUM</Text>
             </View>
+            {localMode === 'insane' && (
+              <View style={styles.checkBadge}><Text style={styles.checkBadgeText}>✓</Text></View>
+            )}
           </View>
           <Text style={styles.modeSub}>Every movie ever made · Unverified trailers</Text>
           <Text style={styles.modeDisclaimer}>Clips may reveal the title, year, or director — use your judgement</Text>
@@ -193,19 +200,42 @@ export default function ModeSelectScreen() {
               <Text style={styles.soonBadgeText}>COMING SOON</Text>
             </View>
           </View>
-          <Text style={styles.modeSub}>Christmas · Horror · The 2010s…</Text>
+          <Text style={styles.modeSub}>{collectionSubtitle}</Text>
         </View>
 
-        {/* Coming soon: Movie Trivia */}
-        <View style={[styles.modeCard, styles.modeCardDisabled]}>
-          <View style={styles.modeRow}>
-            <Text style={[styles.modeName, styles.modeNameDisabled]}>Movie Trivia</Text>
-            <View style={styles.soonBadge}>
-              <Text style={styles.soonBadgeText}>COMING SOON</Text>
-            </View>
+        {/* Visibility toggle */}
+        <View style={styles.visibilitySection}>
+          <Text style={styles.visibilityLabel}>VISIBILITY</Text>
+          <View style={styles.visibilityToggle}>
+            <TouchableOpacity
+              style={[styles.visibilityOption, localVisibility === 'invite_only' && styles.visibilityOptionActive]}
+              onPress={() => setLocalVisibility('invite_only')}
+              activeOpacity={0.8}
+            >
+              <Image source={lcLock} style={styles.visibilityIcon} />
+              <Text style={[styles.visibilityOptionText, localVisibility === 'invite_only' && styles.visibilityOptionTextActive]}>
+                Private
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.visibilityOption, localVisibility === 'public' && styles.visibilityOptionActive]}
+              onPress={() => setLocalVisibility('public')}
+              activeOpacity={0.8}
+            >
+              <Image source={lcGlobePin} style={styles.visibilityIcon} />
+              <Text style={[styles.visibilityOptionText, localVisibility === 'public' && styles.visibilityOptionTextActive]}>
+                Public
+              </Text>
+            </TouchableOpacity>
           </View>
-          <Text style={styles.modeSub}>Answer questions about the movies you've placed</Text>
         </View>
+      </View>
+
+      {/* CTA */}
+      <View style={styles.ctaBar}>
+        <CinemaButton size="lg" onPress={handleCreateGame}>
+          Create Game →
+        </CinemaButton>
       </View>
 
       <PaywallSheet
@@ -297,6 +327,10 @@ const styles = StyleSheet.create({
     borderColor: C.ochre,
     backgroundColor: 'rgba(245,197,24,0.04)',
   },
+  modeCardSelected: {
+    borderColor: C.ochre,
+    borderWidth: 3,
+  },
   modeCardDisabled: { opacity: 0.35 },
 
   modeRow: { flexDirection: 'row', alignItems: 'center', gap: SP.sm },
@@ -332,6 +366,62 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   soonBadgeText: { ...T.micro },
+
+  checkBadge: {
+    width: 22, height: 22,
+    borderRadius: 11,
+    backgroundColor: C.ochre,
+    borderWidth: 1,
+    borderColor: C.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkBadgeText: {
+    fontFamily: Fonts.label,
+    fontSize: FS.xs,
+    color: C.ink,
+  },
+
+  // Visibility toggle
+  visibilitySection: { gap: 6 },
+  visibilityLabel: {
+    fontFamily: Fonts.label,
+    fontSize: FS.xs,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+    color: C.textMuted,
+  },
+  visibilityToggle: {
+    flexDirection: 'row',
+    backgroundColor: C.surface,
+    borderRadius: R.md,
+    borderWidth: 2,
+    borderColor: C.ink,
+    overflow: 'hidden',
+  },
+  visibilityOption: {
+    flex: 1,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  visibilityOptionActive: { backgroundColor: C.ochre },
+  visibilityOptionText: {
+    fontFamily: Fonts.label,
+    color: C.textSub,
+    fontSize: FS.sm,
+  },
+  visibilityOptionTextActive: { color: C.textOnOchre },
+  visibilityIcon: { width: 16, height: 16, resizeMode: 'contain' },
+
+  // CTA bar
+  ctaBar: {
+    paddingHorizontal: SP.lg,
+    paddingTop: SP.sm,
+    paddingBottom: SP.md,
+  },
 
   // Collection picker sheet
   overlay: {

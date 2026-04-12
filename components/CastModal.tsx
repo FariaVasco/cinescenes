@@ -225,6 +225,7 @@ const styles = StyleSheet.create({
     color: C.textOnOchre,
     fontSize: FS.xs,
     fontFamily: Fonts.display,
+    lineHeight: FS.xs, includeFontPadding: false,
   },
   stepText: {
     flex: 1,

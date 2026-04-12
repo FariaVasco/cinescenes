@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   BackHandler,
+  ActivityIndicator,
 } from 'react-native';
 
 const lcCrown    = require('../assets/lc-crown.png');
@@ -25,20 +26,18 @@ import { CinemaButton } from '@/components/CinemaButton';
 import { BackButton } from '@/components/BackButton';
 const lcClapperboard = require('../assets/lc-clapperboard.png');
 const lcMovieTicket  = require('../assets/lc-movie-ticket.png');
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
 import { Game, Movie, Player } from '@/lib/database.types';
 import { fetchRandomInsaneMovie } from '@/lib/tmdb-insane';
-
-type LobbyView = 'choice' | 'create' | 'join';
-type Visibility = 'public' | 'invite_only';
 
 const db = supabase as unknown as { from: (t: string) => any };
 const POLL_MS = 1000;
 
 export default function LocalLobbyScreen() {
   const router = useRouter();
-  const { joinCode: joinCodeParam, startView } = useLocalSearchParams<{ joinCode?: string; startView?: string }>();
+  const { joinCode: joinCodeParam, startView, displayName: displayNameParam } = useLocalSearchParams<{ joinCode?: string; startView?: string; displayName?: string }>();
   const {
     activeMovies,
     setActiveMovies,
@@ -52,14 +51,17 @@ export default function LocalLobbyScreen() {
     setStartingMovieIds,
     selectedGameMode,
     selectedCollectionId,
+    selectedVisibility,
+    authUser,
   } = useAppStore();
 
-  const [view, setView] = useState<LobbyView>(
-    startView === 'create' ? 'create' : joinCodeParam ? 'join' : 'choice'
-  );
-  const [displayName, setDisplayName] = useState('');
-  const [joinCode, setJoinCode] = useState(joinCodeParam ?? '');
-  const [visibility, setVisibility] = useState<Visibility>('invite_only');
+  function getDefaultName(): string {
+    if (displayNameParam) return displayNameParam;
+    const meta = authUser?.user_metadata ?? {};
+    return (meta.given_name || meta.full_name?.split(' ')[0] || meta.name?.split(' ')[0] || '').trim();
+  }
+
+  const [displayName, setDisplayName] = useState(getDefaultName);
   const [loading, setLoading] = useState(false);
   const [localGame, setLocalGame] = useState<Game | null>(null);
   const [localPlayers, setLocalPlayers] = useState<Player[]>([]);
@@ -67,6 +69,7 @@ export default function LocalLobbyScreen() {
   const [localIsHost, setLocalIsHost] = useState(false);
   const [nameEntered, setNameEntered] = useState(false);
   const [maxPlayers, setMaxPlayers] = useState(8);
+  const [codeCopied, setCodeCopied] = useState(false);
 
   const nameInputRef = useRef<TextInput>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -83,6 +86,37 @@ export default function LocalLobbyScreen() {
 
   useEffect(() => {
     return () => stopPolling();
+  }, []);
+
+  // Load cached name (only if no auth name and no param)
+  useEffect(() => {
+    if (displayNameParam || getDefaultName()) return;
+    AsyncStorage.getItem('player_display_name').then((saved) => {
+      if (saved) setDisplayName(saved);
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Save name to cache whenever it changes
+  useEffect(() => {
+    if (displayName.trim()) AsyncStorage.setItem('player_display_name', displayName.trim());
+  }, [displayName]);
+
+  // Auto-create when arriving from mode-select
+  useEffect(() => {
+    if (startView === 'create') {
+      handleCreateGame();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto-join if arriving with a joinCode (e.g. from lobby browser)
+  useEffect(() => {
+    if (joinCodeParam) {
+      const name = displayNameParam || getDefaultName();
+      handleJoinGame(name, joinCodeParam);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function stopPolling() {
@@ -154,7 +188,7 @@ export default function LocalLobbyScreen() {
   }
 
   async function handleCreateGame() {
-    if (!displayName.trim()) return;
+    if (!displayName.trim()) { router.back(); return; }
     setLoading(true);
     try {
       const code = generateCode();
@@ -168,7 +202,7 @@ export default function LocalLobbyScreen() {
           game_mode: selectedGameMode,
           collection_id: selectedCollectionId,
           max_players: maxPlayers,
-          visibility,
+          visibility: selectedVisibility,
         })
         .select()
         .single() as { data: Game | null; error: any };
@@ -198,20 +232,24 @@ export default function LocalLobbyScreen() {
 
       startPolling(newGame.id, true);
     } catch (e: any) {
-      Alert.alert('Error', e?.message ?? 'Could not create game');
+      Alert.alert('Error', e?.message ?? 'Could not create game', [
+        { text: 'OK', onPress: () => router.back() },
+      ]);
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleJoinGame() {
-    if (!joinCode.trim() || !displayName.trim()) return;
+  async function handleJoinGame(nameOverride?: string, codeOverride?: string) {
+    const name = (nameOverride ?? displayName).trim();
+    const code = (codeOverride ?? '').trim().toUpperCase();
+    if (!code || !name) return;
     setLoading(true);
     try {
       const { data: foundGame, error: findErr } = await db
         .from('games')
         .select('*')
-        .eq('game_code', joinCode.trim().toUpperCase())
+        .eq('game_code', code)
         .eq('status', 'lobby')
         .single() as { data: Game | null; error: any };
       if (findErr || !foundGame) throw new Error('Game not found or already started');
@@ -224,7 +262,7 @@ export default function LocalLobbyScreen() {
 
       const { data: newPlayer, error: playerErr } = await db
         .from('players')
-        .insert({ game_id: foundGame.id, display_name: displayName.trim() })
+        .insert({ game_id: foundGame.id, display_name: name })
         .select()
         .single() as { data: Player | null; error: any };
       if (playerErr || !newPlayer) throw playerErr ?? new Error('Could not join game');
@@ -245,7 +283,9 @@ export default function LocalLobbyScreen() {
 
       startPolling(foundGame.id, false);
     } catch (e: any) {
-      Alert.alert('Error', e?.message ?? 'Could not join game');
+      Alert.alert('Error', e?.message ?? 'Could not join game', [
+        { text: 'OK', onPress: () => { if (codeOverride) router.back(); } },
+      ]);
     } finally {
       setLoading(false);
     }
@@ -290,6 +330,17 @@ export default function LocalLobbyScreen() {
     return () => sub.remove();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nameEntered, localGame, localIsHost]);
+
+  // Cancel game when host navigates away without tapping Cancel (e.g. iOS swipe-back)
+  useEffect(() => {
+    if (!nameEntered || !localIsHost) return;
+    return () => {
+      if (!navigatedRef.current && gameIdRef.current) {
+        db.from('games').update({ status: 'cancelled' }).eq('id', gameIdRef.current);
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nameEntered, localIsHost]);
 
   async function handleStartGame() {
     if (!localGame || localPlayers.length < 1) return;
@@ -365,6 +416,7 @@ export default function LocalLobbyScreen() {
         status: 'drawing',
       });
 
+      navigatedRef.current = true;
       stopPolling();
       setPlayers(localPlayers);
       router.replace('/game');
@@ -375,46 +427,11 @@ export default function LocalLobbyScreen() {
     }
   }
 
-  // ── Choice view ──────────────────────────────────────────────────────────────
-
-  if (view === 'choice') {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.accentTopRight} pointerEvents="none" />
-        <BackButton onPress={() => router.back()} />
-
-        <View style={styles.choiceCenter}>
-          <View style={styles.choiceHeader}>
-            <Text style={styles.sectionLabel}>Multiplayer</Text>
-            <Text style={styles.title}>Go Digital</Text>
-            <View style={styles.titleUnderline} />
-            <Text style={styles.subtitle}>Up to 10 players — each on their own phone</Text>
-          </View>
-
-          <View style={styles.choiceCards}>
-            <TouchableOpacity
-              style={[styles.choiceCard, styles.choiceCardPrimary]}
-              onPress={() => router.push('/mode-select')}
-              activeOpacity={0.85}
-            >
-              <Image source={lcClapperboard} style={{ width: 56, height: 56, resizeMode: 'contain' }} />
-              <Text style={[styles.choiceCardTitle, { color: C.ink }]}>Create Game</Text>
-              <Text style={[styles.choiceCardSub, { color: 'rgba(26,26,26,0.6)' }]}>Share the code with friends</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.choiceCard}
-              onPress={() => router.push('/lobby-browser')}
-              activeOpacity={0.85}
-            >
-              <Image source={lcMovieTicket} style={{ width: 56, height: 56, resizeMode: 'contain' }} />
-              <Text style={styles.choiceCardTitle}>Join Game</Text>
-              <Text style={styles.choiceCardSub}>Browse open games or enter an invite code</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </SafeAreaView>
-    );
+  function handleCopyCode() {
+    if (!localGame) return;
+    Clipboard.setString(localGame.game_code);
+    setCodeCopied(true);
+    setTimeout(() => setCodeCopied(false), 1500);
   }
 
   // ── Waiting room ─────────────────────────────────────────────────────────────
@@ -431,18 +448,24 @@ export default function LocalLobbyScreen() {
         <View style={styles.waitingHeader}>
           <Text style={styles.waitingLabel}>Game Code</Text>
           <TouchableOpacity
-            onPress={() => Clipboard.setString(localGame.game_code)}
+            onPress={handleCopyCode}
             style={styles.codeCard}
             activeOpacity={0.8}
           >
             <Text style={styles.gameCode}>{localGame.game_code}</Text>
-            <Text style={styles.copyHint}>tap to copy</Text>
+            <Text style={styles.copyHint}>{codeCopied ? 'Copied!' : 'tap to copy'}</Text>
           </TouchableOpacity>
-          <Text style={styles.codeHint}>
-            {localGame.visibility === 'invite_only'
-              ? '🔒  Invite-only · share the code above'
-              : '🌐  Public · visible in lobby browser'}
-          </Text>
+          <View style={styles.visibilityHintRow}>
+            <Image
+              source={localGame.visibility === 'invite_only' ? lcLock : lcGlobePin}
+              style={styles.visibilityHintIcon}
+            />
+            <Text style={styles.codeHint}>
+              {localGame.visibility === 'invite_only'
+                ? 'Private · join by code only'
+                : 'Public · visible in lobby browser'}
+            </Text>
+          </View>
         </View>
 
         {/* Player count / max stepper */}
@@ -511,30 +534,73 @@ export default function LocalLobbyScreen() {
     );
   }
 
-  // ── Create / Join form ───────────────────────────────────────────────────────
+  // ── Spinner for auto-create / auto-join ───────────────────────────────────────
 
-  const isCreate = view === 'create';
-  const canSubmit = displayName.trim().length > 0 && (isCreate || joinCode.trim().length > 0);
-  const handleSubmit = isCreate ? handleCreateGame : handleJoinGame;
+  if ((startView === 'create' || !!joinCodeParam) && !nameEntered) {
+    return (
+      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={C.ochre} />
+      </SafeAreaView>
+    );
+  }
 
+  // ── Choice view ───────────────────────────────────────────────────────────────
+
+  const nameReady = displayName.trim().length > 0;
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.accentBottomRight} pointerEvents="none" />
-      <BackButton onPress={() => setView('choice')} />
+      <View style={styles.accentTopRight} pointerEvents="none" />
+      <BackButton onPress={() => router.back()} />
 
+      {/* Header + cards — unaffected by keyboard */}
+      <View style={styles.choiceCenter}>
+        <View style={styles.choiceHeader}>
+          <Text style={styles.sectionLabel}>Multiplayer</Text>
+          <Text style={styles.title}>Go Digital</Text>
+          <View style={styles.titleUnderline} />
+          <Text style={styles.subtitle}>Up to 10 players — each on their own phone</Text>
+        </View>
+
+        <View style={styles.choiceCards}>
+          <TouchableOpacity
+            style={[styles.choiceCard, styles.choiceCardPrimary, !nameReady && styles.choiceCardDisabled]}
+            onPress={() => {
+              if (!nameReady) return;
+              router.push({ pathname: '/mode-select', params: { displayName: displayName.trim() } });
+            }}
+            activeOpacity={0.85}
+          >
+            <Image source={lcClapperboard} style={{ width: 56, height: 56, resizeMode: 'contain' }} />
+            <Text style={[styles.choiceCardTitle, { color: C.ink }]}>Create Game</Text>
+            <Text style={[styles.choiceCardSub, { color: 'rgba(26,26,26,0.6)' }]}>Share the code with friends</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.choiceCard, !nameReady && styles.choiceCardDisabled]}
+            onPress={() => {
+              if (!nameReady) return;
+              router.push({ pathname: '/lobby-browser', params: { displayName: displayName.trim() } });
+            }}
+            activeOpacity={0.85}
+          >
+            <Image source={lcMovieTicket} style={{ width: 56, height: 56, resizeMode: 'contain' }} />
+            <Text style={styles.choiceCardTitle}>Join Game</Text>
+            <Text style={styles.choiceCardSub}>Browse open games or enter an invite code</Text>
+          </TouchableOpacity>
+        </View>
+
+        {!nameReady && (
+          <Text style={styles.namePrompt}>Enter your name above to continue</Text>
+        )}
+      </View>
+
+      {/* Name input pinned to bottom — lifts with keyboard */}
       <KeyboardAvoidingView
-        style={styles.formCenter}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={0}
       >
-        <View style={styles.formHeader}>
-          <Text style={styles.sectionLabel}>{isCreate ? 'New game' : 'Enter game'}</Text>
-          <Text style={styles.title}>{isCreate ? 'Create Game' : 'Join Game'}</Text>
-          <View style={[styles.titleUnderline, { backgroundColor: isCreate ? C.ochre : C.cerulean }]} />
-        </View>
-
-        <View style={styles.inputWrapper}>
-          <Text style={styles.inputLabel}>Your Name</Text>
+        <View style={styles.nameBar}>
+          <Text style={styles.inputLabel}>Your name</Text>
           <TextInput
             ref={nameInputRef}
             style={styles.input}
@@ -543,70 +609,9 @@ export default function LocalLobbyScreen() {
             placeholder="Enter your name"
             placeholderTextColor={C.textMuted}
             maxLength={20}
-            returnKeyType={isCreate ? 'go' : 'next'}
-            onSubmitEditing={() => { if (isCreate && canSubmit && !loading) handleSubmit(); }}
-            autoFocus
+            returnKeyType="done"
           />
         </View>
-
-        {!isCreate && (
-          <View style={styles.inputWrapper}>
-            <Text style={styles.inputLabel}>Game Code</Text>
-            <TextInput
-              style={[styles.input, styles.inputCode]}
-              value={joinCode}
-              onChangeText={(t) => setJoinCode(t.toUpperCase())}
-              placeholder="ABC123"
-              placeholderTextColor={C.textMuted}
-              autoCapitalize="characters"
-              maxLength={6}
-              returnKeyType="go"
-              onSubmitEditing={() => { if (canSubmit && !loading) handleSubmit(); }}
-            />
-          </View>
-        )}
-
-        {isCreate && (
-          <View style={styles.visibilityToggleWrap}>
-            <Text style={styles.inputLabel}>Visibility</Text>
-            <View style={styles.visibilityToggle}>
-              <TouchableOpacity
-                style={[styles.visibilityOption, visibility === 'invite_only' && styles.visibilityOptionActive]}
-                onPress={() => setVisibility('invite_only')}
-              >
-                <Text style={[styles.visibilityOptionText, visibility === 'invite_only' && styles.visibilityOptionTextActive]}>
-                  Local Lobby
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.visibilityOption, visibility === 'public' && styles.visibilityOptionActive]}
-                onPress={() => setVisibility('public')}
-              >
-                <Text style={[styles.visibilityOptionText, visibility === 'public' && styles.visibilityOptionTextActive]}>
-                  Online Lobby
-                </Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.visibilityHintRow}>
-              <Image
-                source={visibility === 'invite_only' ? lcLock : lcGlobePin}
-                style={styles.visibilityHintIcon}
-              />
-              <Text style={styles.visibilityHint}>
-                {visibility === 'invite_only' ? 'Private · join by code only' : 'Public · open to everyone'}
-              </Text>
-            </View>
-          </View>
-        )}
-
-        <CinemaButton
-          onPress={handleSubmit}
-          disabled={!canSubmit || loading}
-          size="lg"
-          style={styles.actionBtn}
-        >
-          {loading ? 'Loading…' : isCreate ? 'Create Game' : 'Join Game'}
-        </CinemaButton>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -620,11 +625,6 @@ const styles = StyleSheet.create({
     position: 'absolute', top: -70, right: -70,
     width: 180, height: 180, borderRadius: 90,
     backgroundColor: 'rgba(232,55,42,0.06)',
-  },
-  accentBottomRight: {
-    position: 'absolute', bottom: -60, right: -60,
-    width: 160, height: 160, borderRadius: 80,
-    backgroundColor: 'rgba(74,158,196,0.07)',
   },
 
   // Choice view
@@ -664,14 +664,25 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.label,
     fontSize: FS.sm, color: C.textSub, textAlign: 'center',
   },
+  choiceCardDisabled: { opacity: 0.35 },
 
-  // Form view
-  formCenter: {
-    flex: 1, justifyContent: 'center',
-    paddingHorizontal: SP.lg, gap: SP.md,
+  namePrompt: {
+    fontFamily: Fonts.label,
+    fontSize: FS.sm,
+    color: C.textMuted,
+    textAlign: 'center',
   },
-  formHeader: { gap: 4, marginBottom: SP.xs },
-  inputWrapper: { gap: 6 },
+
+  nameBar: {
+    paddingHorizontal: SP.lg,
+    paddingTop: SP.sm,
+    paddingBottom: SP.md,
+    gap: 6,
+    borderTopWidth: 2,
+    borderTopColor: C.inkFaint,
+    backgroundColor: C.bg,
+  },
+
   inputLabel: {
     fontFamily: Fonts.label,
     fontSize: FS.xs, letterSpacing: 1.5,
@@ -683,31 +694,6 @@ const styles = StyleSheet.create({
     borderWidth: 2, borderColor: C.ink,
     color: C.textPrimary, fontSize: FS.md,
     paddingHorizontal: SP.md, paddingVertical: 14,
-  },
-  inputCode: {
-    letterSpacing: 6, fontFamily: Fonts.display,
-    fontSize: FS.xl, textAlign: 'center',
-  },
-  actionBtn: { marginTop: SP.xs },
-  visibilityToggleWrap: { gap: 6 },
-  visibilityToggle: {
-    flexDirection: 'row', backgroundColor: C.surface,
-    borderRadius: R.md, borderWidth: 2, borderColor: C.ink, overflow: 'hidden',
-  },
-  visibilityOption: { flex: 1, paddingVertical: 12, alignItems: 'center' },
-  visibilityOptionActive: { backgroundColor: C.ochre },
-  visibilityOptionText: {
-    fontFamily: Fonts.label,
-    color: C.textSub, fontSize: FS.sm,
-  },
-  visibilityOptionTextActive: { color: C.textOnOchre },
-  visibilityHintRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 6,
-  },
-  visibilityHintIcon: { width: 18, height: 18 },
-  visibilityHint: {
-    fontFamily: Fonts.label,
-    color: C.textMuted, fontSize: FS.sm,
   },
 
   // Waiting room
@@ -739,6 +725,10 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.label,
     color: C.textMuted, fontSize: FS.sm,
   },
+  visibilityHintRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+  },
+  visibilityHintIcon: { width: 18, height: 18 },
   playerCountRow: { alignItems: 'center', paddingVertical: SP.sm },
   playerCountText: {
     fontFamily: Fonts.label,
@@ -778,6 +768,7 @@ const styles = StyleSheet.create({
   playerAvatarText: {
     fontFamily: Fonts.display,
     color: C.ink, fontSize: FS.sm,
+    lineHeight: FS.sm, includeFontPadding: false,
   },
   playerName: {
     fontFamily: Fonts.bodyBold,

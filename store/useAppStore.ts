@@ -28,8 +28,10 @@ interface AppState {
   // Game mode selection
   selectedGameMode: 'classic' | 'collection' | 'insane';
   selectedCollectionId: string | null;
+  selectedVisibility: 'invite_only' | 'public';
   setSelectedGameMode: (m: 'classic' | 'collection' | 'insane') => void;
   setSelectedCollectionId: (id: string | null) => void;
+  setSelectedVisibility: (v: 'invite_only' | 'public') => void;
 
   // Phase 3+: game state
   gameId: string | null;
@@ -72,8 +74,10 @@ export const useAppStore = create<AppState>((set) => ({
 
   selectedGameMode: 'classic',
   selectedCollectionId: null,
+  selectedVisibility: 'invite_only',
   setSelectedGameMode: (m) => set({ selectedGameMode: m }),
   setSelectedCollectionId: (id) => set({ selectedCollectionId: id }),
+  setSelectedVisibility: (v) => set({ selectedVisibility: v }),
 
   gameId: null,
   playerId: null,

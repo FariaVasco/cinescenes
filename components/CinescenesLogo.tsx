@@ -55,5 +55,6 @@ const styles = StyleSheet.create({
   wordmark: {
     fontFamily: Fonts.display,
     letterSpacing: 6,
+    paddingHorizontal: 8,
   },
 });

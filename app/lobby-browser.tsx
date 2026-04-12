@@ -13,7 +13,7 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { C, R, FS, Fonts, SP } from '@/constants/theme';
 import { BackButton } from '@/components/BackButton';
@@ -32,6 +32,7 @@ type LobbyEntry = {
 
 export default function LobbyBrowserScreen() {
   const router = useRouter();
+  const { displayName } = useLocalSearchParams<{ displayName?: string }>();
   const [entries, setEntries] = useState<LobbyEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -100,7 +101,7 @@ export default function LobbyBrowserScreen() {
   function handleRefresh() { setRefreshing(true); fetchGames(); }
 
   function joinGame(code: string) {
-    router.push({ pathname: '/local-lobby', params: { joinCode: code } });
+    router.push({ pathname: '/local-lobby', params: { joinCode: code, displayName: displayName ?? '' } });
   }
 
   const canJoinByCode = inviteCode.trim().length > 0;

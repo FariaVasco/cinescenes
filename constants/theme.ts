@@ -113,9 +113,9 @@ export const SP = {
 // Typography presets
 // ─────────────────────────────────────────────────────────────
 export const T = {
-  hero:     { fontFamily: Fonts.display, fontSize: FS.hero,   lineHeight: 44 },
-  display:  { fontFamily: Fonts.display, fontSize: FS['2xl'], lineHeight: 34, letterSpacing: 0.5 },
-  title:    { fontFamily: Fonts.display, fontSize: FS.xl,     lineHeight: 29, letterSpacing: 0.5 },
+  hero:     { fontFamily: Fonts.display, fontSize: FS.hero,   lineHeight: 44, paddingHorizontal: 6 },
+  display:  { fontFamily: Fonts.display, fontSize: FS['2xl'], lineHeight: 34, letterSpacing: 0.5, paddingHorizontal: 5 },
+  title:    { fontFamily: Fonts.display, fontSize: FS.xl,     lineHeight: 29, letterSpacing: 0.5, paddingHorizontal: 4 },
   subtitle: { fontFamily: Fonts.bodyBold, fontSize: FS.lg,    lineHeight: 25 },
   body:     { fontFamily: Fonts.body,    fontSize: FS.md,     lineHeight: 24, color: C.textSub },
   label:    { fontFamily: Fonts.label,   fontSize: FS.base,   lineHeight: 20, letterSpacing: 0.3 },

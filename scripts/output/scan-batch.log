@@ -1428,3 +1428,183 @@
 [2026-04-06T00:08:21.453Z]     Log: /Users/vascolencastre/cinescenes/scripts/output/scan-batch.log
 [2026-04-06T00:08:21.454Z] ────────────────────────────────────────────────────────────
 
+[2026-04-07T07:03:15.532Z] 
+────────────────────────────────────────────────────────────
+[2026-04-07T07:03:15.536Z] 🎬  Batch scan starting — 318 movie(s) to process
+[2026-04-07T07:03:15.536Z] ────────────────────────────────────────────────────────────
+[2026-04-07T07:03:15.536Z] 
+[1/318]  "Jaws" (1975)
+[2026-04-07T07:03:16.545Z]   ❌  [1/318]  "Jaws" (1975)  →  exited with code 1
+[2026-04-07T07:03:16.725Z]   ⏳  Waiting 3s before next movie…
+[2026-04-07T07:03:23.491Z] 
+────────────────────────────────────────────────────────────
+[2026-04-07T07:03:23.493Z] 🎬  Batch scan starting — 14 movie(s) to process
+[2026-04-07T07:03:23.494Z] ────────────────────────────────────────────────────────────
+[2026-04-07T07:03:23.494Z] 
+[1/14]  "Central Station (Central do Brasil)" (1998)
+[2026-04-07T07:09:25.916Z]   ❌  [1/14]  "Central Station (Central do Brasil)" (1998)  →  exited with code 2
+[2026-04-07T07:09:26.519Z]   ⏳  Waiting 3s before next movie…
+[2026-04-07T07:09:29.520Z] 
+[2/14]  "The Celebration (Festen)" (1998)
+[2026-04-07T07:15:19.676Z]   ✅  [2/14]  "The Celebration (Festen)" (1998)  →  done
+[2026-04-07T07:15:19.676Z]   ⏳  Waiting 3s before next movie…
+[2026-04-07T07:15:22.676Z] 
+[3/14]  "Saving Private Ryan" (1998)
+[2026-04-07T07:17:27.156Z]   ❌  [3/14]  "Saving Private Ryan" (1998)  →  exited with code 2
+[2026-04-07T07:17:27.395Z]   ⏳  Waiting 3s before next movie…
+[2026-04-07T07:17:30.395Z] 
+[4/14]  "Armageddon" (1998)
+[2026-04-07T07:42:30.477Z]   ⏱  [4/14]  "Armageddon" (1998)  →  timed out after 10 min — skipping
+[2026-04-07T07:42:30.507Z]   ⏳  Waiting 3s before next movie…
+[2026-04-07T07:42:33.507Z] 
+[5/14]  "American History X" (1998)
+[2026-04-07T08:07:33.532Z]   ⏱  [5/14]  "American History X" (1998)  →  timed out after 10 min — skipping
+[2026-04-07T08:07:34.509Z]   ⏳  Waiting 3s before next movie…
+[2026-04-07T08:07:37.511Z] 
+[6/14]  "Shakespeare in Love" (1998)
+[2026-04-07T08:07:40.122Z]   ❌  [6/14]  "Shakespeare in Love" (1998)  →  exited with code 1
+[2026-04-07T08:07:40.195Z]   ⏳  Waiting 3s before next movie…
+[2026-04-07T08:07:43.197Z] 
+[7/14]  "The Truman Show" (1998)
+[2026-04-07T08:07:53.328Z]   ❌  [7/14]  "The Truman Show" (1998)  →  exited with code 2
+[2026-04-07T08:07:53.382Z]   ⏳  Waiting 3s before next movie…
+[2026-04-07T08:07:56.382Z] 
+[8/14]  "Mulan" (1998)
+[2026-04-07T08:08:03.965Z]   ❌  [8/14]  "Mulan" (1998)  →  exited with code 1
+[2026-04-07T08:08:04.016Z]   ⏳  Waiting 3s before next movie…
+[2026-04-07T08:08:07.018Z] 
+[9/14]  "Rush Hour" (1998)
+[2026-04-07T08:33:07.083Z]   ⏱  [9/14]  "Rush Hour" (1998)  →  timed out after 10 min — skipping
+[2026-04-07T08:33:07.112Z]   ⏳  Waiting 3s before next movie…
+[2026-04-07T08:33:10.112Z] 
+[10/14]  "The Big Lebowski" (1998)
+[2026-04-07T08:58:10.115Z]   ⏱  [10/14]  "The Big Lebowski" (1998)  →  timed out after 10 min — skipping
+[2026-04-07T08:58:11.069Z]   ⏳  Waiting 3s before next movie…
+[2026-04-07T08:58:14.072Z] 
+[11/14]  "Run Lola Run (Lola rennt)" (1998)
+[2026-04-07T09:23:14.086Z]   ⏱  [11/14]  "Run Lola Run (Lola rennt)" (1998)  →  timed out after 10 min — skipping
+[2026-04-07T09:23:14.122Z]   ⏳  Waiting 3s before next movie…
+[2026-04-07T09:23:17.124Z] 
+[12/14]  "Rushmore" (1998)
+[2026-04-07T09:48:17.170Z]   ⏱  [12/14]  "Rushmore" (1998)  →  timed out after 10 min — skipping
+[2026-04-07T09:48:18.237Z]   ⏳  Waiting 3s before next movie…
+[2026-04-07T09:48:21.240Z] 
+[13/14]  "The Thin Red Line" (1998)
+[2026-04-07T10:13:21.291Z]   ⏱  [13/14]  "The Thin Red Line" (1998)  →  timed out after 10 min — skipping
+[2026-04-07T10:13:21.336Z]   ⏳  Waiting 3s before next movie…
+[2026-04-07T10:13:24.339Z] 
+[14/14]  "Lock, Stock and Two Smoking Barrels" (1998)
+[2026-04-07T10:13:27.489Z]   ❌  [14/14]  "Lock, Stock and Two Smoking Barrels" (1998)  →  exited with code 1
+[2026-04-07T10:13:28.451Z] 
+────────────────────────────────────────────────────────────
+[2026-04-07T10:13:28.451Z] 📊  Batch complete
+[2026-04-07T10:13:28.451Z]     ✅  Success:  1
+[2026-04-07T10:13:28.451Z]     ❌  Failed:   6  (safe_start set to -1 — rerun with --retry-failed)
+[2026-04-07T10:13:28.451Z]     ⏱  Timed out: 7
+[2026-04-07T10:13:28.451Z]     Log: /Users/vascolencastre/cinescenes/scripts/output/scan-batch.log
+[2026-04-07T10:13:28.451Z] ────────────────────────────────────────────────────────────
+
+[2026-04-11T10:31:14.277Z] 
+────────────────────────────────────────────────────────────
+[2026-04-11T10:31:14.280Z] 🎬  Batch scan starting — 16 movie(s) to process
+[2026-04-11T10:31:14.280Z]     DRY RUN — no scans will run
+[2026-04-11T10:31:14.280Z] ────────────────────────────────────────────────────────────
+[2026-04-11T10:31:14.280Z]   [1/16]  "Kids" (1995)  →  would scan  (tmdb_id=none)
+[2026-04-11T10:31:14.280Z]   [2/16]  "Toy Story" (1995)  →  would scan  (tmdb_id=none)
+[2026-04-11T10:31:14.280Z]   [3/16]  "Heat" (1995)  →  would scan  (tmdb_id=none)
+[2026-04-11T10:31:14.280Z]   [4/16]  "Apollo 13" (1995)  →  would scan  (tmdb_id=none)
+[2026-04-11T10:31:14.280Z]   [5/16]  "Braveheart" (1995)  →  would scan  (tmdb_id=none)
+[2026-04-11T10:31:14.280Z]   [6/16]  "Casino" (1995)  →  would scan  (tmdb_id=none)
+[2026-04-11T10:31:14.280Z]   [7/16]  "Se7en" (1995)  →  would scan  (tmdb_id=none)
+[2026-04-11T10:31:14.281Z]   [8/16]  "Dead Man Walking" (1995)  →  would scan  (tmdb_id=none)
+[2026-04-11T10:31:14.281Z]   [9/16]  "Underground" (1995)  →  would scan  (tmdb_id=none)
+[2026-04-11T10:31:14.281Z]   [10/16]  "Antonia's Line" (1995)  →  would scan  (tmdb_id=none)
+[2026-04-11T10:31:14.281Z]   [11/16]  "Before Sunrise" (1995)  →  would scan  (tmdb_id=none)
+[2026-04-11T10:31:14.281Z]   [12/16]  "Dead Man" (1995)  →  would scan  (tmdb_id=none)
+[2026-04-11T10:31:14.281Z]   [13/16]  "Leaving Las Vegas" (1995)  →  would scan  (tmdb_id=none)
+[2026-04-11T10:31:14.281Z]   [14/16]  "La Haine" (1995)  →  would scan  (tmdb_id=none)
+[2026-04-11T10:31:14.281Z]   [15/16]  "Babe" (1995)  →  would scan  (tmdb_id=none)
+[2026-04-11T10:31:14.281Z]   [16/16]  "The Usual Suspects" (1995)  →  would scan  (tmdb_id=none)
+[2026-04-11T10:31:14.281Z] 
+────────────────────────────────────────────────────────────
+[2026-04-11T10:31:14.281Z] 📊  Batch complete
+[2026-04-11T10:31:14.281Z]     ✅  Success:  0
+[2026-04-11T10:31:14.281Z]     Log: /Users/vascolencastre/cinescenes/scripts/output/scan-batch.log
+[2026-04-11T10:31:14.281Z] ────────────────────────────────────────────────────────────
+
+[2026-04-11T10:31:17.613Z] 
+────────────────────────────────────────────────────────────
+[2026-04-11T10:31:17.617Z] 🎬  Batch scan starting — 16 movie(s) to process
+[2026-04-11T10:31:17.618Z] ────────────────────────────────────────────────────────────
+[2026-04-11T10:31:17.618Z] 
+[1/16]  "Kids" (1995)
+[2026-04-11T10:34:10.364Z]   ✅  [1/16]  "Kids" (1995)  →  done
+[2026-04-11T10:34:10.366Z]   ⏳  Waiting 3s before next movie…
+[2026-04-11T10:34:13.367Z] 
+[2/16]  "Toy Story" (1995)
+[2026-04-11T10:34:16.994Z]   ❌  [2/16]  "Toy Story" (1995)  →  exited with code 1
+[2026-04-11T10:34:17.121Z]   ⏳  Waiting 3s before next movie…
+[2026-04-11T10:34:20.122Z] 
+[3/16]  "Heat" (1995)
+[2026-04-11T10:37:43.723Z]   ✅  [3/16]  "Heat" (1995)  →  done
+[2026-04-11T10:37:43.724Z]   ⏳  Waiting 3s before next movie…
+[2026-04-11T10:37:46.725Z] 
+[4/16]  "Apollo 13" (1995)
+[2026-04-11T10:41:08.144Z]   ❌  [4/16]  "Apollo 13" (1995)  →  exited with code 2
+[2026-04-11T10:41:08.882Z]   ⏳  Waiting 3s before next movie…
+[2026-04-11T10:41:11.883Z] 
+[5/16]  "Braveheart" (1995)
+[2026-04-11T10:47:17.146Z]   ✅  [5/16]  "Braveheart" (1995)  →  done
+[2026-04-11T10:47:17.150Z]   ⏳  Waiting 3s before next movie…
+[2026-04-11T10:47:20.154Z] 
+[6/16]  "Casino" (1995)
+[2026-04-11T10:47:23.593Z]   ❌  [6/16]  "Casino" (1995)  →  exited with code 1
+[2026-04-11T10:47:23.802Z]   ⏳  Waiting 3s before next movie…
+[2026-04-11T10:47:26.806Z] 
+[7/16]  "Se7en" (1995)
+[2026-04-11T10:47:34.879Z]   ❌  [7/16]  "Se7en" (1995)  →  exited with code 1
+[2026-04-11T10:47:34.989Z]   ⏳  Waiting 3s before next movie…
+[2026-04-11T10:47:37.989Z] 
+[8/16]  "Dead Man Walking" (1995)
+[2026-04-11T11:12:38.041Z]   ⏱  [8/16]  "Dead Man Walking" (1995)  →  timed out after 10 min — skipping
+[2026-04-11T11:12:38.079Z]   ⏳  Waiting 3s before next movie…
+[2026-04-11T11:12:41.082Z] 
+[9/16]  "Underground" (1995)
+[2026-04-11T11:37:41.121Z]   ⏱  [9/16]  "Underground" (1995)  →  timed out after 10 min — skipping
+[2026-04-11T11:37:42.089Z]   ⏳  Waiting 3s before next movie…
+[2026-04-11T11:37:45.091Z] 
+[10/16]  "Antonia's Line" (1995)
+[2026-04-11T12:02:45.099Z]   ⏱  [10/16]  "Antonia's Line" (1995)  →  timed out after 10 min — skipping
+[2026-04-11T12:02:45.124Z]   ⏳  Waiting 3s before next movie…
+[2026-04-11T12:02:48.128Z] 
+[11/16]  "Before Sunrise" (1995)
+[2026-04-11T12:27:48.117Z]   ⏱  [11/16]  "Before Sunrise" (1995)  →  timed out after 10 min — skipping
+[2026-04-11T12:27:49.179Z]   ⏳  Waiting 3s before next movie…
+[2026-04-11T12:27:52.182Z] 
+[12/16]  "Dead Man" (1995)
+[2026-04-11T12:52:52.206Z]   ⏱  [12/16]  "Dead Man" (1995)  →  timed out after 10 min — skipping
+[2026-04-11T12:52:52.230Z]   ⏳  Waiting 3s before next movie…
+[2026-04-11T12:52:55.231Z] 
+[13/16]  "Leaving Las Vegas" (1995)
+[2026-04-11T13:17:55.378Z]   ⏱  [13/16]  "Leaving Las Vegas" (1995)  →  timed out after 10 min — skipping
+[2026-04-11T13:17:56.470Z]   ⏳  Waiting 3s before next movie…
+[2026-04-11T13:17:59.474Z] 
+[14/16]  "La Haine" (1995)
+[2026-04-11T13:42:59.514Z]   ⏱  [14/16]  "La Haine" (1995)  →  timed out after 10 min — skipping
+[2026-04-11T13:42:59.545Z]   ⏳  Waiting 3s before next movie…
+[2026-04-11T13:43:02.548Z] 
+[15/16]  "Babe" (1995)
+[2026-04-11T14:08:02.587Z]   ⏱  [15/16]  "Babe" (1995)  →  timed out after 10 min — skipping
+[2026-04-11T14:08:03.666Z]   ⏳  Waiting 3s before next movie…
+[2026-04-11T14:08:06.667Z] 
+[16/16]  "The Usual Suspects" (1995)
+[2026-04-11T14:33:06.733Z]   ⏱  [16/16]  "The Usual Suspects" (1995)  →  timed out after 10 min — skipping
+[2026-04-11T14:33:06.756Z] 
+────────────────────────────────────────────────────────────
+[2026-04-11T14:33:06.757Z] 📊  Batch complete
+[2026-04-11T14:33:06.757Z]     ✅  Success:  3
+[2026-04-11T14:33:06.757Z]     ❌  Failed:   4  (safe_start set to -1 — rerun with --retry-failed)
+[2026-04-11T14:33:06.757Z]     ⏱  Timed out: 9
+[2026-04-11T14:33:06.757Z]     Log: /Users/vascolencastre/cinescenes/scripts/output/scan-batch.log
+[2026-04-11T14:33:06.757Z] ────────────────────────────────────────────────────────────
+
