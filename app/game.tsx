@@ -3319,14 +3319,14 @@ const styles = StyleSheet.create({
   // Animated hourglass overlays
   placeHourglassOverlay: {
     position: 'absolute',
-    top: 2,
-    left: 12,
+    bottom: 10,
+    right: 12,
     zIndex: 2,
   },
   pickerHourglassOverlay: {
     position: 'absolute',
-    top: 2,
-    left: 12,
+    bottom: 10,
+    right: 12,
     zIndex: 2,
   },
   challengeHourglassRow: {
