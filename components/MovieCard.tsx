@@ -4,6 +4,7 @@ import { Movie } from '@/lib/database.types';
 import { cardColor, Fonts, C } from '@/constants/theme';
 
 const lcMysteryCard = require('@/assets/lc-mystery-card.png');
+const lcCardFront   = require('@/assets/lc-card-front.png');
 
 export { cardColor as getCardColor };
 
@@ -16,10 +17,9 @@ interface CardSizeProps {
 }
 
 // How much to overscan the PNG to clip its transparent padding.
-// The actual card drawing occupies roughly the inner 70% of the PNG —
-// scaling by 1/0.70 ≈ 1.43 pushes the transparent edges outside the
-// shell's overflow:hidden boundary, so only the drawn card is visible.
-const BACK_SCALE = 1.45;
+// PNG is 1068×1333 (4:5). Reduce this value if card details are clipped.
+// 1.0 = show full PNG; 1.1 = clip ~5% from each edge; 1.45 = clip ~15%.
+const BACK_SCALE = 1.0;
 
 export function CardBack({ width, height, outlined = false }: CardSizeProps) {
   const radius = Math.max(6, width * 0.08);
@@ -47,47 +47,64 @@ export function CardFront({ movie, width, height }: CardFrontProps) {
 
   return (
     <View style={[s.shell, { width, height, borderRadius: radius, backgroundColor: bg }]}>
-      {/* Subtle center glow overlay */}
-      <View style={[StyleSheet.absoluteFill, s.frontGlow, { borderRadius: radius }]} pointerEvents="none" />
 
-      {/* Fixed-proportion sections — each section always occupies the same slice of
-          the card regardless of text length. Font shrinks to fit via adjustsFontSizeToFit. */}
-      <View style={[s.frontBody, { paddingHorizontal: width * 0.1, paddingVertical: height * 0.08 }]}>
-        {/* Director — top slice, flex 2 */}
-        <View style={s.frontDirectorSection}>
-          <Text
-            style={[s.frontDirector, { fontSize: Math.max(6, width * 0.1) }]}
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            minimumFontScale={0.4}
-          >
-            {movie.director ?? ''}
-          </Text>
-        </View>
-
-        {/* Year — centre slice, flex 5 */}
-        <View style={s.frontYearSection}>
-          <Text
-            style={[s.frontYear, { fontSize: Math.max(12, width * 0.3) }]}
-            numberOfLines={1}
-            adjustsFontSizeToFit
-          >
-            {movie.year}
-          </Text>
-        </View>
-
-        {/* Title — bottom slice, flex 3 */}
-        <View style={s.frontTitleSection}>
-          <Text
-            style={[s.frontTitle, { fontSize: Math.max(7, width * 0.12) }]}
-            numberOfLines={2}
-            adjustsFontSizeToFit
-            minimumFontScale={0.4}
-          >
-            {movie.title}
-          </Text>
-        </View>
+      {/* Director — top label zone (x 23%–77%, y 17%–28%) */}
+      <View style={[s.frontZone, {
+        top: height * 0.17,
+        left: width * 0.23,
+        width: width * 0.54,
+        height: height * 0.11,
+      }]}>
+        <Text
+          style={[s.frontDirector, { fontSize: Math.max(6, width * 0.10) }]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.25}
+        >
+          {movie.director ?? ''}
+        </Text>
       </View>
+
+      {/* Year — middle frame zone (x 28%–72%, y 32%–68%) */}
+      <View style={[s.frontZone, {
+        top: height * 0.32,
+        left: width * 0.28,
+        width: width * 0.44,
+        height: height * 0.36,
+      }]}>
+        <Text
+          style={[s.frontYear, { fontSize: Math.max(12, width * 0.26) }]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+        >
+          {movie.year}
+        </Text>
+      </View>
+
+      {/* Title — bottom label zone (x 23%–77%, y 75%–88%) */}
+      <View style={[s.frontZone, {
+        top: height * 0.75,
+        left: width * 0.23,
+        width: width * 0.54,
+        height: height * 0.13,
+      }]}>
+        <Text
+          style={[s.frontTitle, { fontSize: Math.max(7, width * 0.10) }]}
+          numberOfLines={2}
+          adjustsFontSizeToFit
+          minimumFontScale={0.25}
+        >
+          {movie.title}
+        </Text>
+      </View>
+
+      {/* PNG frame overlay — must be RGBA (transparent bg) to show card colour beneath */}
+      <Image
+        source={lcCardFront}
+        style={{ position: 'absolute', top: 0, left: 0, width, height }}
+        resizeMode="stretch"
+        pointerEvents="none"
+      />
     </View>
   );
 }
@@ -185,49 +202,28 @@ const s = StyleSheet.create({
     marginVertical: 2,
   },
   // ── CardFront ──
-  frontGlow: {
-    backgroundColor: 'rgba(255,255,255,0.07)',
-  },
-  frontBody: {
-    flex: 1,
-    width: '100%',
-  },
-  // Fixed-proportion section containers
-  frontDirectorSection: {
-    flex: 2,
-    width: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  frontYearSection: {
-    flex: 5,
-    width: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  frontTitleSection: {
-    flex: 3,
-    width: '100%',
+  frontZone: {
+    position: 'absolute',
     justifyContent: 'center',
     alignItems: 'center',
   },
   frontDirector: {
-    alignSelf: 'stretch',
-    color: 'rgba(255,255,255,0.75)',
+    width: '100%',
+    color: 'rgba(255,255,255,0.85)',
     fontFamily: Fonts.body,
     fontStyle: 'italic',
     textAlign: 'center',
   },
   frontYear: {
-    alignSelf: 'stretch',
+    width: '100%',
     color: '#ffffff',
     fontFamily: Fonts.display,
     letterSpacing: -0.5,
     textAlign: 'center',
   },
   frontTitle: {
-    alignSelf: 'stretch',
-    color: 'rgba(255,255,255,0.9)',
+    width: '100%',
+    color: 'rgba(255,255,255,0.95)',
     fontFamily: Fonts.bodyBold,
     fontStyle: 'italic',
     textAlign: 'center',
