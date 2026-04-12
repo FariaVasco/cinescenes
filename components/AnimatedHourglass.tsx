@@ -1,19 +1,24 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Animated } from 'react-native';
 import Svg, { Path, Rect, Circle, Defs, ClipPath, G, Line } from 'react-native-svg';
 import { Fonts } from '@/constants/theme';
+
+const VERMILLION = '#E8372A';
+const OCHRE      = '#F5C518';
+const CERULEAN   = '#54B0D9';
 
 interface AnimatedHourglassProps {
   durationMs: number;
   progress: number; // 0 to 1
   size?: number;    // width in px, default 80 (height scales at 104/80)
+  urgent?: boolean;
 }
 
 /**
  * Ligne Claire animated hourglass — React Native SVG version.
  * Sand depletes from the top bulb and fills the bottom as progress goes 0→1.
  */
-export default function AnimatedHourglass({ progress, size = 80 }: AnimatedHourglassProps) {
+export default function AnimatedHourglass({ progress, size = 80, urgent = false }: AnimatedHourglassProps) {
   const s = size / 80; // scale factor
 
   // ── Geometry (original at 80×104) ──────────────────────────────────────────
@@ -32,8 +37,8 @@ export default function AnimatedHourglass({ progress, size = 80 }: AnimatedHourg
   const sw    = 2.5 * s;
 
   // ── Colours ─────────────────────────────────────────────────────────────────
-  const ink        = '#54B0D9'; // cerulean
-  const sand       = '#F5C518'; // ochre
+  const ink        = urgent ? VERMILLION : CERULEAN;
+  const sand       = OCHRE;
   const sandStream = '#C89B10';
   const capColor   = '#3A2E22';
 
@@ -47,7 +52,6 @@ export default function AnimatedHourglass({ progress, size = 80 }: AnimatedHourg
   const b2 = bSpan * 0.65;
 
   // ── Paths ───────────────────────────────────────────────────────────────────
-  // Top bulb: wide at top, narrows to neck at midY
   const topBulbD = [
     `M ${cx - bulbW} ${glassTop}`,
     `C ${cx - bulbW} ${glassTop + t1} ${cx - neckW} ${midY - t2} ${cx - neckW} ${midY}`,
@@ -56,7 +60,6 @@ export default function AnimatedHourglass({ progress, size = 80 }: AnimatedHourg
     'Z',
   ].join(' ');
 
-  // Bottom bulb: narrow at midY, widens to bottom
   const botBulbD = [
     `M ${cx - neckW} ${midY}`,
     `C ${cx - neckW} ${midY + b1} ${cx - bulbW} ${glassBot - b2} ${cx - bulbW} ${glassBot}`,
@@ -152,6 +155,8 @@ interface HourglassTimerProps {
 export function HourglassTimer({ durationMs, onExpire, size = 80 }: HourglassTimerProps) {
   const [progress, setProgress] = useState(0);
   const firedRef = useRef(false);
+  const shakeAnim = useRef(new Animated.Value(0)).current;
+  const shakeLoopRef = useRef<Animated.CompositeAnimation | null>(null);
 
   useEffect(() => {
     firedRef.current = false;
@@ -170,16 +175,44 @@ export function HourglassTimer({ durationMs, onExpire, size = 80 }: HourglassTim
   }, []); // run once on mount
 
   const secsLeft = Math.ceil((1 - progress) * durationMs / 1000);
+  const urgent = secsLeft <= 5 && secsLeft > 0;
+
+  // Start/stop shake loop when urgency changes
+  useEffect(() => {
+    if (urgent) {
+      shakeLoopRef.current = Animated.loop(
+        Animated.sequence([
+          Animated.timing(shakeAnim, { toValue: -4, duration: 55, useNativeDriver: true }),
+          Animated.timing(shakeAnim, { toValue:  4, duration: 55, useNativeDriver: true }),
+          Animated.timing(shakeAnim, { toValue: -4, duration: 55, useNativeDriver: true }),
+          Animated.timing(shakeAnim, { toValue:  4, duration: 55, useNativeDriver: true }),
+          Animated.timing(shakeAnim, { toValue:  0, duration: 55, useNativeDriver: true }),
+          Animated.delay(350),
+        ])
+      );
+      shakeLoopRef.current.start();
+    } else {
+      shakeLoopRef.current?.stop();
+      shakeLoopRef.current = null;
+      shakeAnim.setValue(0);
+    }
+    return () => {
+      shakeLoopRef.current?.stop();
+      shakeLoopRef.current = null;
+    };
+  }, [urgent]);
 
   return (
-    <View style={hStyles.wrap}>
-      <AnimatedHourglass durationMs={durationMs} progress={progress} size={size} />
-      <Text style={[hStyles.secs, { fontSize: Math.max(10, size * 0.22) }]}>{secsLeft}s</Text>
-    </View>
+    <Animated.View style={[hStyles.wrap, { transform: [{ translateX: shakeAnim }] }]}>
+      <AnimatedHourglass durationMs={durationMs} progress={progress} size={size} urgent={urgent} />
+      <Text style={[hStyles.secs, { fontSize: Math.max(10, size * 0.22), color: urgent ? VERMILLION : OCHRE }]}>
+        {secsLeft}s
+      </Text>
+    </Animated.View>
   );
 }
 
 const hStyles = StyleSheet.create({
   wrap: { alignItems: 'center', gap: 2 },
-  secs: { color: '#F5C518', fontFamily: Fonts.display, lineHeight: 16 },
+  secs: { fontFamily: Fonts.display, lineHeight: 16 },
 });
