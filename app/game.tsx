@@ -132,6 +132,8 @@ export default function GameScreen() {
   const challengeDecisionMade = useRef(false);
   // Mirrors challengeConfirmed state for use inside poll closures (state is stale in closures).
   const challengeConfirmedRef = useRef(false);
+  // Mirrors myChallenge state so timer callbacks can read it without stale closures.
+  const myChallengeRef = useRef<Challenge | null>(null);
   // Set to true while a local turn/placement write is in-flight so the poll doesn't
   // overwrite our optimistic state with stale DB data before the write lands.
   const pendingTurnWrite = useRef(false);
@@ -335,6 +337,7 @@ export default function GameScreen() {
   }, [showBetReveal]);
 
   useEffect(() => { challengeConfirmedRef.current = challengeConfirmed; }, [challengeConfirmed]);
+  useEffect(() => { myChallengeRef.current = myChallenge; }, [myChallenge]);
 
   // Lock the Reveal button for 5.5 s after challenging starts
   // (gives everyone the challenge window + buffer before reveal is allowed)
@@ -870,6 +873,17 @@ export default function GameScreen() {
     setLocalChallenges(newChallenges);
     setChallenges(newChallenges);
     setChallengeInterval(null);
+  }
+
+  async function handlePickerTimeout() {
+    // Timer ran out before challenger picked an interval — withdraw without refunding the coin.
+    const mc = myChallengeRef.current;
+    if (!mc || mc.id === 'pending' || mc.interval_index !== -1) return;
+    const updated = { ...mc, interval_index: -3 };
+    setMyChallenge(updated);
+    myChallengeRef.current = updated;
+    setChallengeInterval(null);
+    await db.from('challenges').update({ interval_index: -3 }).eq('id', mc.id);
   }
 
   function handleAnimatedConfirm() {
@@ -2026,7 +2040,7 @@ export default function GameScreen() {
           <Animated.View style={styles.timelineAreaFull}>
             {isPickingInterval && (
               <View style={styles.timelineHourglassRow}>
-                <HourglassTimer durationMs={15000} size={40} />
+                <HourglassTimer durationMs={15000} size={40} onExpire={handlePickerTimeout} />
               </View>
             )}
             <Timeline
