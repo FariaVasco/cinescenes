@@ -1528,7 +1528,7 @@ export default function GameScreen() {
         </View>
 
         <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} />
-        {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} />}
+        {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} bottomOffset={scoreBarH} />}
         {leaveModal}
         {castFab}
         {castOverlay}
@@ -1712,7 +1712,7 @@ export default function GameScreen() {
             </Animated.View>
           )}
 
-          {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} />}
+          {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} bottomOffset={scoreBarH} />}
           {leaveModal}
           {castFab}
           {castOverlay}
@@ -1758,7 +1758,7 @@ export default function GameScreen() {
               </View>
             )}
             <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} />
-            {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} />}
+            {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} bottomOffset={scoreBarH} />}
             {leaveModal}
             {castFab}
             {castOverlay}
@@ -2103,7 +2103,7 @@ export default function GameScreen() {
         </View>
 
         <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} />
-        {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} />}
+        {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} bottomOffset={scoreBarH} />}
         {leaveModal}
         {castFab}
         {castOverlay}
@@ -2272,7 +2272,7 @@ export default function GameScreen() {
           />
         )}
         {winnerId === myPlayerId && revealPhase === 'result' && <ConfettiBurst />}
-        {showMyTimelineSheet && <MyTimelineSheet timeline={revealMyTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} />}
+        {showMyTimelineSheet && <MyTimelineSheet timeline={revealMyTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} bottomOffset={scoreBarH} />}
         {leaveModal}
         {castFab}
         {castOverlay}
@@ -2331,10 +2331,11 @@ function CollapsibleMyTimeline({ timeline, cards }: {
   );
 }
 
-function MyTimelineSheet({ timeline, cards, onClose }: {
+function MyTimelineSheet({ timeline, cards, onClose, bottomOffset = 0 }: {
   timeline: number[];
   cards: (Movie | undefined)[];
   onClose: () => void;
+  bottomOffset?: number;
 }) {
   const CARD_W = 80, CARD_H = 100;
   const translateY = useRef(new Animated.Value(0)).current;
@@ -2356,7 +2357,7 @@ function MyTimelineSheet({ timeline, cards, onClose }: {
   return (
     <View style={[StyleSheet.absoluteFill, styles.timelineSheetOverlay]} pointerEvents="box-none">
       <TouchableOpacity style={StyleSheet.absoluteFill} onPress={onClose} activeOpacity={1} />
-      <Animated.View style={[styles.timelineSheetPanel, { transform: [{ translateY }] }]} {...panResponder.panHandlers}>
+      <Animated.View style={[styles.timelineSheetPanel, { transform: [{ translateY }], marginBottom: bottomOffset }]} {...panResponder.panHandlers}>
         <View style={styles.timelineSheetHandle} />
         <Text style={styles.timelineSheetTitle}>Your Timeline</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}
