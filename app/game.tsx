@@ -2029,7 +2029,9 @@ export default function GameScreen() {
     } else if (myChallenge?.interval_index === -3) {
       badgeText = 'You withdrew.';
     }
-    const showChallengePanel = !amActive && !alreadyDecided && !inSeqPhase;
+    // Keep panel open until the player has decided — don't hide early just because
+    // other players filled the challenger slots (inSeqPhase).
+    const showChallengePanel = !amActive && !alreadyDecided;
 
     return (
       <SafeAreaView style={styles.container}>
