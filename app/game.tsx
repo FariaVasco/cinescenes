@@ -34,6 +34,7 @@ import { Challenge, Movie, Player, Turn } from '@/lib/database.types';
 import { TrailerPlayer, TrailerPlayerHandle } from '@/components/TrailerPlayer';
 import { Timeline, TimelineHandle } from '@/components/Timeline';
 import { ChallengeTimer } from '@/components/ChallengeTimer';
+import { HourglassTimer } from '@/components/AnimatedHourglass';
 import { CardBack, CardFront } from '@/components/MovieCard';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { AirPlayButton } from 'airplay-picker';
@@ -1533,6 +1534,11 @@ export default function GameScreen() {
                       <Text style={styles.replayLinkText}>↺ Replay</Text>
                     </TouchableOpacity>
                   )}
+                  {selectedInterval === null && (
+                    <View style={styles.placeHourglassOverlay} pointerEvents="none">
+                      <HourglassTimer durationMs={30000} size={44} />
+                    </View>
+                  )}
                 </>
               ) : (
                 <View style={styles.placePromptRow}>
@@ -2006,6 +2012,11 @@ export default function GameScreen() {
       <SafeAreaView style={styles.container}>
         <View style={styles.gameArea}>
           <Animated.View style={styles.timelineAreaFull}>
+            {isPickingInterval && (
+              <View style={styles.pickerHourglassOverlay} pointerEvents="none">
+                <HourglassTimer durationMs={15000} size={44} />
+              </View>
+            )}
             <Timeline
               timeline={timeline}
               currentCardMovie={movie}
@@ -2037,7 +2048,9 @@ export default function GameScreen() {
 
           {showChallengePanel && (
             <Animated.View style={[styles.challengeBottomPanel, { transform: [{ translateY: challengePanelY }] }]}>
-              <ChallengeTimer seconds={10} onExpire={handlePass} barMode />
+              <View style={styles.challengeHourglassRow}>
+                <HourglassTimer durationMs={10000} onExpire={handlePass} size={48} />
+              </View>
               <View style={styles.challengeBottomActions}>
                 <TouchableOpacity onPress={handlePass} activeOpacity={0.7} style={styles.passBtn}>
                   <Text style={styles.passBtnLabel}>Pass</Text>
@@ -3302,6 +3315,23 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
     resizeMode: 'contain',
+  },
+  // Animated hourglass overlays
+  placeHourglassOverlay: {
+    position: 'absolute',
+    top: 2,
+    right: 12,
+    zIndex: 2,
+  },
+  pickerHourglassOverlay: {
+    position: 'absolute',
+    top: 2,
+    right: 12,
+    zIndex: 2,
+  },
+  challengeHourglassRow: {
+    alignItems: 'center',
+    paddingBottom: 4,
   },
   drawingMySection: {
     maxHeight: 110,
