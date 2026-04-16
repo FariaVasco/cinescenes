@@ -324,12 +324,12 @@ const styles = StyleSheet.create({
     borderColor: C.ink,
   },
   modeCardPremium: {
-    borderColor: C.ochre,
     backgroundColor: 'rgba(245,197,24,0.04)',
   },
   modeCardSelected: {
     borderColor: C.ochre,
     borderWidth: 3,
+    backgroundColor: 'rgba(245,197,24,0.10)',
   },
   modeCardDisabled: { opacity: 0.35 },
 

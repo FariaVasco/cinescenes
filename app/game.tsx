@@ -790,7 +790,8 @@ export default function GameScreen() {
 
   async function handlePlacementTimeout() {
     const ct = currentTurnRef.current ?? currentTurn;
-    if (!ct || ct.status !== 'placing' || ct.placed_interval !== null) return;
+    // Allow -1 (the "trailer ended" pre-signal) — only bail if a real interval was already placed
+    if (!ct || ct.status !== 'placing' || (ct.placed_interval !== null && ct.placed_interval !== -1)) return;
     const optimistic = { ...ct, placed_interval: -1, status: 'challenging' as const };
     pendingTurnWrite.current = true;
     setLocalTurn(optimistic);
@@ -815,7 +816,7 @@ export default function GameScreen() {
       const newPlayers = players.map(p => p.id === myPlayerId ? { ...p, coins: updatedCoins } : p);
       setLocalPlayers(newPlayers);
       setPlayers(newPlayers);
-      db.from('players').update({ coins: updatedCoins }).eq('id', myPlayerId);
+      await db.from('players').update({ coins: updatedCoins }).eq('id', myPlayerId);
     }
     const { data: inserted } = await db
       .from('challenges')
@@ -1141,7 +1142,6 @@ export default function GameScreen() {
       const refundWrites: Promise<any>[] = [];
       for (const c of challenges) {
         if (c.interval_index < 0) continue; // passed / withdrew / unpicked
-        if (c.challenger_id === winnerId) continue; // winner keeps their coin
         const shouldRefund =
           (activeCorrect && validIntervals.includes(c.interval_index)) ||
           (winnerId && winnerId !== ct.active_player_id && validIntervals.includes(c.interval_index));
@@ -1519,16 +1519,14 @@ export default function GameScreen() {
             )}
           </View>
 
-          {/* ── Observer's own timeline — pinned to bottom of flex container ── */}
+          {/* ── Observer's own timeline — sits below CTA, above ScoreBar ── */}
           {!amActive && myTimeline.length > 0 && (
-            <View style={{ marginTop: 'auto' }}>
-              <CollapsibleMyTimeline timeline={myTimeline} cards={myTimelineCards} />
-            </View>
+            <CollapsibleMyTimeline timeline={myTimeline} cards={myTimelineCards} />
           )}
         </View>
 
         <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} />
-        {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} bottomOffset={scoreBarH} />}
+        {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} bottomOffset={insets.bottom} />}
         {leaveModal}
         {castFab}
         {castOverlay}
@@ -1557,11 +1555,9 @@ export default function GameScreen() {
                       <Text style={styles.replayLinkText}>↺ Replay</Text>
                     </TouchableOpacity>
                   )}
-                  {selectedInterval === null && (
-                    <View style={styles.timelineHourglassRow}>
-                      <HourglassTimer durationMs={30000} size={40} onExpire={handlePlacementTimeout} label="to place the card in the timeline" />
-                    </View>
-                  )}
+                  <View style={styles.timelineHourglassRow}>
+                    <HourglassTimer durationMs={30000} size={40} onExpire={handlePlacementTimeout} label="to place the card in the timeline" />
+                  </View>
                 </>
               ) : (
                 <View style={styles.placePromptRow}>
@@ -1709,7 +1705,7 @@ export default function GameScreen() {
             </Animated.View>
           )}
 
-          {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} bottomOffset={scoreBarH} />}
+          {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} bottomOffset={insets.bottom} />}
           {leaveModal}
           {castFab}
           {castOverlay}
@@ -1755,7 +1751,7 @@ export default function GameScreen() {
               </View>
             )}
             <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} />
-            {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} bottomOffset={scoreBarH} />}
+            {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} bottomOffset={insets.bottom} />}
             {leaveModal}
             {castFab}
             {castOverlay}
@@ -2102,7 +2098,7 @@ export default function GameScreen() {
         </View>
 
         <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} />
-        {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} bottomOffset={scoreBarH} />}
+        {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} bottomOffset={insets.bottom} />}
         {leaveModal}
         {castFab}
         {castOverlay}
@@ -2270,8 +2266,8 @@ export default function GameScreen() {
             getPlayer={getPlayer}
           />
         )}
-        {winnerId === myPlayerId && revealPhase === 'result' && <ConfettiBurst />}
-        {showMyTimelineSheet && <MyTimelineSheet timeline={revealMyTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} bottomOffset={scoreBarH} />}
+        <ConfettiBurst trigger={winnerId === myPlayerId && revealPhase === 'result'} />
+        {showMyTimelineSheet && <MyTimelineSheet timeline={revealMyTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} bottomOffset={insets.bottom} />}
         {leaveModal}
         {castFab}
         {castOverlay}
@@ -2356,10 +2352,11 @@ function MyTimelineSheet({ timeline, cards, onClose, bottomOffset = 0 }: {
   return (
     <View style={[StyleSheet.absoluteFill, styles.timelineSheetOverlay]} pointerEvents="box-none">
       <TouchableOpacity style={StyleSheet.absoluteFill} onPress={onClose} activeOpacity={1} />
-      <Animated.View style={[styles.timelineSheetPanel, { transform: [{ translateY }], marginBottom: bottomOffset }]} {...panResponder.panHandlers}>
+      <Animated.View style={[styles.timelineSheetPanel, { transform: [{ translateY }], paddingBottom: bottomOffset + 8 }]} {...panResponder.panHandlers}>
         <View style={styles.timelineSheetHandle} />
         <Text style={styles.timelineSheetTitle}>Your Timeline</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}
+          style={{ height: CARD_H + 8 }}
           contentContainerStyle={styles.timelineSheetScroll}>
           {timeline.map((year, i) => {
             const mv = cards[i];
@@ -2464,7 +2461,7 @@ function GameOverScreen({ winner, players, myId }: { winner: Player; players: Pl
         </View>
 
       </View>
-      {isMe && <ConfettiBurst />}
+      <ConfettiBurst trigger={isMe} />
     </SafeAreaView>
   );
 }
@@ -2682,98 +2679,74 @@ const betRevealStyles = StyleSheet.create({
 // Particles follow a gravity curve: shoot outward + up, then fall down.
 // Two waves of fire + double screen flash for extra flair.
 
+// Ligne-claire palette: ochre dominant, vermillion + cerulean accents, ink + white
 const CONFETTI_COLORS = [
-  '#f5c518', '#f5c518', '#f5c518', // gold — dominant
-  '#ffffff', '#ffffff',             // white
-  '#ffd700', '#ffe082', '#fff3a0', // warm golds
-  '#e63946',                        // accent red
-  '#a855f7',                        // purple
-  '#22d3ee',                        // teal
-  '#fb923c',                        // orange
+  '#F5C518', '#F5C518', '#F5C518', '#F5C518', // ochre — dominant
+  '#E8372A', '#E8372A',                         // vermillion
+  '#54B0D9', '#54B0D9',                         // cerulean
+  '#ffffff', '#ffffff',                          // white
+  '#1A1A1A',                                     // ink
 ];
-const PER_CANNON = 38;
+const PER_CANNON = 45;
 
-function ConfettiBurst() {
-  const flash1Anim = useRef(new Animated.Value(0)).current;
-  const flash2Anim = useRef(new Animated.Value(0)).current;
-
-  const makeParticle = (i: number, wave: number) => {
+function ConfettiBurst({ trigger = true }: { trigger?: boolean }) {
+  const makeParticle = (i: number) => {
     const fromRight = i >= PER_CANNON;
     const frac = (i % PER_CANNON) / (PER_CANNON - 1);
-    const spreadRad = (130 / 180) * Math.PI;
-    const baseAngle = fromRight
-      ? (115 / 180) * Math.PI + frac * spreadRad
-      : (-60 / 180) * Math.PI + frac * spreadRad;
-    const angle = baseAngle + (Math.random() - 0.5) * 0.22;
-    const speed = 120 + Math.random() * 220;
-    const isStrip = Math.random() < 0.55;
-    const gravity = 270 + Math.random() * 160;
+    // 80° fan centered upward from each bottom corner.
+    // Left cannon  (-105° → -25°): shoots up and rightward.
+    // Right cannon (-155° → -75°): shoots up and leftward.
+    const spreadRad = (80 / 180) * Math.PI;
+    const baseAngle = fromRight ? (-155 / 180) * Math.PI : (-105 / 180) * Math.PI;
+    const angle = baseAngle + frac * spreadRad + (Math.random() - 0.5) * 0.25;
+    const speed   = 300 + Math.random() * 350;
+    const gravity = 550 + Math.random() * 280;
+    const isStrip = Math.random() < 0.70;
     return {
       anim: new Animated.Value(0),
       fromRight,
-      dx: Math.cos(angle) * speed,
-      dyMid: Math.sin(angle) * speed,
-      dyEnd: Math.sin(angle) * speed + gravity,
+      dx:     Math.cos(angle) * speed,
+      dyPeak: Math.sin(angle) * speed,           // negative = upward
+      dyEnd:  Math.sin(angle) * speed + gravity, // falls back down after peak
       color: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
-      w: isStrip ? 2.5 + Math.random() * 2.5 : 5 + Math.random() * 5,
-      h: isStrip ? 11 + Math.random() * 10  : 5 + Math.random() * 5,
-      spins: (Math.random() - 0.5) * 9,
-      // wave 0 = 0-110ms, wave 1 = 500-660ms
-      delay: wave === 0 ? Math.floor(Math.random() * 110) : 500 + Math.floor(Math.random() * 160),
+      w: isStrip ? 3.5 + Math.random() * 3 : 6 + Math.random() * 6,
+      h: isStrip ? 14  + Math.random() * 12 : 6 + Math.random() * 6,
+      spins:    (Math.random() > 0.5 ? 1 : -1) * (2 + Math.random() * 6),
+      delay:    Math.floor(Math.random() * 320),
+      duration: 1600 + Math.floor(Math.random() * 600),
     };
   };
 
   const particles = useRef(
-    [
-      ...Array.from({ length: PER_CANNON * 2 }, (_, i) => makeParticle(i, 0)),
-      ...Array.from({ length: PER_CANNON * 2 }, (_, i) => makeParticle(i, 1)),
-    ]
+    Array.from({ length: PER_CANNON * 2 }, (_, i) => makeParticle(i))
   ).current;
 
   useEffect(() => {
-    // Double flash: first on the beat, second on second wave
-    Animated.sequence([
-      Animated.timing(flash1Anim, { toValue: 0.18, duration: 90,  useNativeDriver: true }),
-      Animated.timing(flash1Anim, { toValue: 0,    duration: 400, useNativeDriver: true }),
-    ]).start();
-    const t = setTimeout(() => {
-      Animated.sequence([
-        Animated.timing(flash2Anim, { toValue: 0.12, duration: 90,  useNativeDriver: true }),
-        Animated.timing(flash2Anim, { toValue: 0,    duration: 350, useNativeDriver: true }),
-      ]).start();
-    }, 500);
-
-    Animated.stagger(
-      8,
-      particles.map(p =>
-        Animated.sequence([
-          Animated.delay(p.delay),
-          Animated.timing(p.anim, {
-            toValue: 1,
-            duration: 1100 + Math.random() * 600,
-            easing: Easing.out(Easing.cubic),
-            useNativeDriver: true,
-          }),
-        ])
-      )
-    ).start();
-
-    return () => clearTimeout(t);
-  }, []);
+    if (!trigger) return;
+    particles.forEach(p => {
+      p.anim.setValue(0);
+      Animated.timing(p.anim, {
+        toValue: 1,
+        duration: p.duration,
+        delay: p.delay,
+        easing: Easing.linear, // let position keyframes encode the physics arc
+        useNativeDriver: true,
+      }).start();
+    });
+  }, [trigger]);
 
   return (
     <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
-      <Animated.View style={[StyleSheet.absoluteFillObject, { backgroundColor: '#f5c518', opacity: flash1Anim }]} />
-      <Animated.View style={[StyleSheet.absoluteFillObject, { backgroundColor: '#f5c518', opacity: flash2Anim }]} />
       {particles.map((p, i) => {
         const tx = p.anim.interpolate({ inputRange: [0, 1], outputRange: [0, p.dx] });
+        // Peak at 38% of animation: rises fast, drifts down slowly — like real confetti
         const ty = p.anim.interpolate({
-          inputRange: [0, 0.45, 1],
-          outputRange: [0, p.dyMid, p.dyEnd],
+          inputRange: [0, 0.38, 1],
+          outputRange: [0, p.dyPeak, p.dyEnd],
         });
         const opacity = p.anim.interpolate({
-          inputRange: [0, 0.5, 0.88, 1],
-          outputRange: [1, 1, 0.6, 0],
+          inputRange: [0, 0.70, 1],
+          outputRange: [1, 1, 0],
         });
         const rotate = p.anim.interpolate({
           inputRange: [0, 1],
@@ -2784,8 +2757,8 @@ function ConfettiBurst() {
             key={i}
             style={{
               position: 'absolute',
-              top: '9%',
-              left: p.fromRight ? '82%' : '18%',
+              bottom: '5%',
+              left: p.fromRight ? '85%' : '15%',
               width: p.w,
               height: p.h,
               borderRadius: 1,
@@ -3308,6 +3281,7 @@ const styles = StyleSheet.create({
 
   // ── Drawing phase ──
   drawingTopSection: {
+    flex: 1,
     paddingTop: 16,
   },
   drawingTurnLabel: {
@@ -3344,8 +3318,12 @@ const styles = StyleSheet.create({
   },
   // Animated hourglass — in-flow above the timeline
   timelineHourglassRow: {
+    position: 'absolute',
+    top: 8,
+    left: 0,
+    right: 0,
     alignItems: 'center',
-    paddingBottom: 6,
+    zIndex: 1,
   },
   challengeHourglassRow: {
     alignItems: 'center',
@@ -3437,6 +3415,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   challengeBottomPanel: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     backgroundColor: C.inkSurface,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.10)',
@@ -3515,7 +3497,7 @@ const styles = StyleSheet.create({
   },
   challengeBadge: {
     position: 'absolute',
-    bottom: 12,
+    top: 12,
     alignSelf: 'center',
     backgroundColor: 'rgba(0,0,0,0.55)',
     borderRadius: 20,
@@ -4239,7 +4221,6 @@ const styles = StyleSheet.create({
     borderColor: C.ink,
     paddingHorizontal: 16,
     paddingTop: 10,
-    paddingBottom: 16,
     gap: 10,
   },
   timelineSheetHandle: {
