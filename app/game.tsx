@@ -84,7 +84,7 @@ export default function GameScreen() {
   const [players, setLocalPlayers] = useState<Player[]>(storePlayers);
   const [currentTurn, setLocalTurn] = useState<Turn | null>(null);
   const [challenges, setLocalChallenges] = useState<Challenge[]>([]);
-  const { width: screenWidth } = useWindowDimensions();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const [trailerEnded, setTrailerEnded] = useState(false);
   const [canSkipTrailer, setCanSkipTrailer] = useState(true);
   const skipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -100,7 +100,6 @@ export default function GameScreen() {
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
   const [castVisible, setCastVisible] = useState(false);
   const [bonusPanelOpen, setBonusPanelOpen] = useState(false);
-  const [scoreBarH, setScoreBarH] = useState(48);
 
   const [selectedInterval, setSelectedInterval] = useState<number | null>(null);
   const [hasPassed, setHasPassed] = useState(false);
@@ -148,7 +147,6 @@ export default function GameScreen() {
   const [autoNextCountdown, setAutoNextCountdown] = useState(5);
   const autoNextIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [showChallengerTimeline, setShowChallengerTimeline] = useState(false);
-  const [showMyTimelineSheet, setShowMyTimelineSheet] = useState(false);
   const [movieGuess, setMovieGuess] = useState('');
   const [directorGuess, setDirectorGuess] = useState('');
   const [revealLocked, setRevealLocked] = useState(true);
@@ -1481,8 +1479,8 @@ export default function GameScreen() {
     const drawingTimeline = amActive ? myTimeline : timeline;
     const drawingPlacedMovies = amActive ? myPlacedMovies : placedMovies;
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={{ flex: 1 }}>
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+        <View style={{ flex: 1, paddingBottom: PULL_TAB_H }}>
           {/* ── Active player's timeline — main section ── */}
           <View style={styles.drawingTopSection}>
             <Text style={styles.drawingTurnLabel}>
@@ -1519,14 +1517,12 @@ export default function GameScreen() {
             )}
           </View>
 
-          {/* ── Observer's own timeline — sits below CTA, above ScoreBar ── */}
-          {!amActive && myTimeline.length > 0 && (
-            <CollapsibleMyTimeline timeline={myTimeline} cards={myTimelineCards} />
-          )}
         </View>
 
-        <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} />
-        {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} bottomOffset={insets.bottom} />}
+        <PlayerChips players={players} myId={myPlayerId} topInset={insets.top} hasCastFab={!!castFab} />
+        {myTimeline.length > 0 && (
+          <MyTimelinePanel timeline={myTimeline} cards={myTimelineCards} bottomInset={insets.bottom} screenHeight={screenHeight} />
+        )}
         {leaveModal}
         {castFab}
         {castOverlay}
@@ -1545,7 +1541,7 @@ export default function GameScreen() {
       const bonusScale = bonusPanelAnim.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] });
 
       return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
           <View style={styles.gameArea}>
             <Animated.View style={styles.timelineAreaFull}>
               {amActive ? (
@@ -1579,16 +1575,9 @@ export default function GameScreen() {
             </Animated.View>
           </View>
 
-          <View onLayout={e => setScoreBarH(e.nativeEvent.layout.height)}>
-            <ScoreBar
-              players={players} myId={myPlayerId}
-              onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined}
-            />
-          </View>
-
-          {/* ── Bonus FABs — floats above ScoreBar, last child → on top ── */}
+          {/* ── Bonus FABs — floats above bottom inset, last child → on top ── */}
           {amActive && (
-            <View style={[styles.bonusFabColumn, { bottom: scoreBarH + insets.bottom + 12 }]}>
+            <View style={[styles.bonusFabColumn, { bottom: insets.bottom + 12 }]}>
               {/* Coin FAB row — with first-turn tooltip to the left */}
               <View style={styles.bonusFabMainRow}>
                 {myTimeline.length <= 1 && !bonusEntered && !bonusPanelOpen && (
@@ -1615,7 +1604,7 @@ export default function GameScreen() {
           {amActive && bonusPanelOpen && (
             <Animated.View
               style={[styles.bonusOverlay, {
-                bottom: scoreBarH + insets.bottom + 62,
+                bottom: insets.bottom + 62,
                 opacity: bonusPanelAnim,
                 transform: [{ scale: bonusScale }],
               }]}
@@ -1705,7 +1694,10 @@ export default function GameScreen() {
             </Animated.View>
           )}
 
-          {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} bottomOffset={insets.bottom} />}
+          <PlayerChips players={players} myId={myPlayerId} topInset={insets.top} hasCastFab={!!castFab} />
+          {myTimeline.length > 0 && (
+            <MyTimelinePanel timeline={myTimeline} cards={myTimelineCards} bottomInset={insets.bottom} screenHeight={screenHeight} />
+          )}
           {leaveModal}
           {castFab}
           {castOverlay}
@@ -1750,8 +1742,10 @@ export default function GameScreen() {
                 </TouchableOpacity>
               </View>
             )}
-            <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} />
-            {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} bottomOffset={insets.bottom} />}
+            <PlayerChips players={players} myId={myPlayerId} topInset={insets.top} hasCastFab={!!castFab} />
+            {myTimeline.length > 0 && (
+              <MyTimelinePanel timeline={myTimeline} cards={myTimelineCards} bottomInset={insets.bottom} screenHeight={screenHeight} />
+            )}
             {leaveModal}
             {castFab}
             {castOverlay}
@@ -2015,7 +2009,7 @@ export default function GameScreen() {
     // Status badge: shown as a floating label inside the timeline, no layout impact
     let badgeText: string | null = null;
     if (amActive) {
-      badgeText = pendingChallengers ? 'Waiting for others to decide…' : canRevealNow ? 'Revealing…' : 'All decided';
+      badgeText = (pendingChallengers || !everybodyIn) ? 'Waiting for others to decide…' : canRevealNow ? 'Revealing…' : 'All decided';
     } else if (isPickingInterval) {
       badgeText = '↑  Tap a gap to place your coin';
     } else if (!inSeqPhase && myChallenge?.interval_index === -1) {
@@ -2097,8 +2091,10 @@ export default function GameScreen() {
           )}
         </View>
 
-        <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} />
-        {showMyTimelineSheet && <MyTimelineSheet timeline={myTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} bottomOffset={insets.bottom} />}
+        <PlayerChips players={players} myId={myPlayerId} topInset={insets.top} hasCastFab={!!castFab} />
+        {myTimeline.length > 0 && (
+          <MyTimelinePanel timeline={myTimeline} cards={myTimelineCards} bottomInset={insets.bottom} screenHeight={screenHeight} />
+        )}
         {leaveModal}
         {castFab}
         {castOverlay}
@@ -2258,8 +2254,11 @@ export default function GameScreen() {
             />
           )}
         </View>
-        <ScoreBar players={players} myId={myPlayerId} onOpenTimeline={myTimeline.length > 0 ? () => setShowMyTimelineSheet(true) : undefined} />
-        {/* Suspense overlay — full-screen, covers timeline + scorebar */}
+        <PlayerChips players={players} myId={myPlayerId} topInset={insets.top} hasCastFab={!!castFab} />
+        {myTimeline.length > 0 && (
+          <MyTimelinePanel timeline={revealMyTimeline} cards={myTimelineCards} bottomInset={insets.bottom} screenHeight={screenHeight} />
+        )}
+        {/* Suspense overlay — full-screen, covers chips + panel */}
         {revealPhase === 'suspense' && (
           <SuspenseOverlay
             challengers={challengersForOverlay}
@@ -2267,7 +2266,6 @@ export default function GameScreen() {
           />
         )}
         <ConfettiBurst trigger={winnerId === myPlayerId && revealPhase === 'result'} />
-        {showMyTimelineSheet && <MyTimelineSheet timeline={revealMyTimeline} cards={myTimelineCards} onClose={() => setShowMyTimelineSheet(false)} bottomOffset={insets.bottom} />}
         {leaveModal}
         {castFab}
         {castOverlay}
@@ -2278,124 +2276,141 @@ export default function GameScreen() {
   return <LoadingScreen />;
 }
 
-function CollapsibleMyTimeline({ timeline, cards }: {
-  timeline: number[];
-  cards: (Movie | undefined)[];
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const CARD_W = 52, CARD_H = 68, OVERLAP = 22;
+const PLAYER_CHIP_COLORS = ['#E8372A','#54B0D9','#F5C518','#8B5CF6','#10B981','#F97316','#EC4899','#6366F1'];
 
-  if (expanded) {
-    return (
-      <TouchableOpacity onPress={() => setExpanded(false)} activeOpacity={1}
-        style={styles.collapsibleBar}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.collapsibleExpandedContent}>
-          {timeline.map((year, i) => {
-            const mv = cards[i];
-            return mv
-              ? <CardFront key={i} movie={mv} width={CARD_W} height={CARD_H} />
-              : <View key={i} style={[styles.collapsedYearCard, { width: CARD_W, height: CARD_H }]}>
-                  <Text style={styles.collapsedYearText}>{year}</Text>
-                </View>;
-          })}
-        </ScrollView>
-      </TouchableOpacity>
-    );
-  }
+function PlayerChips({ players, myId, topInset, hasCastFab }: { players: Player[]; myId: string | null; topInset: number; hasCastFab: boolean }) {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  // When castFab is present (right: 20, 34px tall, top: topInset+14), shift chips below it
+  const topOffset = topInset + (hasCastFab ? 56 : 8);
 
   return (
-    <TouchableOpacity onPress={() => setExpanded(true)} activeOpacity={0.85}
-      style={styles.collapsibleBar}>
-      <View style={styles.collapsibleFanWrap}>
-        {timeline.map((year, i) => {
-          const mv = cards[i];
+    <>
+      {expandedId && (
+        <TouchableOpacity
+          style={[StyleSheet.absoluteFill, { zIndex: 10 }]}
+          onPress={() => setExpandedId(null)}
+          activeOpacity={1}
+        />
+      )}
+      <View style={[styles.playerChipsWrap, { top: topOffset }]}>
+        {players.map((p, i) => {
+          const color = PLAYER_CHIP_COLORS[i % PLAYER_CHIP_COLORS.length];
+          const isMe = p.id === myId;
+          const isExpanded = expandedId === p.id;
+          const initial = (p.display_name ?? '?')[0].toUpperCase();
           return (
-            <View key={i} style={[styles.collapsibleFanCard, i > 0 && { marginLeft: -OVERLAP }]}>
-              {mv
-                ? <CardFront movie={mv} width={CARD_W} height={CARD_H} />
-                : <View style={[styles.collapsedYearCard, { width: CARD_W, height: CARD_H }]}>
-                    <Text style={styles.collapsedYearText}>{year}</Text>
-                  </View>
-              }
-            </View>
+            <TouchableOpacity
+              key={p.id}
+              onPress={() => setExpandedId(isExpanded ? null : p.id)}
+              activeOpacity={0.85}
+              style={[
+                styles.playerChip,
+                { backgroundColor: color },
+                isMe && { borderWidth: 2, borderColor: '#fff' },
+                isExpanded && styles.playerChipExpanded,
+              ]}
+            >
+              {isExpanded ? (
+                <>
+                  <Text style={styles.playerChipPillText} numberOfLines={1}>{p.display_name}</Text>
+                  <Text style={styles.playerChipPillStat}>{p.timeline.length} cards</Text>
+                  <Image source={lcCoin} style={{ width: 12, height: 12 }} />
+                  <Text style={styles.playerChipPillStat}>{p.coins}</Text>
+                </>
+              ) : (
+                <Text style={styles.playerChipInitial}>{initial}</Text>
+              )}
+            </TouchableOpacity>
           );
         })}
       </View>
-    </TouchableOpacity>
+    </>
   );
 }
 
-function MyTimelineSheet({ timeline, cards, onClose, bottomOffset = 0 }: {
+const PULL_TAB_H = 44;
+
+function MyTimelinePanel({ timeline, cards, bottomInset, screenHeight }: {
   timeline: number[];
   cards: (Movie | undefined)[];
-  onClose: () => void;
-  bottomOffset?: number;
+  bottomInset: number;
+  screenHeight: number;
 }) {
+  const maxHeight = screenHeight * 0.5;
+  const translateY = useRef(new Animated.Value(maxHeight)).current;
+  const panelOpenRef = useRef(false);
+  const [isOpen, setIsOpen] = useState(false);
   const CARD_W = 80, CARD_H = 100;
-  const translateY = useRef(new Animated.Value(0)).current;
 
-  const panResponder = useRef(PanResponder.create({
+  const open = () => {
+    panelOpenRef.current = true;
+    setIsOpen(true);
+    Animated.spring(translateY, { toValue: 0, damping: 22, stiffness: 180, useNativeDriver: true }).start();
+  };
+  const close = () => {
+    panelOpenRef.current = false;
+    Animated.timing(translateY, { toValue: maxHeight, duration: 240, easing: Easing.out(Easing.quad), useNativeDriver: true }).start(() => setIsOpen(false));
+  };
+
+  const dragResponder = useRef(PanResponder.create({
     onMoveShouldSetPanResponder: (_, gs) => gs.dy > 5 && Math.abs(gs.dy) > Math.abs(gs.dx),
     onPanResponderMove: (_, gs) => {
       if (gs.dy > 0) translateY.setValue(gs.dy);
     },
     onPanResponderRelease: (_, gs) => {
-      if (gs.dy > 80 || gs.vy > 0.5) {
-        Animated.timing(translateY, { toValue: 600, duration: 220, useNativeDriver: true }).start(onClose);
-      } else {
-        Animated.spring(translateY, { toValue: 0, useNativeDriver: true }).start();
-      }
+      if (gs.dy > 60 || gs.vy > 0.6) close();
+      else Animated.spring(translateY, { toValue: 0, damping: 22, stiffness: 180, useNativeDriver: true }).start();
     },
   })).current;
 
   return (
-    <View style={[StyleSheet.absoluteFill, styles.timelineSheetOverlay]} pointerEvents="box-none">
-      <TouchableOpacity style={StyleSheet.absoluteFill} onPress={onClose} activeOpacity={1} />
-      <Animated.View style={[styles.timelineSheetPanel, { transform: [{ translateY }], paddingBottom: bottomOffset + 8 }]} {...panResponder.panHandlers}>
-        <View style={styles.timelineSheetHandle} />
-        <Text style={styles.timelineSheetTitle}>Your Timeline</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}
-          style={{ height: CARD_H + 8 }}
-          contentContainerStyle={styles.timelineSheetScroll}>
-          {timeline.map((year, i) => {
-            const mv = cards[i];
-            return mv
-              ? <CardFront key={i} movie={mv} width={CARD_W} height={CARD_H} />
-              : <View key={i} style={[styles.collapsedYearCard, { width: CARD_W, height: CARD_H }]}>
-                  <Text style={[styles.collapsedYearText, { fontSize: 20 }]}>{year}</Text>
-                </View>;
-          })}
-        </ScrollView>
-      </Animated.View>
-    </View>
-  );
-}
-
-function ScoreBar({ players, myId, onOpenTimeline }: { players: Player[]; myId: string | null; onOpenTimeline?: () => void }) {
-  return (
-    <View style={styles.scoreBarRow}>
-      <ScrollView
-        horizontal
-        style={styles.scoreBar}
-        contentContainerStyle={styles.scoreBarContent}
-        showsHorizontalScrollIndicator={false}
-      >
-        {players.map((p) => (
-          <View key={p.id} style={[styles.scoreChip, p.id === myId && styles.scoreChipMe]}>
-            <Text style={styles.scoreChipName}>{p.display_name}</Text>
-            <Text style={styles.scoreChipCount}>{p.timeline.length}</Text>
-            <Image source={require('../assets/lc-coin.png')} style={styles.scoreChipCoinIcon} />
-            <Text style={styles.scoreChipCoins}>{p.coins}</Text>
-          </View>
-        ))}
-      </ScrollView>
-      {onOpenTimeline && (
-        <TouchableOpacity onPress={onOpenTimeline} style={styles.scoreBarTimelineBtn} activeOpacity={0.75}>
-          <Text style={styles.scoreBarTimelineBtnText}>🎞</Text>
+    <>
+      {/* Small centered pull tab — visible when closed, non-intrusive */}
+      {!isOpen && (
+        <TouchableOpacity style={[styles.myTimelinePullTab, { bottom: bottomInset }]} onPress={open} activeOpacity={0.85}>
+          <View style={styles.myTimelinePullHandle} />
+          <Text style={styles.myTimelinePullLabel}>My Timeline</Text>
         </TouchableOpacity>
       )}
-    </View>
+
+      {/* Backdrop */}
+      {isOpen && (
+        <TouchableOpacity
+          style={[StyleSheet.absoluteFill, { zIndex: 19, backgroundColor: 'rgba(0,0,0,0.4)' }]}
+          activeOpacity={1}
+          onPress={close}
+        />
+      )}
+
+      {/* Full-width panel — slides up from bottom when open */}
+      {isOpen && (
+        <Animated.View
+          style={[styles.myTimelinePanelWrap, { height: maxHeight, transform: [{ translateY }], zIndex: 20 }]}
+          {...dragResponder.panHandlers}
+        >
+          {/* Drag handle + close */}
+          <TouchableOpacity style={styles.myTimelinePanelHeader} onPress={close} activeOpacity={0.85}>
+            <View style={styles.myTimelinePullHandle} />
+          </TouchableOpacity>
+          {/* Cards */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={{ flex: 1 }}
+            contentContainerStyle={[styles.myTimelinePanelScroll, { paddingBottom: bottomInset + 8 }]}
+          >
+            {timeline.map((year, i) => {
+              const mv = cards[i];
+              return mv
+                ? <CardFront key={i} movie={mv} width={CARD_W} height={CARD_H} />
+                : <View key={i} style={[styles.myTimelinePanelYearCard, { width: CARD_W, height: CARD_H }]}>
+                    <Text style={styles.myTimelinePanelYearText}>{year}</Text>
+                  </View>;
+            })}
+          </ScrollView>
+        </Animated.View>
+      )}
+    </>
   );
 }
 
@@ -3803,27 +3818,22 @@ const styles = StyleSheet.create({
   reportOptionText: { color: C.textSub, fontFamily: Fonts.body, fontSize: FS.sm, lineHeight: 18 },
   snack: { backgroundColor: C.surface, marginBottom: 16 },
 
-  scoreBarRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)' },
-  scoreBar: { flexGrow: 1 },
-  scoreBarContent: { paddingHorizontal: 12, paddingVertical: 6, gap: 8, flexDirection: 'row', alignItems: 'center' },
-  scoreChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: C.surface, borderRadius: R.full, paddingHorizontal: 10, paddingVertical: 4,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+  // ── PlayerChips ──
+  playerChipsWrap: {
+    position: 'absolute', right: 8, zIndex: 11,
+    flexDirection: 'column', alignItems: 'flex-end', gap: 4,
   },
-  scoreChipMe: { borderWidth: 2, borderColor: C.ochre },
-  scoreChipName: { color: C.textSub, fontFamily: Fonts.label, fontSize: FS.sm },
-  scoreChipCount: { color: C.ochre, fontFamily: Fonts.bodyBold, fontSize: FS.sm },
-
-  timelineBtn: {
-    paddingHorizontal: 14, paddingVertical: 8,
-    borderLeftWidth: 1, borderLeftColor: 'rgba(255,255,255,0.08)',
-    justifyContent: 'center', alignItems: 'center',
+  playerChip: {
+    flexDirection: 'row', alignItems: 'center',
+    width: 28, height: 28, borderRadius: 14,
+    justifyContent: 'center', overflow: 'hidden',
   },
-  timelineBtnIcon: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  timelineMiniCard: { width: 7, height: 10, borderRadius: 1.5, backgroundColor: 'rgba(245,197,24,0.75)' },
-  timelineMiniLine: { width: 4, height: 1.5, backgroundColor: 'rgba(245,197,24,0.35)' },
-  myTimelineHintLabel: { color: 'rgba(255,255,255,0.45)', fontFamily: Fonts.label, fontSize: 9, textAlign: 'center', marginBottom: 3 },
+  playerChipExpanded: {
+    width: 'auto', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14, gap: 5,
+  },
+  playerChipInitial: { color: '#fff', fontFamily: Fonts.bodyBold, fontSize: FS.sm },
+  playerChipPillText: { color: '#fff', fontFamily: Fonts.bodyBold, fontSize: FS.sm, maxWidth: 80 },
+  playerChipPillStat: { color: 'rgba(255,255,255,0.75)', fontFamily: Fonts.label, fontSize: FS.xs },
 
   // ── Leave dialog ──
   leaveSheet: {
@@ -4096,10 +4106,6 @@ const styles = StyleSheet.create({
   guessRetryText: { color: C.textSubDark, fontFamily: Fonts.label, fontSize: FS.base },
 
 
-  // Coin count in ScoreBar
-  scoreChipCoinIcon: { width: 12, height: 12 },
-  scoreChipCoins: { color: C.textMuted, fontFamily: Fonts.label, fontSize: FS.xs },
-
   // ── Game Over ──
   gameOverLayout: {
     flex: 1,
@@ -4174,44 +4180,32 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.bodyBold,
     fontSize: FS.base,
   },
-  collapsibleBar: {
-    alignItems: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    backgroundColor: 'rgba(0,0,0,0.25)',
+  // ── MyTimelinePanel ──
+  // Closed state: small centered tab at bottom edge (non-intrusive)
+  myTimelinePullTab: {
+    position: 'absolute', alignSelf: 'center',
+    flexDirection: 'column', alignItems: 'center', gap: 2,
+    paddingHorizontal: 24, paddingTop: 5, paddingBottom: 4,
+    backgroundColor: 'rgba(20,20,22,0.92)',
+    borderWidth: 1, borderBottomWidth: 0, borderColor: 'rgba(255,255,255,0.18)',
+    borderTopLeftRadius: R.md, borderTopRightRadius: R.md,
+    zIndex: 20,
   },
-  collapsibleFanWrap: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
+  myTimelinePullHandle: {
+    width: 32, height: 3, borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    marginBottom: 1,
   },
-  collapsibleFanCard: { zIndex: 1 },
-  collapsibleExpandedContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
+  myTimelinePullLabel: {
+    color: 'rgba(255,255,255,0.55)',
+    fontFamily: Fonts.label,
+    fontSize: 8,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
   },
-  collapsedYearCard: {
-    backgroundColor: C.surface,
-    borderRadius: R.md,
-    borderWidth: 1,
-    borderColor: C.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  collapsedYearText: {
-    color: C.ochre,
-    fontFamily: Fonts.bodyBold,
-    fontSize: FS.sm,
-  },
-  // Timeline sheet (absoluteFill overlay)
-  timelineSheetOverlay: {
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.55)',
-  },
-  timelineSheetPanel: {
+  // Open state: full-width panel
+  myTimelinePanelWrap: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
     backgroundColor: C.surfaceHigh,
     borderTopLeftRadius: R.card,
     borderTopRightRadius: R.card,
@@ -4219,41 +4213,29 @@ const styles = StyleSheet.create({
     borderLeftWidth: 2,
     borderRightWidth: 2,
     borderColor: C.ink,
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    gap: 10,
   },
-  timelineSheetHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: C.inkFaint,
-    alignSelf: 'center',
+  myTimelinePanelHeader: {
+    alignItems: 'center',
+    paddingVertical: 10,
   },
-  timelineSheetTitle: {
-    color: C.textPrimary,
-    fontFamily: Fonts.bodyBold,
-    fontSize: FS.base,
-    textAlign: 'center',
-    letterSpacing: 0.3,
-  },
-  timelineSheetScroll: {
+  myTimelinePanelScroll: {
     gap: 8,
     alignItems: 'center',
-    paddingVertical: 4,
-  },
-  // ScoreBar timeline icon button
-  scoreBarTimelineBtn: {
     paddingHorizontal: 12,
-    paddingBottom: 6,
-    alignSelf: 'stretch',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    borderLeftWidth: 1,
-    borderLeftColor: 'rgba(255,255,255,0.10)',
+    paddingTop: 4,
   },
-  scoreBarTimelineBtnText: {
-    fontSize: 18,
+  myTimelinePanelYearCard: {
+    backgroundColor: C.surface,
+    borderRadius: R.md,
+    borderWidth: 1,
+    borderColor: C.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  myTimelinePanelYearText: {
+    color: C.ochre,
+    fontFamily: Fonts.bodyBold,
+    fontSize: FS.sm,
   },
   castFab: {
     position: 'absolute', right: 20,
