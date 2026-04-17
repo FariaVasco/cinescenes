@@ -120,6 +120,7 @@ export default function GameScreen() {
   const challengePanelY = useRef(new Animated.Value(200)).current;
   const leftPanelFade = useRef(new Animated.Value(1)).current;
   const bonusPanelAnim = useRef(new Animated.Value(0)).current;
+  const bgAnim = useRef(new Animated.Value(0)).current; // 0 = parchment, 1 = ink
   const [flyVisible, setFlyVisible] = useState(false);
   const [flyStart, setFlyStart] = useState({ x: 0, y: 0 });
   const floatingCardRef = useRef<any>(null);
@@ -215,6 +216,16 @@ export default function GameScreen() {
     const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
     return () => { show.remove(); hide.remove(); };
   }, []);
+
+  // Animate background: parchment ↔ ink depending on phase.
+  // Revealing = lights going out (700ms); anything else = lights coming back on (500ms).
+  useEffect(() => {
+    Animated.timing(bgAnim, {
+      toValue: currentTurn?.status === 'revealing' ? 1 : 0,
+      duration: currentTurn?.status === 'revealing' ? 700 : 500,
+      useNativeDriver: false,
+    }).start();
+  }, [currentTurn?.status]);
 
   // Suspense → flip → result reveal sequence.
   // Challenges are fetched immediately (for the suspense overlay).
@@ -1476,6 +1487,9 @@ export default function GameScreen() {
     </TouchableOpacity>
   ) : null;
 
+  // Interpolated background — shared by all phases so transitions are continuous.
+  const screenBg = bgAnim.interpolate({ inputRange: [0, 1], outputRange: [C.bg, C.inkBg] });
+
   // ── DRAWING ──
   if (currentTurn.status === 'drawing') {
     const drawingTimeline = amActive ? myTimeline : timeline;
@@ -1492,7 +1506,8 @@ export default function GameScreen() {
     const ctaBottom = Math.round((tlBottomFromBase + PULL_TAB_VISUAL_H) / 2) - 24;
 
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: C.bg }]} edges={['top', 'bottom']}>
+      <SafeAreaView style={[styles.container, { backgroundColor: 'transparent' }]} edges={['top', 'bottom']}>
+        <Animated.View style={[StyleSheet.absoluteFillObject, { backgroundColor: screenBg }]} />
         <View style={styles.gameArea}>
           <View style={styles.timelineAreaFull}>
             {/* Label — absolute top, doesn't affect centering */}
@@ -1561,7 +1576,8 @@ export default function GameScreen() {
       const bonusScale = bonusPanelAnim.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] });
 
       return (
-        <SafeAreaView style={[styles.container, { backgroundColor: C.bg }]} edges={['top', 'bottom']}>
+        <SafeAreaView style={[styles.container, { backgroundColor: 'transparent' }]} edges={['top', 'bottom']}>
+          <Animated.View style={[StyleSheet.absoluteFillObject, { backgroundColor: screenBg }]} />
           <View style={styles.gameArea}>
             <Animated.View style={styles.timelineAreaFull}>
               {amActive ? (
@@ -1728,7 +1744,8 @@ export default function GameScreen() {
     // ── Trailer ended — observer waiting screen ──
     if (trailerEnded && !amActive) {
         return (
-          <SafeAreaView style={[styles.container, { backgroundColor: C.bg }]} edges={['top', 'bottom']}>
+          <SafeAreaView style={[styles.container, { backgroundColor: 'transparent' }]} edges={['top', 'bottom']}>
+            <Animated.View style={[StyleSheet.absoluteFillObject, { backgroundColor: screenBg }]} />
             <View style={styles.gameArea}>
               <View style={styles.timelineAreaFull}>
                 <View style={styles.placePromptRow}>
@@ -2044,7 +2061,8 @@ export default function GameScreen() {
     const showChallengePanel = !amActive && !alreadyDecided;
 
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: C.bg }]} edges={['top', 'bottom']}>
+      <SafeAreaView style={[styles.container, { backgroundColor: 'transparent' }]} edges={['top', 'bottom']}>
+        <Animated.View style={[StyleSheet.absoluteFillObject, { backgroundColor: screenBg }]} />
         <View style={styles.gameArea}>
           <Animated.View style={styles.timelineAreaFull}>
             <Timeline
@@ -2225,7 +2243,8 @@ export default function GameScreen() {
     const revealIcon = activeCorrect ? '🎯' : winningChallenger ? '⚡' : '🗑️';
 
     return (
-      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      <SafeAreaView style={[styles.container, { backgroundColor: 'transparent' }]} edges={['top', 'bottom']}>
+        <Animated.View style={[StyleSheet.absoluteFillObject, { backgroundColor: screenBg }]} />
         <View style={styles.gameArea}>
           <Animated.View style={[styles.timelineAreaFull, { opacity: timelineFade }]}>
             <Timeline
