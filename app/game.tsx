@@ -163,6 +163,8 @@ export default function GameScreen() {
   const introShownRef = useRef(false);
   // Insane mode: current turn's movie may not be in the activeMovies store
   const [movieOverride, setMovieOverride] = useState<Movie | null>(null);
+  // Bottom Y of the drawing-phase timeline wrapper within timelineAreaFull (set by onLayout)
+  const [drawingTLLayoutBottom, setDrawingTLLayoutBottom] = useState(0);
   // Cache of insane mode movies keyed by id (not in activeMovies classic pool)
   const insaneMoviesCacheRef = useRef<Map<string, Movie>>(new Map());
   // Prefetched next-turn movie promise for insane mode — started during challenging phase
@@ -1478,45 +1480,63 @@ export default function GameScreen() {
   if (currentTurn.status === 'drawing') {
     const drawingTimeline = amActive ? myTimeline : timeline;
     const drawingPlacedMovies = amActive ? myPlacedMovies : placedMovies;
+    // Midpoint between timeline bottom and pull tab top (device-specific, uses onLayout measurement)
+    const gameAreaH = screenHeight - insets.top - insets.bottom;
+    // Distance from bottom of timelineAreaFull to bottom of timeline wrapper (measured via onLayout)
+    const tlBottomFromBase = drawingTLLayoutBottom > 0
+      ? gameAreaH - drawingTLLayoutBottom
+      : 80 + Math.max(0, (gameAreaH - 276) / 2); // fallback before first layout
+    // Pull tab visual height (~28dp): paddingTop(5)+handle(4)+gap(2)+label(~13)+paddingBottom(4)
+    const PULL_TAB_VISUAL_H = 28;
+    // CTA center at midpoint; subtract half primary button height (24px)
+    const ctaBottom = Math.round((tlBottomFromBase + PULL_TAB_VISUAL_H) / 2) - 24;
+
     return (
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-        <View style={{ flex: 1, paddingBottom: PULL_TAB_H }}>
-          {/* ── Active player's timeline — main section ── */}
-          <View style={styles.drawingTopSection}>
-            <Text style={styles.drawingTurnLabel}>
+        <View style={styles.gameArea}>
+          <View style={styles.timelineAreaFull}>
+            {/* Label — absolute top, doesn't affect centering */}
+            <Text style={[styles.drawingTurnLabel, { position: 'absolute', top: 8, left: 0, right: 0 }]}>
               {amActive ? 'Your turn' : `${activePlayer?.display_name}'s timeline`}
             </Text>
-            {movie && drawingTimeline.length > 0 && (
-              <Timeline
-                timeline={drawingTimeline}
-                currentCardMovie={movie}
-                interactive={false}
-                selectedInterval={null}
-                onIntervalSelect={() => {}}
-                onConfirm={() => {}}
-                placedMovies={drawingPlacedMovies}
-                hideFloatingCard
-              />
-            )}
-          </View>
-
-          {/* ── CTA ── */}
-          <View style={styles.drawingCTAArea}>
-            {amActive ? (
-              <TouchableOpacity style={styles.primaryBtn} onPress={handleLetsDraw}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <Image source={lcPopcorn} style={{ width: 28, height: 28 }} />
-                  <Text style={styles.primaryBtnText}>Let's Guess</Text>
+            {/* Timeline — minHeight prevents centering jump when going from 0 to 1 card */}
+            <View
+              style={{ minHeight: 148 }}
+              onLayout={e => {
+                const { y, height } = e.nativeEvent.layout;
+                setDrawingTLLayoutBottom(y + height);
+              }}
+            >
+              {movie && (
+                <Timeline
+                  timeline={drawingTimeline}
+                  currentCardMovie={movie}
+                  interactive={false}
+                  selectedInterval={null}
+                  onIntervalSelect={() => {}}
+                  onConfirm={() => {}}
+                  placedMovies={drawingPlacedMovies}
+                  hideFloatingCard
+                />
+              )}
+            </View>
+            {/* CTA — absolute, vertically centered between timeline bottom and pull tab top */}
+            <View style={[styles.drawingCTAArea, { bottom: ctaBottom }]}>
+              {amActive ? (
+                <TouchableOpacity style={styles.primaryBtn} onPress={handleLetsDraw}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <Image source={lcPopcorn} style={{ width: 28, height: 28 }} />
+                    <Text style={styles.primaryBtnText}>Let's Guess</Text>
+                  </View>
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.drawingWaitingRow}>
+                  <Image source={lcHourglass} style={styles.waitingHourglassIcon} tintColor={C.textSubDark} />
+                  <Text style={styles.drawingWaitingText}>{activePlayer?.display_name} is thinking…</Text>
                 </View>
-              </TouchableOpacity>
-            ) : (
-              <View style={styles.drawingWaitingRow}>
-                <Image source={lcHourglass} style={styles.waitingHourglassIcon} tintColor={C.textSubDark} />
-                <Text style={styles.drawingWaitingText}>{activePlayer?.display_name} is thinking…</Text>
-              </View>
-            )}
+              )}
+            </View>
           </View>
-
         </View>
 
         <PlayerChips players={players} myId={myPlayerId} topInset={insets.top} hasCastFab={!!castFab} />
@@ -1551,7 +1571,7 @@ export default function GameScreen() {
                       <Text style={styles.replayLinkText}>↺ Replay</Text>
                     </TouchableOpacity>
                   )}
-                  <View style={styles.timelineHourglassRow}>
+                  <View style={{ position: 'absolute', top: 8, left: 0, right: 0, alignItems: 'center' }}>
                     <HourglassTimer durationMs={30000} size={40} onExpire={handlePlacementTimeout} label="to place the card in the timeline" />
                   </View>
                 </>
@@ -1708,7 +1728,7 @@ export default function GameScreen() {
     // ── Trailer ended — observer waiting screen ──
     if (trailerEnded && !amActive) {
         return (
-          <SafeAreaView style={styles.container}>
+          <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
             <View style={styles.gameArea}>
               <View style={styles.timelineAreaFull}>
                 <View style={styles.placePromptRow}>
@@ -2024,14 +2044,9 @@ export default function GameScreen() {
     const showChallengePanel = !amActive && !alreadyDecided;
 
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <View style={styles.gameArea}>
           <Animated.View style={styles.timelineAreaFull}>
-            {isPickingInterval && (
-              <View style={styles.timelineHourglassRow}>
-                <HourglassTimer durationMs={15000} size={40} onExpire={handlePickerTimeout} />
-              </View>
-            )}
             <Timeline
               timeline={timeline}
               currentCardMovie={movie}
@@ -2054,40 +2069,44 @@ export default function GameScreen() {
                 <Text style={styles.challengeBadgeText}>{badgeText}</Text>
               </View>
             )}
-            {isPickingInterval && !amFirstChallenger && (
-              <TouchableOpacity style={styles.withdrawOverlayBtn} onPress={handleWithdrawChallenge} activeOpacity={0.7}>
-                <Text style={styles.withdrawOverlayBtnText}>↩  Withdraw</Text>
-              </TouchableOpacity>
-            )}
           </Animated.View>
 
+          {/* Challenge/Pass row — in normal flow so timeline is never covered */}
           {showChallengePanel && (
             <Animated.View style={[styles.challengeBottomPanel, { transform: [{ translateY: challengePanelY }] }]}>
-              <View style={styles.challengeHourglassRow}>
-                <HourglassTimer durationMs={10000} onExpire={handlePass} size={48} />
-              </View>
-              <View style={styles.challengeBottomActions}>
-                <TouchableOpacity onPress={handlePass} activeOpacity={0.7} style={styles.passBtn}>
-                  <Text style={styles.passBtnLabel}>Pass</Text>
+              <HourglassTimer durationMs={10000} onExpire={handlePass} size={36} />
+              <TouchableOpacity onPress={handlePass} activeOpacity={0.7} style={styles.passBtn}>
+                <Text style={styles.passBtnLabel}>Pass</Text>
+              </TouchableOpacity>
+              {canChallenge ? (
+                <TouchableOpacity
+                  style={[styles.challengeBtn, !hasCoins && styles.challengeBtnDisabled]}
+                  onPress={hasCoins ? handleChallenge : undefined}
+                  activeOpacity={hasCoins ? 0.8 : 1}
+                >
+                  <Text style={styles.challengeBtnText}>
+                    {hasCoins ? '⚡  Challenge' : 'No coins'}
+                  </Text>
+                  {hasCoins && <Text style={styles.challengeBtnSub}>1 coin</Text>}
                 </TouchableOpacity>
-                {canChallenge ? (
-                  <TouchableOpacity
-                    style={[styles.challengeBtn, !hasCoins && styles.challengeBtnDisabled]}
-                    onPress={hasCoins ? handleChallenge : undefined}
-                    activeOpacity={hasCoins ? 0.8 : 1}
-                  >
-                    <Text style={styles.challengeBtnText}>
-                      {hasCoins ? '⚡  Challenge' : 'No coins'}
-                    </Text>
-                    {hasCoins && <Text style={styles.challengeBtnSub}>1 coin</Text>}
-                  </TouchableOpacity>
-                ) : (
-                  <View style={[styles.challengeBtn, styles.challengeBtnDisabled]}>
-                    <Text style={styles.challengeBtnText}>All spots taken</Text>
-                  </View>
-                )}
-              </View>
+              ) : (
+                <View style={[styles.challengeBtn, styles.challengeBtnDisabled]}>
+                  <Text style={styles.challengeBtnText}>All spots taken</Text>
+                </View>
+              )}
             </Animated.View>
+          )}
+
+          {/* Picking-phase row: hourglass + optional withdraw — in normal flow */}
+          {isPickingInterval && (
+            <View style={styles.challengePickRow}>
+              <HourglassTimer durationMs={15000} size={36} onExpire={handlePickerTimeout} />
+              {!amFirstChallenger && (
+                <TouchableOpacity style={styles.withdrawOverlayBtn} onPress={handleWithdrawChallenge} activeOpacity={0.7}>
+                  <Text style={styles.withdrawOverlayBtnText}>↩  Withdraw</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           )}
         </View>
 
@@ -2201,7 +2220,7 @@ export default function GameScreen() {
     const revealIcon = activeCorrect ? '🎯' : winningChallenger ? '⚡' : '🗑️';
 
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <View style={styles.gameArea}>
           <Animated.View style={[styles.timelineAreaFull, { opacity: timelineFade }]}>
             <Timeline
@@ -3310,8 +3329,10 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   drawingCTAArea: {
-    paddingHorizontal: 32,
-    paddingVertical: 10,
+    position: 'absolute',
+    bottom: PULL_TAB_H + 8, // fallback; overridden inline with dynamic midpoint
+    left: 32,
+    right: 32,
     alignItems: 'center',
   },
   drawingWaitingRow: {
@@ -3330,19 +3351,6 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
     resizeMode: 'contain',
-  },
-  // Animated hourglass — in-flow above the timeline
-  timelineHourglassRow: {
-    position: 'absolute',
-    top: 8,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    zIndex: 1,
-  },
-  challengeHourglassRow: {
-    alignItems: 'center',
-    paddingBottom: 4,
   },
   drawingMySection: {
     maxHeight: 110,
@@ -3385,6 +3393,8 @@ const styles = StyleSheet.create({
   timelineAreaFull: {
     flex: 1,
     justifyContent: 'center',
+    paddingTop: 48,
+    paddingBottom: 80,
   },
 
   placePromptRow: {
@@ -3434,18 +3444,25 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: C.inkSurface,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.10)',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    gap: 12,
-    justifyContent: 'center',
-  },
-  challengeBottomActions: {
-    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     gap: 10,
-    alignItems: 'stretch',
+  },
+  challengePickRow: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    gap: 16,
   },
   passBtn: {
     flex: 1,
@@ -3688,7 +3705,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    bottom: 56, // above score bar
+    bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
   },
