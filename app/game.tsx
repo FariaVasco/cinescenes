@@ -120,6 +120,9 @@ export default function GameScreen() {
   const challengePanelY = useRef(new Animated.Value(200)).current;
   const leftPanelFade = useRef(new Animated.Value(1)).current;
   const bonusPanelAnim = useRef(new Animated.Value(0)).current;
+  // "Lights on" transition: dark overlay that fades away when drawing phase appears after reveal
+  const lightsOnAnim = useRef(new Animated.Value(0)).current;
+  const prevStatusRef = useRef<string | null>(null);
   const [flyVisible, setFlyVisible] = useState(false);
   const [flyStart, setFlyStart] = useState({ x: 0, y: 0 });
   const floatingCardRef = useRef<any>(null);
@@ -216,6 +219,14 @@ export default function GameScreen() {
     const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
     return () => { show.remove(); hide.remove(); };
   }, []);
+
+  // Fade the "lights on" overlay from opaque → transparent when drawing phase appears after reveal.
+  // The setValue(1) happens synchronously in the render body so the first painted frame is already dark.
+  useEffect(() => {
+    if (currentTurn?.status !== 'drawing') return;
+    Animated.timing(lightsOnAnim, { toValue: 0, duration: 700, useNativeDriver: true }).start();
+    return () => lightsOnAnim.stopAnimation();
+  }, [currentTurn?.status]);
 
   // Suspense → flip → result reveal sequence.
   // Challenges are fetched immediately (for the suspense overlay).
@@ -1481,6 +1492,16 @@ export default function GameScreen() {
     </TouchableOpacity>
   ) : null;
 
+  // Synchronous transition detection — must happen before phase returns so the overlay is
+  // dark on the very first painted frame (no 1-frame parchment flash).
+  {
+    const _prev = prevStatusRef.current;
+    prevStatusRef.current = currentTurn?.status ?? null;
+    if (_prev === 'revealing' && currentTurn?.status === 'drawing') {
+      lightsOnAnim.setValue(1);
+    }
+  }
+
   // ── DRAWING ──
   if (currentTurn.status === 'drawing') {
     const drawingTimeline = amActive ? myTimeline : timeline;
@@ -1548,6 +1569,11 @@ export default function GameScreen() {
         {myTimeline.length > 0 && (
           <MyTimelinePanel timeline={myTimeline} cards={myTimelineCards} bottomInset={insets.bottom} screenHeight={screenHeight} />
         )}
+        {/* Lights-on overlay: fades from dark → transparent after reveal */}
+        <Animated.View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFillObject, { backgroundColor: C.inkBg, opacity: lightsOnAnim }]}
+        />
         {leaveModal}
         {castFab}
         {castOverlay}
