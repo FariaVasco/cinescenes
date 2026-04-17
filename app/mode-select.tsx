@@ -286,7 +286,7 @@ export default function ModeSelectScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: C.surfaceHigh },
+  container: { flex: 1, backgroundColor: C.bg },
 
   topBar: {
     flexDirection: 'row',

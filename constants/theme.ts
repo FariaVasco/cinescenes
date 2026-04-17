@@ -25,9 +25,9 @@ export const Fonts = {
 // ─────────────────────────────────────────────────────────────
 export const C = {
   // ── Light surfaces (default) ──────────────────────────────
-  bg:           '#FAFAF7',   // parchment cream — app background
+  bg:           '#C8BFA8',   // warm aged parchment — app background
   surface:      '#FFFFFF',   // cards, panels, inputs
-  surfaceHigh:  '#F0EDE4',   // nav bars, footers, secondary surfaces
+  surfaceHigh:  '#D9D0BE',   // nav bars, footers, secondary surfaces
 
   // ── Dark contexts (trailer, scanner, camera) ──────────────
   inkBg:        '#1A1A1A',   // deep ink — dark screen background

@@ -104,7 +104,7 @@ export default function SignInScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: C.surfaceHigh,
+    backgroundColor: C.bg,
   },
   content: {
     flex: 1,
