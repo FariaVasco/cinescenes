@@ -233,8 +233,8 @@ export default function GameScreen() {
         if (cData) { setLocalChallenges(cData); setChallenges(cData); }
       })();
     }
-    const t1 = setTimeout(() => setRevealPhase('flip'), 2400);
-    const t2 = setTimeout(() => setRevealPhase('result'), 3800);
+    const t1 = setTimeout(() => setRevealPhase('flip'), 3400);
+    const t2 = setTimeout(() => setRevealPhase('result'), 4800);
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [currentTurn?.status]);
 
@@ -2212,6 +2212,11 @@ export default function GameScreen() {
       .filter(c => c.interval_index >= 0)
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
+    const revealChallengerPlacements = challengersForOverlay.map(c => ({
+      interval: c.interval_index,
+      label: getPlayer(c.challenger_id)?.display_name ?? '?',
+    }));
+
     const subLines: string[] = [];
     if (winningChallenger) subLines.push(`Card moves to ${getPlayer(winningChallenger.challenger_id)?.display_name}'s timeline`);
     if (coinBackNames.length > 0) subLines.push(`${coinBackNames.join(', ')} also had it right`);
@@ -2236,6 +2241,7 @@ export default function GameScreen() {
               revealingMovie={revealPhase !== 'suspense' ? m : undefined}
               insertDelay={showChallengerTimeline && revealPhase !== 'suspense' ? 700 : undefined}
               trashAfter={(isTrash || (!!winningChallenger && !showChallengerTimeline)) && revealPhase === 'result' ? 1200 : undefined}
+              challengerPlacements={revealPhase !== 'suspense' ? revealChallengerPlacements : []}
             />
           </Animated.View>
           {showChallengerTimeline && winnerPlayer && (
@@ -2282,6 +2288,9 @@ export default function GameScreen() {
           <SuspenseOverlay
             challengers={challengersForOverlay}
             getPlayer={getPlayer}
+            activePlacedInterval={currentTurn.placed_interval}
+            activePlayerName={activePlayer?.display_name ?? ''}
+            placedMovies={revealPlacedMovies}
           />
         )}
         <ConfettiBurst trigger={winnerId === myPlayerId && revealPhase === 'result'} />
@@ -2502,18 +2511,33 @@ function GameOverScreen({ winner, players, myId }: { winner: Player; players: Pl
 
 // ── Suspense overlay (shown at start of revealing phase) ─────────────────────
 
+function getIntervalLabel(idx: number | null, placedMovies: { year: number }[]): string {
+  if (idx === null || idx === undefined) return '?';
+  if (placedMovies.length === 0) return `gap ${idx + 1}`;
+  if (idx === 0) return `before ${placedMovies[0].year}`;
+  if (idx >= placedMovies.length) return `after ${placedMovies[placedMovies.length - 1].year}`;
+  return `${placedMovies[idx - 1].year} – ${placedMovies[idx].year}`;
+}
+
 const MAX_SUSPENSE_CHALLENGERS = 8;
 
 function SuspenseOverlay({
   challengers,
   getPlayer,
+  activePlacedInterval,
+  activePlayerName,
+  placedMovies,
 }: {
-  challengers: { id: string; challenger_id: string }[];
+  challengers: { id: string; challenger_id: string; interval_index: number }[];
   getPlayer: (id: string | null) => { display_name: string } | null;
+  activePlacedInterval: number | null;
+  activePlayerName: string;
+  placedMovies: { year: number }[];
 }) {
   const bgOpacity = useRef(new Animated.Value(0)).current;
   const countAnim = useRef(new Animated.Value(0)).current;
   const countScale = useRef(new Animated.Value(0.82)).current;
+  const activePlacementAnim = useRef(new Animated.Value(0)).current;
   const nameAnims = useRef(
     Array.from({ length: MAX_SUSPENSE_CHALLENGERS }, () => new Animated.Value(0))
   ).current;
@@ -2524,6 +2548,7 @@ function SuspenseOverlay({
       Animated.delay(100),
       Animated.parallel([
         Animated.timing(countAnim, { toValue: 1, duration: 260, useNativeDriver: true }),
+        Animated.timing(activePlacementAnim, { toValue: 1, duration: 260, useNativeDriver: true }),
         Animated.spring(countScale, { toValue: 1, useNativeDriver: true, friction: 5, tension: 80 }),
       ]),
     ]).start();
@@ -2533,22 +2558,30 @@ function SuspenseOverlay({
         Animated.timing(nameAnims[i], { toValue: 1, duration: 300, useNativeDriver: true }),
       ]).start();
     });
-    // Fade out before phase switches at 2400ms
+    // Fade out before phase switches at 3400ms
     const t = setTimeout(() => {
       Animated.parallel([
         Animated.timing(bgOpacity, { toValue: 0, duration: 350, useNativeDriver: true }),
         Animated.timing(countAnim, { toValue: 0, duration: 350, useNativeDriver: true }),
       ]).start();
-    }, 1900);
+    }, 2900);
     return () => clearTimeout(t);
   }, []);
 
   const count = challengers.length;
+  const activeLabel = getIntervalLabel(activePlacedInterval, placedMovies);
 
   return (
     <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
       <Animated.View style={[StyleSheet.absoluteFillObject, { backgroundColor: '#07041a', opacity: bgOpacity }]} />
       <Animated.View style={[styles.suspenseContent, { opacity: countAnim }]}>
+        {/* Active player's pick — appears with the count */}
+        <Animated.View style={[styles.suspenseBetRow, { opacity: activePlacementAnim }]}>
+          <Text style={styles.suspenseBetName}>{activePlayerName}</Text>
+          <Text style={styles.suspenseBetDot}>·</Text>
+          <Text style={styles.suspenseBetInterval}>{activeLabel}</Text>
+        </Animated.View>
+        <View style={styles.suspenseDivider} />
         <Animated.Text style={[styles.suspenseCount, { transform: [{ scale: countScale }] }]}>
           {count === 0 ? 'No challengers' : count === 1 ? '1 challenger' : `${count} challengers`}
         </Animated.Text>
@@ -2556,9 +2589,11 @@ function SuspenseOverlay({
           {count === 0 ? '— revealing now' : '— let\'s see who\'s right'}
         </Text>
         {challengers.slice(0, MAX_SUSPENSE_CHALLENGERS).map((c, i) => (
-          <Animated.Text key={c.id} style={[styles.suspenseName, { opacity: nameAnims[i] }]}>
-            {getPlayer(c.challenger_id)?.display_name ?? '?'}
-          </Animated.Text>
+          <Animated.View key={c.id} style={[styles.suspenseBetRow, { opacity: nameAnims[i] }]}>
+            <Text style={styles.suspenseBetName}>{getPlayer(c.challenger_id)?.display_name ?? '?'}</Text>
+            <Text style={styles.suspenseBetDot}>·</Text>
+            <Text style={styles.suspenseBetInterval}>{getIntervalLabel(c.interval_index, placedMovies)}</Text>
+          </Animated.View>
         ))}
       </Animated.View>
     </View>
@@ -2724,6 +2759,7 @@ const CONFETTI_COLORS = [
 const PER_CANNON = 45;
 
 function ConfettiBurst({ trigger = true }: { trigger?: boolean }) {
+  const [fired, setFired] = useState(false);
   const makeParticle = (i: number) => {
     const fromRight = i >= PER_CANNON;
     const frac = (i % PER_CANNON) / (PER_CANNON - 1);
@@ -2757,6 +2793,7 @@ function ConfettiBurst({ trigger = true }: { trigger?: boolean }) {
 
   useEffect(() => {
     if (!trigger) return;
+    setFired(true);
     particles.forEach(p => {
       p.anim.setValue(0);
       Animated.timing(p.anim, {
@@ -2768,6 +2805,8 @@ function ConfettiBurst({ trigger = true }: { trigger?: boolean }) {
       }).start();
     });
   }, [trigger]);
+
+  if (!fired) return null;
 
   return (
     <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
@@ -3641,6 +3680,36 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     opacity: 0.85,
   },
+  suspenseBetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  suspenseBetName: {
+    color: C.textPrimaryDark,
+    fontFamily: Fonts.bodyBold,
+    fontSize: FS.xl,
+    opacity: 0.9,
+  },
+  suspenseBetDot: {
+    color: C.ochre,
+    opacity: 0.5,
+    fontFamily: Fonts.label,
+    fontSize: FS.sm,
+  },
+  suspenseBetInterval: {
+    color: C.ochre,
+    fontFamily: Fonts.label,
+    fontSize: FS.sm,
+    letterSpacing: 0.5,
+    opacity: 0.8,
+  },
+  suspenseDivider: {
+    width: 48,
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    marginVertical: 6,
+  },
 
   // ── Reveal result banner ──
   resultBanner: {
@@ -3648,58 +3717,51 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: C.ink,
-    borderTopLeftRadius: R.card,
-    borderTopRightRadius: R.card,
-    borderTopWidth: 3,
-    borderLeftWidth: 2,
-    borderRightWidth: 2,
-    borderColor: C.ochre,
+    backgroundColor: C.inkSurface,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.10)',
     paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 16,
+    paddingVertical: 10,
   },
   resultBannerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
-  resultBannerIconImg: { width: 36, height: 36, resizeMode: 'contain' },
-  resultBannerIconEmoji: { fontSize: 32 },
+  resultBannerIconImg: { width: 26, height: 26, resizeMode: 'contain' },
+  resultBannerIconEmoji: { fontSize: 22 },
   resultBannerText: { flex: 1, gap: 1 },
   resultBannerName: {
     color: C.ochre,
     fontFamily: Fonts.display,
-    fontSize: FS.xl,
-    letterSpacing: 0.3,
+    fontSize: FS.base,
+    letterSpacing: 0.2,
   },
   resultBannerVerb: {
     color: C.textPrimaryDark,
-    fontFamily: Fonts.bodyBold,
-    fontSize: FS.sm,
+    fontFamily: Fonts.body,
+    fontSize: FS.xs,
   },
   resultBannerSub: {
-    color: 'rgba(255,255,255,0.45)',
+    color: 'rgba(255,255,255,0.40)',
     fontFamily: Fonts.label,
     fontSize: FS.xs,
-    marginTop: 2,
+    marginTop: 1,
   },
   resultBannerBtn: {
     backgroundColor: C.ochre,
     borderRadius: R.btn,
-    borderWidth: 2,
-    borderColor: C.ink,
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingVertical: 10,
     alignItems: 'center',
   },
   resultBannerBtnText: { color: C.textOnOchre, fontFamily: Fonts.display, fontSize: FS.sm, letterSpacing: 0.3 },
   resultBannerCountdown: {
     width: 36, height: 36, borderRadius: 18,
-    borderWidth: 2, borderColor: 'rgba(255,255,255,0.25)',
+    borderWidth: 2, borderColor: 'rgba(255,255,255,0.20)',
     alignItems: 'center', justifyContent: 'center',
   },
-  resultBannerCountdownText: { color: 'rgba(255,255,255,0.65)', fontFamily: Fonts.bodyBold, fontSize: FS.base },
+  resultBannerCountdownText: { color: 'rgba(255,255,255,0.55)', fontFamily: Fonts.bodyBold, fontSize: FS.sm },
   challengerTransitionOverlay: {
     position: 'absolute',
     top: 0,
