@@ -120,7 +120,6 @@ export default function GameScreen() {
   const challengePanelY = useRef(new Animated.Value(200)).current;
   const leftPanelFade = useRef(new Animated.Value(1)).current;
   const bonusPanelAnim = useRef(new Animated.Value(0)).current;
-  const bgAnim = useRef(new Animated.Value(0)).current; // 0 = parchment, 1 = ink
   const [flyVisible, setFlyVisible] = useState(false);
   const [flyStart, setFlyStart] = useState({ x: 0, y: 0 });
   const floatingCardRef = useRef<any>(null);
@@ -145,6 +144,7 @@ export default function GameScreen() {
   const betRevealTriggered = useRef(false);
   const betRevealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [revealPhase, setRevealPhase] = useState<'suspense' | 'flip' | 'result'>('suspense');
+  const [revealBgDark, setRevealBgDark] = useState(false);
   const [autoNextCountdown, setAutoNextCountdown] = useState(5);
   const autoNextIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [showChallengerTimeline, setShowChallengerTimeline] = useState(false);
@@ -217,22 +217,13 @@ export default function GameScreen() {
     return () => { show.remove(); hide.remove(); };
   }, []);
 
-  // Animate background: parchment ↔ ink depending on phase.
-  // Revealing = lights going out (700ms); anything else = lights coming back on (500ms).
-  useEffect(() => {
-    Animated.timing(bgAnim, {
-      toValue: currentTurn?.status === 'revealing' ? 1 : 0,
-      duration: currentTurn?.status === 'revealing' ? 700 : 500,
-      useNativeDriver: false,
-    }).start();
-  }, [currentTurn?.status]);
-
   // Suspense → flip → result reveal sequence.
   // Challenges are fetched immediately (for the suspense overlay).
   // Phase timeline: 0ms suspense, 2400ms flip (card visible+flipping), 3800ms result (panel slides up).
   useEffect(() => {
     if (currentTurn?.status !== 'revealing') return;
     setRevealPhase('suspense');
+    setRevealBgDark(false);
     setShowChallengerTimeline(false);
     timelineFade.setValue(1);
     challengerTransitionOpacity.setValue(0);
@@ -246,7 +237,10 @@ export default function GameScreen() {
     }
     const t1 = setTimeout(() => setRevealPhase('flip'), 3400);
     const t2 = setTimeout(() => setRevealPhase('result'), 4800);
-    return () => { clearTimeout(t1); clearTimeout(t2); };
+    // Switch to dark bg when overlay starts fading out — invisible under the overlay,
+    // so when it completes the dark timeline is already visible underneath.
+    const tBg = setTimeout(() => setRevealBgDark(true), 2900);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(tBg); };
   }, [currentTurn?.status]);
 
   // After the result strip appears and the card drifts away from the active player's
@@ -1487,9 +1481,6 @@ export default function GameScreen() {
     </TouchableOpacity>
   ) : null;
 
-  // Interpolated background — shared by all phases so transitions are continuous.
-  const screenBg = bgAnim.interpolate({ inputRange: [0, 1], outputRange: [C.bg, C.inkBg] });
-
   // ── DRAWING ──
   if (currentTurn.status === 'drawing') {
     const drawingTimeline = amActive ? myTimeline : timeline;
@@ -1506,8 +1497,7 @@ export default function GameScreen() {
     const ctaBottom = Math.round((tlBottomFromBase + PULL_TAB_VISUAL_H) / 2) - 24;
 
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: 'transparent' }]} edges={['top', 'bottom']}>
-        <Animated.View style={[StyleSheet.absoluteFillObject, { backgroundColor: screenBg }]} />
+      <SafeAreaView style={[styles.container, { backgroundColor: C.bg }]} edges={['top', 'bottom']}>
         <View style={styles.gameArea}>
           <View style={styles.timelineAreaFull}>
             {/* Label — absolute top, doesn't affect centering */}
@@ -1576,8 +1566,7 @@ export default function GameScreen() {
       const bonusScale = bonusPanelAnim.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] });
 
       return (
-        <SafeAreaView style={[styles.container, { backgroundColor: 'transparent' }]} edges={['top', 'bottom']}>
-          <Animated.View style={[StyleSheet.absoluteFillObject, { backgroundColor: screenBg }]} />
+        <SafeAreaView style={[styles.container, { backgroundColor: C.bg }]} edges={['top', 'bottom']}>
           <View style={styles.gameArea}>
             <Animated.View style={styles.timelineAreaFull}>
               {amActive ? (
@@ -1744,8 +1733,7 @@ export default function GameScreen() {
     // ── Trailer ended — observer waiting screen ──
     if (trailerEnded && !amActive) {
         return (
-          <SafeAreaView style={[styles.container, { backgroundColor: 'transparent' }]} edges={['top', 'bottom']}>
-            <Animated.View style={[StyleSheet.absoluteFillObject, { backgroundColor: screenBg }]} />
+          <SafeAreaView style={[styles.container, { backgroundColor: C.bg }]} edges={['top', 'bottom']}>
             <View style={styles.gameArea}>
               <View style={styles.timelineAreaFull}>
                 <View style={styles.placePromptRow}>
@@ -2061,8 +2049,7 @@ export default function GameScreen() {
     const showChallengePanel = !amActive && !alreadyDecided;
 
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: 'transparent' }]} edges={['top', 'bottom']}>
-        <Animated.View style={[StyleSheet.absoluteFillObject, { backgroundColor: screenBg }]} />
+      <SafeAreaView style={[styles.container, { backgroundColor: C.bg }]} edges={['top', 'bottom']}>
         <View style={styles.gameArea}>
           <Animated.View style={styles.timelineAreaFull}>
             <Timeline
@@ -2243,8 +2230,7 @@ export default function GameScreen() {
     const revealIcon = activeCorrect ? '🎯' : winningChallenger ? '⚡' : '🗑️';
 
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: 'transparent' }]} edges={['top', 'bottom']}>
-        <Animated.View style={[StyleSheet.absoluteFillObject, { backgroundColor: screenBg }]} />
+      <SafeAreaView style={[styles.container, { backgroundColor: revealBgDark ? C.inkBg : C.bg }]} edges={['top', 'bottom']}>
         <View style={styles.gameArea}>
           <Animated.View style={[styles.timelineAreaFull, { opacity: timelineFade }]}>
             <Timeline
@@ -2567,9 +2553,10 @@ function SuspenseOverlay({
   ).current;
 
   useEffect(() => {
-    Animated.timing(bgOpacity, { toValue: 0.93, duration: 220, useNativeDriver: true }).start();
+    // Slow "lights going out" bg fade (700ms), then content reveals once dark
+    Animated.timing(bgOpacity, { toValue: 0.95, duration: 700, useNativeDriver: true }).start();
     Animated.sequence([
-      Animated.delay(100),
+      Animated.delay(750),
       Animated.parallel([
         Animated.timing(countAnim, { toValue: 1, duration: 260, useNativeDriver: true }),
         Animated.timing(activePlacementAnim, { toValue: 1, duration: 260, useNativeDriver: true }),
@@ -2578,7 +2565,7 @@ function SuspenseOverlay({
     ]).start();
     challengers.slice(0, MAX_SUSPENSE_CHALLENGERS).forEach((_, i) => {
       Animated.sequence([
-        Animated.delay(380 + i * 200),
+        Animated.delay(950 + i * 200),
         Animated.timing(nameAnims[i], { toValue: 1, duration: 300, useNativeDriver: true }),
       ]).start();
     });
