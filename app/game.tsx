@@ -1546,7 +1546,7 @@ export default function GameScreen() {
 
         <PlayerChips players={players} myId={myPlayerId} topInset={insets.top} hasCastFab={!!castFab} />
         {myTimeline.length > 0 && (
-          <MyTimelinePanel timeline={myTimeline} cards={myTimelineCards} bottomInset={insets.bottom} screenHeight={screenHeight} dark={false} />
+          <MyTimelinePanel timeline={myTimeline} cards={myTimelineCards} bottomInset={insets.bottom} screenHeight={screenHeight} />
         )}
         {leaveModal}
         {castFab}
@@ -1721,7 +1721,7 @@ export default function GameScreen() {
 
           <PlayerChips players={players} myId={myPlayerId} topInset={insets.top} hasCastFab={!!castFab} />
           {myTimeline.length > 0 && (
-            <MyTimelinePanel timeline={myTimeline} cards={myTimelineCards} bottomInset={insets.bottom} screenHeight={screenHeight} dark={false} />
+            <MyTimelinePanel timeline={myTimeline} cards={myTimelineCards} bottomInset={insets.bottom} screenHeight={screenHeight} />
           )}
           {leaveModal}
           {castFab}
@@ -1769,7 +1769,7 @@ export default function GameScreen() {
             )}
             <PlayerChips players={players} myId={myPlayerId} topInset={insets.top} hasCastFab={!!castFab} />
             {myTimeline.length > 0 && (
-              <MyTimelinePanel timeline={myTimeline} cards={myTimelineCards} bottomInset={insets.bottom} screenHeight={screenHeight} dark={false} />
+              <MyTimelinePanel timeline={myTimeline} cards={myTimelineCards} bottomInset={insets.bottom} screenHeight={screenHeight} />
             )}
             {leaveModal}
             {castFab}
@@ -2064,6 +2064,7 @@ export default function GameScreen() {
               placedMovies={placedMovies}
               challengerPlacements={challengerPlacements}
               blockedIntervals={isPickingInterval ? blockedIntervals : undefined}
+              dark={false}
               hideFloatingCard
             />
             {badgeText && (
@@ -2117,7 +2118,7 @@ export default function GameScreen() {
 
         <PlayerChips players={players} myId={myPlayerId} topInset={insets.top} hasCastFab={!!castFab} />
         {myTimeline.length > 0 && (
-          <MyTimelinePanel timeline={myTimeline} cards={myTimelineCards} bottomInset={insets.bottom} screenHeight={screenHeight} dark={false} />
+          <MyTimelinePanel timeline={myTimeline} cards={myTimelineCards} bottomInset={insets.bottom} screenHeight={screenHeight} />
         )}
         {leaveModal}
         {castFab}
@@ -2363,12 +2364,11 @@ function PlayerChips({ players, myId, topInset, hasCastFab }: { players: Player[
 
 const PULL_TAB_H = 44;
 
-function MyTimelinePanel({ timeline, cards, bottomInset, screenHeight, dark = true }: {
+function MyTimelinePanel({ timeline, cards, bottomInset, screenHeight }: {
   timeline: number[];
   cards: (Movie | undefined)[];
   bottomInset: number;
   screenHeight: number;
-  dark?: boolean;
 }) {
   const maxHeight = screenHeight * 0.5;
   const translateY = useRef(new Animated.Value(maxHeight)).current;
@@ -2402,12 +2402,12 @@ function MyTimelinePanel({ timeline, cards, bottomInset, screenHeight, dark = tr
       {/* Small centered pull tab — visible when closed, non-intrusive */}
       {!isOpen && (
         <TouchableOpacity
-          style={[styles.myTimelinePullTab, { bottom: bottomInset }, !dark && { backgroundColor: C.surface, borderColor: C.borderLight }]}
+          style={[styles.myTimelinePullTab, { bottom: bottomInset }]}
           onPress={open}
           activeOpacity={0.85}
         >
-          <View style={[styles.myTimelinePullHandle, !dark && { backgroundColor: C.inkFaint }]} />
-          <Text style={[styles.myTimelinePullLabel, !dark && { color: C.textMuted }]}>My Timeline</Text>
+          <View style={styles.myTimelinePullHandle} />
+          <Text style={styles.myTimelinePullLabel}>My Timeline</Text>
         </TouchableOpacity>
       )}
 
@@ -3369,13 +3369,13 @@ const styles = StyleSheet.create({
     paddingTop: 16,
   },
   drawingTurnLabel: {
-    color: C.ochre,
+    color: C.textSub,
     fontFamily: Fonts.label,
     fontSize: FS.xs,
     textAlign: 'center',
     letterSpacing: 1,
     textTransform: 'uppercase',
-    opacity: 0.8,
+    opacity: 0.9,
     marginBottom: 2,
   },
   drawingCTAArea: {

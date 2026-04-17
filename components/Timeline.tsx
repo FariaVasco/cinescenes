@@ -36,6 +36,8 @@ interface TimelineProps {
   insertDelay?: number;
   /** When set, the revealingMovie card flies off the screen after this many ms (trash result). */
   trashAfter?: number;
+  /** false = light background (parchment) — label/coin text uses ink instead of ochre. Default true. */
+  dark?: boolean;
 }
 
 export interface TimelineHandle {
@@ -58,7 +60,9 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
   challengerPlacements,
   insertDelay,
   trashAfter,
+  dark = true,
 }, ref) {
+  const labelColor = dark ? C.ochre : C.textSub;
   const scrollRef = useRef<React.ElementRef<typeof ScrollView>>(null);
   const activeGapRef = useRef<View>(null);
 
@@ -267,7 +271,7 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
       }
       return (
         <View key={`gap-${index}`} style={styles.placedMarkerWrap}>
-          <Text style={styles.placedMarkerLabel}>{placedLabel}</Text>
+          <Text style={[styles.placedMarkerLabel, { color: labelColor }]}>{placedLabel}</Text>
           <CardBack width={96} height={120} outlined />
         </View>
       );
@@ -279,8 +283,8 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
       return (
         <View key={`gap-${index}`} style={styles.coinWrap} onStartShouldSetResponder={() => true}>
           {coins.map((coin, i) => (
-            <View key={i} style={styles.coinCircle}>
-              <Text style={styles.coinInitials}>{coin.label.charAt(0).toUpperCase()}</Text>
+            <View key={i} style={[styles.coinCircle, !dark && { borderColor: 'rgba(26,26,26,0.3)', backgroundColor: 'rgba(26,26,26,0.07)' }]}>
+              <Text style={[styles.coinInitials, { color: labelColor }]}>{coin.label.charAt(0).toUpperCase()}</Text>
             </View>
           ))}
         </View>
