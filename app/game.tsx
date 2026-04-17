@@ -1492,7 +1492,7 @@ export default function GameScreen() {
     const ctaBottom = Math.round((tlBottomFromBase + PULL_TAB_VISUAL_H) / 2) - 24;
 
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: C.bg }]} edges={['top', 'bottom']}>
+      <SafeAreaView style={[styles.container, { backgroundColor: '#C8BFA8' }]} edges={['top', 'bottom']}>
         <View style={styles.gameArea}>
           <View style={styles.timelineAreaFull}>
             {/* Label — absolute top, doesn't affect centering */}
@@ -1561,7 +1561,7 @@ export default function GameScreen() {
       const bonusScale = bonusPanelAnim.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] });
 
       return (
-        <SafeAreaView style={[styles.container, { backgroundColor: C.bg }]} edges={['top', 'bottom']}>
+        <SafeAreaView style={[styles.container, { backgroundColor: '#C8BFA8' }]} edges={['top', 'bottom']}>
           <View style={styles.gameArea}>
             <Animated.View style={styles.timelineAreaFull}>
               {amActive ? (
@@ -1728,7 +1728,7 @@ export default function GameScreen() {
     // ── Trailer ended — observer waiting screen ──
     if (trailerEnded && !amActive) {
         return (
-          <SafeAreaView style={[styles.container, { backgroundColor: C.bg }]} edges={['top', 'bottom']}>
+          <SafeAreaView style={[styles.container, { backgroundColor: '#C8BFA8' }]} edges={['top', 'bottom']}>
             <View style={styles.gameArea}>
               <View style={styles.timelineAreaFull}>
                 <View style={styles.placePromptRow}>
@@ -2044,7 +2044,7 @@ export default function GameScreen() {
     const showChallengePanel = !amActive && !alreadyDecided;
 
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: C.bg }]} edges={['top', 'bottom']}>
+      <SafeAreaView style={[styles.container, { backgroundColor: '#C8BFA8' }]} edges={['top', 'bottom']}>
         <View style={styles.gameArea}>
           <Animated.View style={styles.timelineAreaFull}>
             <Timeline
