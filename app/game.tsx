@@ -1492,7 +1492,7 @@ export default function GameScreen() {
     const ctaBottom = Math.round((tlBottomFromBase + PULL_TAB_VISUAL_H) / 2) - 24;
 
     return (
-      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      <SafeAreaView style={[styles.container, { backgroundColor: C.bg }]} edges={['top', 'bottom']}>
         <View style={styles.gameArea}>
           <View style={styles.timelineAreaFull}>
             {/* Label — absolute top, doesn't affect centering */}
@@ -1531,7 +1531,7 @@ export default function GameScreen() {
                 </TouchableOpacity>
               ) : (
                 <View style={styles.drawingWaitingRow}>
-                  <Image source={lcHourglass} style={styles.waitingHourglassIcon} tintColor={C.textSubDark} />
+                  <Image source={lcHourglass} style={styles.waitingHourglassIcon} tintColor={C.textSub} />
                   <Text style={styles.drawingWaitingText}>{activePlayer?.display_name} is thinking…</Text>
                 </View>
               )}
@@ -1541,7 +1541,7 @@ export default function GameScreen() {
 
         <PlayerChips players={players} myId={myPlayerId} topInset={insets.top} hasCastFab={!!castFab} />
         {myTimeline.length > 0 && (
-          <MyTimelinePanel timeline={myTimeline} cards={myTimelineCards} bottomInset={insets.bottom} screenHeight={screenHeight} />
+          <MyTimelinePanel timeline={myTimeline} cards={myTimelineCards} bottomInset={insets.bottom} screenHeight={screenHeight} dark={false} />
         )}
         {leaveModal}
         {castFab}
@@ -1561,7 +1561,7 @@ export default function GameScreen() {
       const bonusScale = bonusPanelAnim.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] });
 
       return (
-        <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+        <SafeAreaView style={[styles.container, { backgroundColor: C.bg }]} edges={['top', 'bottom']}>
           <View style={styles.gameArea}>
             <Animated.View style={styles.timelineAreaFull}>
               {amActive ? (
@@ -1577,7 +1577,7 @@ export default function GameScreen() {
                 </>
               ) : (
                 <View style={styles.placePromptRow}>
-                  <Image source={lcHourglass} style={styles.waitingHourglassIcon} tintColor={C.textSubDark} />
+                  <Image source={lcHourglass} style={styles.waitingHourglassIcon} tintColor={C.textSub} />
                   <Text style={styles.placePromptText}>{`Waiting for ${activePlayer?.display_name}…`}</Text>
                 </View>
               )}
@@ -1716,7 +1716,7 @@ export default function GameScreen() {
 
           <PlayerChips players={players} myId={myPlayerId} topInset={insets.top} hasCastFab={!!castFab} />
           {myTimeline.length > 0 && (
-            <MyTimelinePanel timeline={myTimeline} cards={myTimelineCards} bottomInset={insets.bottom} screenHeight={screenHeight} />
+            <MyTimelinePanel timeline={myTimeline} cards={myTimelineCards} bottomInset={insets.bottom} screenHeight={screenHeight} dark={false} />
           )}
           {leaveModal}
           {castFab}
@@ -1728,11 +1728,11 @@ export default function GameScreen() {
     // ── Trailer ended — observer waiting screen ──
     if (trailerEnded && !amActive) {
         return (
-          <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+          <SafeAreaView style={[styles.container, { backgroundColor: C.bg }]} edges={['top', 'bottom']}>
             <View style={styles.gameArea}>
               <View style={styles.timelineAreaFull}>
                 <View style={styles.placePromptRow}>
-                  <Image source={lcHourglass} style={styles.waitingHourglassIcon} tintColor={C.textSubDark} />
+                  <Image source={lcHourglass} style={styles.waitingHourglassIcon} tintColor={C.textSub} />
                   <Text style={styles.placePromptText}>Waiting for {activePlayer?.display_name} to place the card…</Text>
                 </View>
                 <Timeline
@@ -1764,7 +1764,7 @@ export default function GameScreen() {
             )}
             <PlayerChips players={players} myId={myPlayerId} topInset={insets.top} hasCastFab={!!castFab} />
             {myTimeline.length > 0 && (
-              <MyTimelinePanel timeline={myTimeline} cards={myTimelineCards} bottomInset={insets.bottom} screenHeight={screenHeight} />
+              <MyTimelinePanel timeline={myTimeline} cards={myTimelineCards} bottomInset={insets.bottom} screenHeight={screenHeight} dark={false} />
             )}
             {leaveModal}
             {castFab}
@@ -2044,7 +2044,7 @@ export default function GameScreen() {
     const showChallengePanel = !amActive && !alreadyDecided;
 
     return (
-      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      <SafeAreaView style={[styles.container, { backgroundColor: C.bg }]} edges={['top', 'bottom']}>
         <View style={styles.gameArea}>
           <Animated.View style={styles.timelineAreaFull}>
             <Timeline
@@ -2112,7 +2112,7 @@ export default function GameScreen() {
 
         <PlayerChips players={players} myId={myPlayerId} topInset={insets.top} hasCastFab={!!castFab} />
         {myTimeline.length > 0 && (
-          <MyTimelinePanel timeline={myTimeline} cards={myTimelineCards} bottomInset={insets.bottom} screenHeight={screenHeight} />
+          <MyTimelinePanel timeline={myTimeline} cards={myTimelineCards} bottomInset={insets.bottom} screenHeight={screenHeight} dark={false} />
         )}
         {leaveModal}
         {castFab}
@@ -2358,11 +2358,12 @@ function PlayerChips({ players, myId, topInset, hasCastFab }: { players: Player[
 
 const PULL_TAB_H = 44;
 
-function MyTimelinePanel({ timeline, cards, bottomInset, screenHeight }: {
+function MyTimelinePanel({ timeline, cards, bottomInset, screenHeight, dark = true }: {
   timeline: number[];
   cards: (Movie | undefined)[];
   bottomInset: number;
   screenHeight: number;
+  dark?: boolean;
 }) {
   const maxHeight = screenHeight * 0.5;
   const translateY = useRef(new Animated.Value(maxHeight)).current;
@@ -2395,9 +2396,13 @@ function MyTimelinePanel({ timeline, cards, bottomInset, screenHeight }: {
     <>
       {/* Small centered pull tab — visible when closed, non-intrusive */}
       {!isOpen && (
-        <TouchableOpacity style={[styles.myTimelinePullTab, { bottom: bottomInset }]} onPress={open} activeOpacity={0.85}>
-          <View style={styles.myTimelinePullHandle} />
-          <Text style={styles.myTimelinePullLabel}>My Timeline</Text>
+        <TouchableOpacity
+          style={[styles.myTimelinePullTab, { bottom: bottomInset }, !dark && { backgroundColor: C.surface, borderColor: C.borderLight }]}
+          onPress={open}
+          activeOpacity={0.85}
+        >
+          <View style={[styles.myTimelinePullHandle, !dark && { backgroundColor: C.inkFaint }]} />
+          <Text style={[styles.myTimelinePullLabel, !dark && { color: C.textMuted }]}>My Timeline</Text>
         </TouchableOpacity>
       )}
 
@@ -3381,7 +3386,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   drawingWaitingText: {
-    color: C.textSubDark,
+    color: C.textSub,
     fontFamily: Fonts.label,
     fontSize: FS.sm,
     textAlign: 'center',
@@ -3459,7 +3464,7 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   placePromptText: {
-    color: C.textSubDark,
+    color: C.textSub,
     fontFamily: Fonts.label,
     fontSize: FS.sm,
   },
@@ -3485,9 +3490,9 @@ const styles = StyleSheet.create({
     right: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: C.inkSurface,
+    backgroundColor: C.surface,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.10)',
+    borderTopColor: C.borderLight,
     paddingHorizontal: 16,
     paddingVertical: 10,
     gap: 10,
@@ -3510,10 +3515,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.25)',
+    borderColor: C.borderLight,
   },
   passBtnLabel: {
-    color: C.textSubDark,
+    color: C.textSub,
     fontFamily: Fonts.label,
     fontSize: FS.sm,
   },
@@ -4090,7 +4095,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4, paddingHorizontal: 8,
   },
   replayLinkText: {
-    color: C.textMutedDark, fontFamily: Fonts.label, fontSize: FS.sm,
+    color: C.textMuted, fontFamily: Fonts.label, fontSize: FS.sm,
   },
   bonusFabTip: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
