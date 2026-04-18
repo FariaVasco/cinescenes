@@ -315,7 +315,7 @@ const styles = StyleSheet.create({
 
   // Mode cards
   modeCard: {
-    backgroundColor: C.surface,
+    backgroundColor: C.surfaceWarm,
     borderRadius: R.card,
     paddingVertical: SP.md,
     paddingHorizontal: SP.lg,
@@ -323,9 +323,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: C.ink,
   },
-  modeCardPremium: {
-    backgroundColor: 'rgba(245,197,24,0.04)',
-  },
+  modeCardPremium: {},
   modeCardSelected: {
     borderColor: C.ochre,
     borderWidth: 3,
