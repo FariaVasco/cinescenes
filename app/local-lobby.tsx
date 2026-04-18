@@ -651,7 +651,7 @@ const styles = StyleSheet.create({
   },
   choiceCards: { gap: SP.md },
   choiceCard: {
-    backgroundColor: C.surface, borderRadius: R.card,
+    backgroundColor: C.surfaceWarm, borderRadius: R.card,
     borderWidth: 2, borderColor: C.ink,
     padding: 28, alignItems: 'center', gap: 8,
   },
@@ -690,7 +690,7 @@ const styles = StyleSheet.create({
   },
   input: {
     fontFamily: Fonts.body,
-    backgroundColor: C.surface, borderRadius: R.md,
+    backgroundColor: C.surfaceWarm, borderRadius: R.md,
     borderWidth: 2, borderColor: C.ink,
     color: C.textPrimary, fontSize: FS.md,
     paddingHorizontal: SP.md, paddingVertical: 14,
@@ -708,7 +708,7 @@ const styles = StyleSheet.create({
   },
   codeCard: {
     borderWidth: 2, borderColor: C.ink,
-    borderRadius: R.card, backgroundColor: C.surface,
+    borderRadius: R.card, backgroundColor: C.surfaceWarm,
     paddingHorizontal: SP.xl, paddingVertical: SP.md,
     alignItems: 'center', gap: 4,
   },
@@ -755,7 +755,7 @@ const styles = StyleSheet.create({
   playerList: { flex: 1, paddingHorizontal: SP.lg },
   playerListContent: { gap: 10, paddingBottom: SP.md },
   playerChip: {
-    backgroundColor: C.surface,
+    backgroundColor: C.surfaceWarm,
     borderRadius: R.md, borderWidth: 2, borderColor: C.ink,
     paddingHorizontal: SP.md, paddingVertical: 10,
     flexDirection: 'row', alignItems: 'center', gap: 12,

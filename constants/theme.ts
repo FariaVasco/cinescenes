@@ -27,6 +27,7 @@ export const C = {
   // ── Light surfaces (default) ──────────────────────────────
   bg:           '#C8BFA8',   // warm aged parchment — app background
   surface:      '#FFFFFF',   // cards, panels, inputs
+  surfaceWarm:  '#F2EDE4',   // warm cream — cards/inputs on parchment bg
   surfaceHigh:  '#D9D0BE',   // nav bars, footers, secondary surfaces
 
   // ── Dark contexts (trailer, scanner, camera) ──────────────

@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
     backgroundColor: C.ochre,
   },
   cardSecondary: {
-    backgroundColor: C.surface,
+    backgroundColor: C.surfaceWarm,
   },
   cardIconWrap: {
     marginBottom: 4,

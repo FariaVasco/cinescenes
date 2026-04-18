@@ -393,7 +393,7 @@ const styles = StyleSheet.create({
   },
   visibilityToggle: {
     flexDirection: 'row',
-    backgroundColor: C.surface,
+    backgroundColor: C.surfaceWarm,
     borderRadius: R.md,
     borderWidth: 2,
     borderColor: C.ink,

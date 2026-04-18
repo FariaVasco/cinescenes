@@ -261,7 +261,7 @@ const styles = StyleSheet.create({
 
   // Game card
   gameCard: {
-    backgroundColor: C.surface,
+    backgroundColor: C.surfaceWarm,
     borderRadius: R.card, borderWidth: 2, borderColor: C.ink,
     paddingHorizontal: SP.md, paddingVertical: 16,
     flexDirection: 'row', alignItems: 'center',
@@ -292,7 +292,7 @@ const styles = StyleSheet.create({
     paddingBottom: SP.md,
   },
   inviteCard: {
-    backgroundColor: C.surface,
+    backgroundColor: C.surfaceWarm,
     borderRadius: R.card, borderWidth: 2, borderColor: C.ink,
     padding: SP.md, gap: 10,
   },
