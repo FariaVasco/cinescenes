@@ -1522,7 +1522,7 @@ export default function GameScreen() {
         <View style={styles.gameArea}>
           <View style={styles.timelineAreaFull}>
             {/* Label — absolute top, doesn't affect centering */}
-            <Text style={[styles.drawingTurnLabel, { position: 'absolute', top: 8, left: 0, right: 0 }]}>
+            <Text style={[styles.drawingTurnLabel, { position: 'absolute', top: 20, left: 0, right: 0 }]}>
               {amActive ? 'Your turn' : `${activePlayer?.display_name}'s timeline`}
             </Text>
             {/* Timeline — minHeight prevents centering jump when going from 0 to 1 card */}
@@ -3397,7 +3397,7 @@ const styles = StyleSheet.create({
   drawingTurnLabel: {
     color: C.textSub,
     fontFamily: Fonts.label,
-    fontSize: FS.xs,
+    fontSize: FS.base,
     textAlign: 'center',
     letterSpacing: 1,
     textTransform: 'uppercase',
