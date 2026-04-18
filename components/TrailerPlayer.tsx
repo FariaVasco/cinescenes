@@ -55,6 +55,16 @@ true;
 export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>(
   function TrailerPlayer({ movie, onEnded, onWindowCalculated }, ref) {
     const { width, height } = useWindowDimensions();
+
+    // Compute the largest 16:9 rect that fits within the screen.
+    // In landscape, height is the short side → fit by height.
+    // In portrait, width is the short side → fit by width.
+    const ratio = 16 / 9;
+    const byWidth  = { w: width,                    h: Math.round(width / ratio)  };
+    const byHeight = { w: Math.round(height * ratio), h: height                   };
+    const playerW = byWidth.h <= height ? byWidth.w : byHeight.w;
+    const playerH = byWidth.h <= height ? byWidth.h : byHeight.h;
+
     const [loading, setLoading] = useState(true);
     const [playing, setPlaying] = useState(true);
 
@@ -197,8 +207,8 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
 
         <YoutubePlayer
             ref={playerRef}
-            height={height}
-            width={width}
+            height={playerH}
+            width={playerW}
             videoId={movie.youtube_id!}
             play={playing}
             initialPlayerParams={{
@@ -235,6 +245,8 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   loader: {
     ...StyleSheet.absoluteFillObject,
