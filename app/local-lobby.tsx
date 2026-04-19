@@ -346,6 +346,8 @@ export default function LocalLobbyScreen() {
 
   async function handleStartGame() {
     if (!localGame || localPlayers.length < 1) return;
+    const startedAt = Date.now();
+    const MIN_SPLASH_MS = 1800;
     setLoading(true);
     try {
       let firstTurnMovie!: Movie;
@@ -428,6 +430,13 @@ export default function LocalLobbyScreen() {
       navigatedRef.current = true;
       stopPolling();
       setPlayers(localPlayers);
+
+      // Hold the "Shuffling the deck…" splash for at least MIN_SPLASH_MS so the
+      // user has time to read it, even when DB writes finish in <500 ms.
+      const elapsed = Date.now() - startedAt;
+      const wait = Math.max(MIN_SPLASH_MS - elapsed, 0);
+      if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+
       router.replace('/game');
     } catch (e: any) {
       Alert.alert('Error', e?.message ?? 'Could not start game');

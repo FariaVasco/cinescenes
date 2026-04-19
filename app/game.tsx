@@ -49,6 +49,7 @@ const lcStarburst     = require('../assets/lc-starburst.png');
 const lcFilmReel      = require('../assets/lc-film-reel.png');
 const lcHourglass     = require('../assets/lc-hourglass.png');
 const lcCoin          = require('../assets/lc-coin.png');
+const lcClapperboard  = require('../assets/lc-clapperboard.png');
 
 const REPORT_OPTIONS = [
   { id: 'spoiler',       label: '🎬  Title or info is revealed in the clip' },
@@ -3011,20 +3012,29 @@ function FadePauseOverlay({ visible, onPress, style }: { visible: boolean; onPre
 function BrandedLoader() {
   const fadeIn = useRef(new Animated.Value(0)).current;
   const pulse  = useRef(new Animated.Value(1)).current;
+  const [dots, setDots] = useState('');
   useEffect(() => {
-    Animated.timing(fadeIn, { toValue: 1, duration: 350, useNativeDriver: true }).start();
+    Animated.timing(fadeIn, { toValue: 1, duration: 280, useNativeDriver: true }).start();
     Animated.loop(
       Animated.sequence([
-        Animated.timing(pulse, { toValue: 1.08, duration: 900, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 1,    duration: 900, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1.08, duration: 750, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1,    duration: 750, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
       ])
     ).start();
+    const t = setInterval(() => setDots((d) => (d.length >= 3 ? '' : d + '.')), 400);
+    return () => clearInterval(t);
   }, []);
   return (
-    <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: C.bg, justifyContent: 'center', alignItems: 'center', opacity: fadeIn }]}>
+    <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: C.bg, justifyContent: 'center', alignItems: 'center', gap: 18, opacity: fadeIn }]}>
       <Animated.View style={{ transform: [{ scale: pulse }] }}>
-        <CinescenesMark size={96} />
+        <Image source={lcClapperboard} style={{ width: 96, height: 96, resizeMode: 'contain' }} />
       </Animated.View>
+      <Text style={{ fontFamily: Fonts.display, fontSize: FS.xl, color: C.textPrimary, letterSpacing: 0.4 }}>
+        Shuffling the deck{dots}
+      </Text>
+      <Text style={{ fontFamily: Fonts.body, fontSize: FS.base, color: C.textSub }}>
+        Dealing starting cards
+      </Text>
     </Animated.View>
   );
 }
@@ -3161,6 +3171,21 @@ function GameIntroScreen({
   // swap isn't a hard cut.
   const exitOpacity    = useRef(new Animated.Value(1)).current;
   const exitingRef     = useRef(false);
+  // Parchment curtain that fades out on mount — BrandedLoader has parchment bg
+  // and GameIntroScreen has ink bg; this curtain bridges the two so the swap is
+  // perceived as the parchment darkening, not a hard color cut.
+  const parchmentCurtain = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    Animated.sequence([
+      Animated.delay(120),
+      Animated.timing(parchmentCurtain, {
+        toValue: 0,
+        duration: 520,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
   function fadeOutAndDone() {
     if (exitingRef.current) return;
     exitingRef.current = true;
@@ -3386,6 +3411,13 @@ function GameIntroScreen({
           </SafeAreaView>
         </View>
       </Animated.View>
+
+      {/* Parchment curtain — covers the ink bg on mount, fades out over ~520ms
+          so the handoff from BrandedLoader (parchment) reads as a soft darken. */}
+      <Animated.View
+        pointerEvents="none"
+        style={[StyleSheet.absoluteFillObject, { backgroundColor: C.bg, opacity: parchmentCurtain }]}
+      />
 
     </Animated.View>
   );
