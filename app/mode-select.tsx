@@ -100,10 +100,6 @@ export default function ModeSelectScreen() {
     }
   }
 
-  async function handleAccount() {
-    await presentCustomerCenter();
-  }
-
   function handleSelectCollection(col: Collection) {
     setSelectedCollectionId(col.id);
     setLocalMode('collection');
@@ -141,11 +137,6 @@ export default function ModeSelectScreen() {
       {/* Top bar */}
       <View style={styles.topBar}>
         <BackButton onPress={() => router.back()} style={{ marginHorizontal: 0, marginTop: 0 }} />
-        {authUser && (
-          <TouchableOpacity style={styles.accountBtn} onPress={handleAccount}>
-            <Text style={styles.accountBtnText}>Account</Text>
-          </TouchableOpacity>
-        )}
       </View>
 
       <View style={styles.content}>
@@ -169,7 +160,7 @@ export default function ModeSelectScreen() {
               <View style={styles.checkBadge}><Text style={styles.checkBadgeText}>✓</Text></View>
             )}
           </View>
-          <Text style={styles.modeSub}>500+ curated movies · Safe trailers, no spoilers</Text>
+          <Text style={[styles.modeSub, localMode === 'classic' && styles.modeSubSelected]}>500+ curated movies · Safe trailers, no spoilers</Text>
         </TouchableOpacity>
 
         {/* Insane Mode */}
@@ -188,7 +179,7 @@ export default function ModeSelectScreen() {
               <View style={styles.checkBadge}><Text style={styles.checkBadgeText}>✓</Text></View>
             )}
           </View>
-          <Text style={styles.modeSub}>Every movie ever made · Unverified trailers</Text>
+          <Text style={[styles.modeSub, localMode === 'insane' && styles.modeSubSelected]}>Every movie ever made · Unverified trailers</Text>
           <Text style={styles.modeDisclaimer}>Clips may reveal the title, year, or director — use your judgement</Text>
         </TouchableOpacity>
 
@@ -295,8 +286,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: SP.lg,
     paddingVertical: SP.md,
   },
-  accountBtn: {},
-  accountBtnText: { ...T.caption },
 
   content: {
     flex: 1,
@@ -327,8 +316,9 @@ const styles = StyleSheet.create({
   modeCardSelected: {
     borderColor: C.ochre,
     borderWidth: 3,
-    backgroundColor: 'rgba(245,197,24,0.10)',
+    backgroundColor: C.ochre,
   },
+  modeSubSelected: { color: C.ink },
   modeCardDisabled: { opacity: 0.35 },
 
   modeRow: { flexDirection: 'row', alignItems: 'center', gap: SP.sm },
@@ -368,7 +358,7 @@ const styles = StyleSheet.create({
   checkBadge: {
     width: 22, height: 22,
     borderRadius: 11,
-    backgroundColor: C.ochre,
+    backgroundColor: C.ink,
     borderWidth: 1,
     borderColor: C.ink,
     alignItems: 'center',

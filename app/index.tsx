@@ -6,6 +6,7 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import { C, R, Fonts, FS, SP } from '@/constants/theme';
 import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
+import { presentCustomerCenter } from '@/lib/revenuecat';
 
 const lcClapperboard  = require('@/assets/lc-clapperboard.png');
 const lcFilmReel      = require('@/assets/lc-film-reel.png');
@@ -16,7 +17,7 @@ const lcCard          = require('@/assets/lc-card.png');
 
 export default function LandingScreen() {
   const router = useRouter();
-  const { setActiveMovies } = useAppStore();
+  const { setActiveMovies, authUser } = useAppStore();
 
   useFocusEffect(
     useCallback(() => {
@@ -48,10 +49,17 @@ export default function LandingScreen() {
       <Image source={lcSpinningWheel} style={styles.bgSpinningWheel} pointerEvents="none" />
       <Image source={lcCoin}          style={styles.bgCoin}          pointerEvents="none" />
 
-      {/* Top bar — ? only */}
+      {/* Top bar — Account (left) + ? (right) */}
       <View style={styles.topBar}>
-        <TouchableOpacity style={styles.helpBtn} onPress={() => router.push('/rules')} activeOpacity={0.7}>
-          <Text style={styles.helpBtnText}>?</Text>
+        {authUser ? (
+          <TouchableOpacity style={styles.topBtn} onPress={() => presentCustomerCenter()} activeOpacity={0.7}>
+            <Text style={styles.topBtnText}>Account</Text>
+          </TouchableOpacity>
+        ) : (
+          <View />
+        )}
+        <TouchableOpacity style={styles.topBtn} onPress={() => router.push('/rules')} activeOpacity={0.7}>
+          <Text style={styles.topBtnText}>?</Text>
         </TouchableOpacity>
       </View>
 
@@ -155,23 +163,24 @@ const styles = StyleSheet.create({
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
     paddingTop: SP.sm,
     paddingBottom: SP.xs,
   },
-  helpBtn: {
-    width: 34,
+  topBtn: {
+    minWidth: 34,
     height: 34,
     borderRadius: 17,
     borderWidth: 2,
-    borderColor: C.inkFaint,
+    borderColor: C.inkSoft,
+    paddingHorizontal: SP.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  helpBtnText: {
+  topBtnText: {
     fontFamily: Fonts.display,
     fontSize: FS.base,
-    color: C.textMuted,
+    color: C.textSub,
     lineHeight: 18,
   },
 
@@ -228,7 +237,7 @@ const styles = StyleSheet.create({
     backgroundColor: C.ochre,
   },
   cardSecondary: {
-    backgroundColor: C.surface,
+    backgroundColor: C.surfaceWarm,
   },
   cardIcon: {
     width: 56,
