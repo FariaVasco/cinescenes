@@ -2613,7 +2613,7 @@ function GameOverScreen({ winner, players, myId }: { winner: Player; players: Pl
 // ── Suspense overlay (shown at start of revealing phase) ─────────────────────
 
 function getIntervalLabel(idx: number | null, placedMovies: { year: number }[]): string {
-  if (idx === null || idx === undefined) return '?';
+  if (idx === null || idx === undefined || idx < 0) return '?';
   if (placedMovies.length === 0) return `gap ${idx + 1}`;
   if (idx === 0) return `before ${placedMovies[0].year}`;
   if (idx >= placedMovies.length) return `after ${placedMovies[placedMovies.length - 1].year}`;
