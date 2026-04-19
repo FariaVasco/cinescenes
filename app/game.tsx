@@ -1891,7 +1891,7 @@ export default function GameScreen() {
     }
 
     // In private games, only the host's phone plays the actual video.
-    const showVideo = amHost || game?.visibility === 'public';
+    const showVideo = amHost || amActive || game?.visibility === 'public';
 
     // ── Trailer screen ──
     return (
