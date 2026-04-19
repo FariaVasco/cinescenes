@@ -161,19 +161,25 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
     collapseAnim.setValue(0);
     const t = setTimeout(() => {
       const runAnim = () => {
-        Animated.timing(trashAnim, {
-          toValue: 1,
-          duration: 700,
-          easing: Easing.in(Easing.cubic),
-          useNativeDriver: true,
-        }).start(() => {
-          Animated.timing(collapseAnim, {
+        // Overlap fly-off and slot collapse so the timeline closes while the
+        // card is still in the air — saves ~350ms vs strict sequencing.
+        Animated.parallel([
+          Animated.timing(trashAnim, {
             toValue: 1,
-            duration: 600,
-            easing: Easing.inOut(Easing.quad),
-            useNativeDriver: false,
-          }).start(() => { setTrashGone(true); setTrashOverlay(null); });
-        });
+            duration: 700,
+            easing: Easing.in(Easing.cubic),
+            useNativeDriver: true,
+          }),
+          Animated.sequence([
+            Animated.delay(350),
+            Animated.timing(collapseAnim, {
+              toValue: 1,
+              duration: 600,
+              easing: Easing.inOut(Easing.quad),
+              useNativeDriver: false,
+            }),
+          ]),
+        ]).start(() => { setTrashGone(true); setTrashOverlay(null); });
       };
       // Measure card + wrapper to position the overlay outside the ScrollView
       if (trashCardRef.current && wrapperRef.current) {

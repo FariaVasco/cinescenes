@@ -39,6 +39,7 @@ import { CardBack, CardFront } from '@/components/MovieCard';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { AirPlayButton } from 'airplay-picker';
 import { CloseIcon, PlayIcon, CastToTVIcon } from '@/components/CinemaIcons';
+import { CinescenesMark } from '@/components/CinescenesMark';
 
 const lcTrophy        = require('../assets/lc-trophy.png');
 const lcDirectorsChair = require('../assets/lc-directors-chair.png');
@@ -122,6 +123,9 @@ export default function GameScreen() {
   const bonusPanelAnim = useRef(new Animated.Value(0)).current;
   // "Lights on" transition: dark overlay that fades away when drawing phase appears after reveal
   const lightsOnAnim = useRef(new Animated.Value(0)).current;
+  // "Curtain" transition: fades drawing → black before the trailer mounts so the
+  // parchment → trailer hand-off isn't a hard color swap.
+  const curtainAnim = useRef(new Animated.Value(0)).current;
   const prevStatusRef = useRef<string | null>(null);
   const [flyVisible, setFlyVisible] = useState(false);
   const [flyStart, setFlyStart] = useState({ x: 0, y: 0 });
@@ -173,6 +177,9 @@ export default function GameScreen() {
   const insaneMoviesCacheRef = useRef<Map<string, Movie>>(new Map());
   // Prefetched next-turn movie promise for insane mode — started during challenging phase
   const prefetchedInsaneMovieRef = useRef<Promise<Movie> | null>(null);
+  // Prefetched past-turn movie_ids for standard/collection modes — started during challenging
+  // so the dedup set is ready at next-turn time (saves a ~200-400ms round-trip).
+  const prefetchedPastTurnsRef = useRef<Promise<{ data: { movie_id: string }[] | null }> | null>(null);
 
   const [voiceState, setVoiceState] = useState<'idle' | 'recording' | 'processing' | 'result' | 'error'>('idle');
   const [voiceError, setVoiceError] = useState('');
@@ -313,7 +320,7 @@ export default function GameScreen() {
       if (remaining <= 0) {
         clearInterval(autoNextIntervalRef.current!);
         autoNextIntervalRef.current = null;
-        if (isActive) handleNextTurn();
+        if (isActive) handleNextTurnWithFade();
       }
     }, 1000);
     return () => {
@@ -419,28 +426,34 @@ export default function GameScreen() {
       return;
     }
     db.from('movies').select('*').eq('id', id).single()
-      .then(({ data }) => {
+      .then(({ data }: { data: Movie | null }) => {
         if (data) {
-          insaneMoviesCacheRef.current.set(id, data as Movie);
-          setMovieOverride(data as Movie);
+          insaneMoviesCacheRef.current.set(id, data);
+          setMovieOverride(data);
         } else {
           setMovieOverride(null);
         }
       });
   }, [currentTurn?.movie_id]);
 
-  // Insane mode prefetch: reset on new turn, then kick off next-movie fetch during challenging
+  // Next-turn prefetch: reset on new turn, then kick off next-move data during challenging
   // so it's ready (or nearly ready) by the time handleNextTurn is called.
   useEffect(() => {
     prefetchedInsaneMovieRef.current = null;
+    prefetchedPastTurnsRef.current = null;
     leftPanelFade.setValue(1);
   }, [currentTurn?.id]);
 
   useEffect(() => {
-    if (currentTurn?.status !== 'challenging' || game?.game_mode !== 'insane') return;
-    if (prefetchedInsaneMovieRef.current) return; // already started
-    prefetchedInsaneMovieRef.current = fetchRandomInsaneMovie(db);
-  }, [currentTurn?.status, currentTurn?.id]);
+    if (currentTurn?.status !== 'challenging' || !game) return;
+    if (game.game_mode === 'insane') {
+      if (prefetchedInsaneMovieRef.current) return;
+      prefetchedInsaneMovieRef.current = fetchRandomInsaneMovie(db);
+    } else {
+      if (prefetchedPastTurnsRef.current) return;
+      prefetchedPastTurnsRef.current = db.from('turns').select('movie_id').eq('game_id', game.id) as unknown as Promise<{ data: { movie_id: string }[] | null }>;
+    }
+  }, [currentTurn?.status, currentTurn?.id, game?.game_mode, game?.id]);
 
   // Auto-reveal: trigger when all observers have committed (bypass lock) or when the
   // lock expires with no pending pickers.
@@ -475,7 +488,7 @@ export default function GameScreen() {
     const winningChallenger = challengers.find(c => validIntervals.includes(c.interval_index));
     if (!winningChallenger) return;
     db.from('turns').select('movie_id').eq('game_id', g.id).eq('winner_id', winningChallenger.challenger_id)
-      .then(({ data }) => setWinnerPairs(wonTurnsToPairs(data ?? [])));
+      .then(({ data }: { data: { movie_id: string }[] | null }) => setWinnerPairs(wonTurnsToPairs(data ?? [])));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTurn?.status, currentTurn?.id]);
 
@@ -551,27 +564,37 @@ export default function GameScreen() {
         currentTurnRef.current = latestTurn;
 
         if (turnChanged && freshPlayers) {
-          // Transition the UI immediately — don't block on pair queries.
+          // Await pair queries BEFORE flipping the phase so the first drawing-phase
+          // paint renders with correct placedMovies — no stale-timeline flash when
+          // two movies share a year.
           const fp = freshPlayers as Player[];
           const newActiveId = latestTurn.active_player_id;
+          const [{ data: activeWonTurns }, { data: myWonTurns }] = await Promise.all([
+            db.from('turns').select('movie_id').eq('game_id', gId).eq('winner_id', newActiveId),
+            db.from('turns').select('movie_id').eq('game_id', gId).eq('winner_id', myPlayerId ?? ''),
+          ]) as [{ data: { movie_id: string }[] | null }, { data: { movie_id: string }[] | null }];
+          // Hydrate any referenced movies not yet in the store (insane mode).
+          const allWonIds = [...new Set([
+            ...(activeWonTurns ?? []),
+            ...(myWonTurns ?? []),
+          ].map(t => t.movie_id))];
+          const missingIds = allWonIds.filter(id => !activeMovies.find(m => m.id === id));
+          if (missingIds.length > 0) {
+            const { data: missing } = await db.from('movies').select('*').in('id', missingIds) as { data: Movie[] | null };
+            if (missing?.length) setActiveMovies([...activeMovies, ...missing]);
+          }
+          const nextActivePairs = wonTurnsToPairs(activeWonTurns ?? []);
+          const nextMyPairsFromDB = wonTurnsToPairs(myWonTurns ?? []);
+          setActivePlayerPairs(nextActivePairs);
+          // Only apply DB result if it has MORE pairs than current state.
+          // Prevents a stale myWonTurns query (winner_id write still in-flight)
+          // from overwriting an optimistic update already applied in handleNextTurn.
+          setMyMoviePairs(prev => nextMyPairsFromDB.length > prev.length ? nextMyPairsFromDB : prev);
+          // Now commit turn + players in the same batched render with correct pair state.
           setLocalTurn(latestTurn);
           setCurrentTurn(latestTurn);
           setLocalPlayers(fp);
           setPlayers(fp);
-          // Fetch pair sets in the background and patch state when they land.
-          // myWonTurns re-syncs myMoviePairs in case we won the previous turn but
-          // handleNextTurn didn't run on our device (another device tapped Next first).
-          Promise.all([
-            db.from('turns').select('movie_id').eq('game_id', gId).eq('winner_id', newActiveId),
-            db.from('turns').select('movie_id').eq('game_id', gId).eq('winner_id', myPlayerId ?? ''),
-          ]).then(([{ data: activeWonTurns }, { data: myWonTurns }]) => {
-            setActivePlayerPairs(wonTurnsToPairs(activeWonTurns ?? []));
-            // Only apply DB result if it has MORE pairs than current state.
-            // Prevents a stale myWonTurns query (winner_id write still in-flight)
-            // from overwriting an optimistic update already applied in handleNextTurn.
-            const fromDB = wonTurnsToPairs(myWonTurns ?? []);
-            setMyMoviePairs(prev => fromDB.length > prev.length ? fromDB : prev);
-          });
         } else {
           setLocalTurn(latestTurn);
           setCurrentTurn(latestTurn);
@@ -609,6 +632,9 @@ export default function GameScreen() {
           revealTriggered.current = false;
           nextTurnInProgress.current = false;
           setNextTurnPending(false);
+          // New turn = new drawing phase. Reset the curtain so the trailer-
+          // boundary fade is replayable for the next "Let's Guess".
+          curtainAnim.setValue(0);
           challengeDecisionMade.current = false;
           challengeConfirmedRef.current = false;
           betRevealTriggered.current = false;
@@ -784,6 +810,15 @@ export default function GameScreen() {
 
   async function handleLetsDraw() {
     if (!currentTurn) return;
+    // Close the curtain (parchment → black) BEFORE flipping the phase, so the
+    // trailer's black backdrop continues the fade without a jarring color swap.
+    await new Promise<void>((resolve) => {
+      Animated.timing(curtainAnim, {
+        toValue: 1,
+        duration: 320,
+        useNativeDriver: true,
+      }).start(() => resolve());
+    });
     const optimistic = { ...currentTurn, status: 'placing' as const };
     pendingTurnWrite.current = true;
     setLocalTurn(optimistic);
@@ -1079,6 +1114,22 @@ export default function GameScreen() {
     setTrailerKey(k => k + 1);
   }
 
+  // Wraps handleNextTurn with a "lights out" fade so the reveal→drawing hand-off
+  // is a continuous fade-to-black → fade-from-black instead of a hard swap.
+  // The overlay is rendered in both the reveal and drawing phase trees so the
+  // darkness persists across the phase switch.
+  async function handleNextTurnWithFade() {
+    if (nextTurnInProgress.current) return;
+    await new Promise<void>((resolve) => {
+      Animated.timing(lightsOnAnim, {
+        toValue: 1,
+        duration: 380,
+        useNativeDriver: true,
+      }).start(() => resolve());
+    });
+    handleNextTurn();
+  }
+
   async function handleNextTurn() {
     // Guard: prevent double-tap on this device
     if (nextTurnInProgress.current) return;
@@ -1100,9 +1151,10 @@ export default function GameScreen() {
         db.from('players').select('*').eq('game_id', g.id).order('created_at') as Promise<{ data: Player[] | null }>,
         db.from('turns').select('id').eq('game_id', g.id).neq('status', 'complete').gt('created_at', ct.created_at).limit(1) as Promise<{ data: { id: string }[] | null }>,
         g.game_mode !== 'insane'
-          ? db.from('turns').select('movie_id').eq('game_id', g.id)
+          ? (prefetchedPastTurnsRef.current ?? db.from('turns').select('movie_id').eq('game_id', g.id))
           : Promise.resolve({ data: [] as { movie_id: string }[] }),
       ]);
+      prefetchedPastTurnsRef.current = null;
 
       const movie = (movieResult.data as typeof movieFromCache) ?? null;
       if (!movie) return;
@@ -1289,11 +1341,7 @@ export default function GameScreen() {
   }
 
   if (loading || !currentTurn) {
-    return (
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: C.inkBg, justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color={C.ochre} />
-      </View>
-    );
+    return <BrandedLoader />;
   }
 
   if (showIntro) {
@@ -1502,6 +1550,19 @@ export default function GameScreen() {
     }
   }
 
+  // Persistent overlay stack — rendered as a stable sibling after each phase's
+  // tree so the chips/modals/cast controls don't remount on phase change.
+  // MyTimelinePanel stays inline per-phase because its timeline prop differs
+  // during the reveal-winner optimistic insert.
+  const persistentOverlays = (
+    <>
+      <PlayerChips players={players} myId={myPlayerId} topInset={insets.top} hasCastFab={!!castFab} />
+      {leaveModal}
+      {castFab}
+      {castOverlay}
+    </>
+  );
+
   // ── DRAWING ──
   if (currentTurn.status === 'drawing') {
     const drawingTimeline = amActive ? myTimeline : timeline;
@@ -1518,6 +1579,7 @@ export default function GameScreen() {
     const ctaBottom = Math.round((tlBottomFromBase + PULL_TAB_VISUAL_H) / 2) - 24;
 
     return (
+      <>
       <SafeAreaView style={[styles.container, { backgroundColor: C.bg }]} edges={['top', 'bottom']}>
         <View style={styles.gameArea}>
           <View style={styles.timelineAreaFull}>
@@ -1565,7 +1627,6 @@ export default function GameScreen() {
           </View>
         </View>
 
-        <PlayerChips players={players} myId={myPlayerId} topInset={insets.top} hasCastFab={!!castFab} />
         {myTimeline.length > 0 && (
           <MyTimelinePanel timeline={myTimeline} cards={myTimelineCards} bottomInset={insets.bottom} screenHeight={screenHeight} />
         )}
@@ -1574,10 +1635,14 @@ export default function GameScreen() {
           pointerEvents="none"
           style={[StyleSheet.absoluteFillObject, { backgroundColor: C.inkBg, opacity: lightsOnAnim }]}
         />
-        {leaveModal}
-        {castFab}
-        {castOverlay}
+        {/* Curtain: fades parchment → black before trailer mounts on "Let's Guess" */}
+        <Animated.View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFillObject, { backgroundColor: C.inkBg, opacity: curtainAnim }]}
+        />
       </SafeAreaView>
+      {persistentOverlays}
+      </>
     );
   }
 
@@ -1592,6 +1657,7 @@ export default function GameScreen() {
       const bonusScale = bonusPanelAnim.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] });
 
       return (
+        <>
         <SafeAreaView style={[styles.container, { backgroundColor: C.bg }]} edges={['top', 'bottom']}>
           <View style={styles.gameArea}>
             <Animated.View style={styles.timelineAreaFull}>
@@ -1745,20 +1811,19 @@ export default function GameScreen() {
             </Animated.View>
           )}
 
-          <PlayerChips players={players} myId={myPlayerId} topInset={insets.top} hasCastFab={!!castFab} />
           {myTimeline.length > 0 && (
             <MyTimelinePanel timeline={myTimeline} cards={myTimelineCards} bottomInset={insets.bottom} screenHeight={screenHeight} />
           )}
-          {leaveModal}
-          {castFab}
-          {castOverlay}
         </SafeAreaView>
+        {persistentOverlays}
+        </>
       );
     }
 
     // ── Trailer ended — observer waiting screen ──
     if (trailerEnded && !amActive) {
         return (
+          <>
           <SafeAreaView style={[styles.container, { backgroundColor: C.bg }]} edges={['top', 'bottom']}>
             <View style={styles.gameArea}>
               <View style={styles.timelineAreaFull}>
@@ -1793,14 +1858,12 @@ export default function GameScreen() {
                 </TouchableOpacity>
               </View>
             )}
-            <PlayerChips players={players} myId={myPlayerId} topInset={insets.top} hasCastFab={!!castFab} />
             {myTimeline.length > 0 && (
               <MyTimelinePanel timeline={myTimeline} cards={myTimelineCards} bottomInset={insets.bottom} screenHeight={screenHeight} />
             )}
-            {leaveModal}
-            {castFab}
-            {castOverlay}
           </SafeAreaView>
+          {persistentOverlays}
+          </>
         );
       }
 
@@ -1810,6 +1873,7 @@ export default function GameScreen() {
     if (!amHost && !amActive && game?.visibility !== 'public') {
       const hostPlayer = players[0];
       return (
+        <>
         <View style={styles.endedOverlay}>
           <SafeAreaView style={styles.endedInner} edges={['top', 'bottom']}>
             <View style={styles.endedCenter}>
@@ -1819,10 +1883,9 @@ export default function GameScreen() {
               </Text>
             </View>
           </SafeAreaView>
-          {leaveModal}
-        {castFab}
-        {castOverlay}
         </View>
+        {persistentOverlays}
+        </>
       );
     }
 
@@ -1831,6 +1894,7 @@ export default function GameScreen() {
 
     // ── Trailer screen ──
     return (
+      <>
       <View style={styles.trailerContainer}>
         {/* Video: host's phone only in private games; all phones in public games */}
         {showVideo && (
@@ -1926,15 +1990,13 @@ export default function GameScreen() {
           </SafeAreaView>
         )}
 
-        {/* Pause overlay — active player only, video must be playing */}
-        {amActive && userPaused && showVideo && (
-          <TouchableOpacity
-            style={styles.pauseOverlay}
-            activeOpacity={1}
+        {/* Pause overlay — active player only, video must be playing (fades in/out) */}
+        {amActive && showVideo && (
+          <FadePauseOverlay
+            visible={userPaused}
             onPress={() => { setUserPaused(false); trailerRef.current?.resume(); }}
-          >
-            <PlayIcon size={72} color='rgba(255,255,255,0.9)' />
-          </TouchableOpacity>
+            style={styles.pauseOverlay}
+          />
         )}
 
         {/* Report overlay — absolute layer instead of Modal to avoid WebView/UIKit crash on iOS */}
@@ -1971,9 +2033,6 @@ export default function GameScreen() {
         >
           {snackMessage}
         </Snackbar>
-        {leaveModal}
-        {castFab}
-        {castOverlay}
         {showBetReveal && currentTurn && (
           <BetRevealOverlay
             rows={buildBetRevealRows(currentTurn, [...(timeline ?? [])].sort((a, b) => a - b))}
@@ -1981,6 +2040,8 @@ export default function GameScreen() {
           />
         )}
       </View>
+      {persistentOverlays}
+      </>
     );
   }
 
@@ -2075,6 +2136,7 @@ export default function GameScreen() {
     const showChallengePanel = !amActive && !alreadyDecided;
 
     return (
+      <>
       <SafeAreaView style={[styles.container, { backgroundColor: C.bg }]} edges={['top', 'bottom']}>
         <View style={styles.gameArea}>
           <Animated.View style={styles.timelineAreaFull}>
@@ -2142,14 +2204,12 @@ export default function GameScreen() {
           )}
         </View>
 
-        <PlayerChips players={players} myId={myPlayerId} topInset={insets.top} hasCastFab={!!castFab} />
         {myTimeline.length > 0 && (
           <MyTimelinePanel timeline={myTimeline} cards={myTimelineCards} bottomInset={insets.bottom} screenHeight={screenHeight} />
         )}
-        {leaveModal}
-        {castFab}
-        {castOverlay}
       </SafeAreaView>
+      {persistentOverlays}
+      </>
     );
   }
 
@@ -2257,6 +2317,7 @@ export default function GameScreen() {
     const revealIcon = activeCorrect ? '🎯' : winningChallenger ? '⚡' : '🗑️';
 
     return (
+      <>
       <SafeAreaView style={[styles.container, { backgroundColor: revealBgDark ? C.inkBg : C.bg }]} edges={['top', 'bottom']}>
         <View style={styles.gameArea}>
           <Animated.View style={[styles.timelineAreaFull, { opacity: timelineFade }]}>
@@ -2304,14 +2365,13 @@ export default function GameScreen() {
               resultName={resultName}
               resultText={resultText}
               subLines={subLines}
-              onNext={handleNextTurn}
+              onNext={handleNextTurnWithFade}
               showNext={amActive}
               nextPending={nextTurnPending}
               countdown={autoNextCountdown}
             />
           )}
         </View>
-        <PlayerChips players={players} myId={myPlayerId} topInset={insets.top} hasCastFab={!!castFab} />
         {myTimeline.length > 0 && (
           <MyTimelinePanel timeline={revealMyTimeline} cards={myTimelineCards} bottomInset={insets.bottom} screenHeight={screenHeight} />
         )}
@@ -2326,10 +2386,14 @@ export default function GameScreen() {
           />
         )}
         <ConfettiBurst trigger={winnerId === myPlayerId && revealPhase === 'result'} />
-        {leaveModal}
-        {castFab}
-        {castOverlay}
+        {/* Lights-out overlay — fades 0→1 when handleNextTurnWithFade fires; persists into drawing phase. */}
+        <Animated.View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFillObject, { backgroundColor: C.inkBg, opacity: lightsOnAnim }]}
+        />
       </SafeAreaView>
+      {persistentOverlays}
+      </>
     );
   }
 
@@ -2920,6 +2984,51 @@ function TrashCard({ movie }: { movie: Movie }) {
   );
 }
 
+// ── Pause overlay with fade transition ──
+
+function FadePauseOverlay({ visible, onPress, style }: { visible: boolean; onPress: () => void; style: any }) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(opacity, {
+      toValue: visible ? 1 : 0,
+      duration: 220,
+      useNativeDriver: true,
+    }).start();
+  }, [visible]);
+  return (
+    <Animated.View style={[style, { opacity }]} pointerEvents={visible ? 'auto' : 'none'}>
+      <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onPress}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <PlayIcon size={72} color='rgba(255,255,255,0.9)' />
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
+// ── Branded loader: parchment bg + pulsing clapperboard mark ──
+
+function BrandedLoader() {
+  const fadeIn = useRef(new Animated.Value(0)).current;
+  const pulse  = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    Animated.timing(fadeIn, { toValue: 1, duration: 350, useNativeDriver: true }).start();
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1.08, duration: 900, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1,    duration: 900, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+  return (
+    <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: C.bg, justifyContent: 'center', alignItems: 'center', opacity: fadeIn }]}>
+      <Animated.View style={{ transform: [{ scale: pulse }] }}>
+        <CinescenesMark size={96} />
+      </Animated.View>
+    </Animated.View>
+  );
+}
+
 // ── Game intro: Price Is Right spinning wheel ──
 
 const CARD_W = 72;
@@ -2945,10 +3054,35 @@ const WHEEL_POSITIONS = Array.from({ length: WHEEL_CARD_COUNT }, (_, i) => {
 
 function LandscapePromptScreen({ onDone }: { onDone: () => void }) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width > height;
+  const mountedAtRef = useRef(Date.now());
+  const exitingRef = useRef(false);
+
+  function fadeOutAndDone() {
+    if (exitingRef.current) return;
+    exitingRef.current = true;
+    Animated.timing(fadeAnim, { toValue: 0, duration: 420, useNativeDriver: true }).start(() => onDone());
+  }
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 350, useNativeDriver: true }).start();
-    const t = setTimeout(onDone, 2400);
+  }, []);
+
+  // Dismiss as soon as the device is actually in landscape, but keep a minimum
+  // display time so the prompt doesn't flash and vanish.
+  useEffect(() => {
+    if (!isLandscape) return;
+    const MIN_MS = 900;
+    const elapsed = Date.now() - mountedAtRef.current;
+    const wait = Math.max(MIN_MS - elapsed, 0);
+    const t = setTimeout(fadeOutAndDone, wait);
+    return () => clearTimeout(t);
+  }, [isLandscape]);
+
+  // Fallback: if the user never rotates, auto-dismiss after 4s.
+  useEffect(() => {
+    const t = setTimeout(fadeOutAndDone, 4000);
     return () => clearTimeout(t);
   }, []);
 
@@ -3023,6 +3157,19 @@ function GameIntroScreen({
   const tapHintOpacity = useRef(new Animated.Value(0)).current;
   const screenOpacity  = useRef(new Animated.Value(0)).current;
   const contextOpacity = useRef(new Animated.Value(1)).current;
+  // Fades the whole intro out before handing off to the landscape prompt so the
+  // swap isn't a hard cut.
+  const exitOpacity    = useRef(new Animated.Value(1)).current;
+  const exitingRef     = useRef(false);
+  function fadeOutAndDone() {
+    if (exitingRef.current) return;
+    exitingRef.current = true;
+    Animated.timing(exitOpacity, {
+      toValue: 0,
+      duration: 420,
+      useNativeDriver: true,
+    }).start(() => onDone());
+  }
 
   const wheelRotStr   = wheelRotation.interpolate({
     inputRange:  [0, WHEEL_TOTAL_SPIN],
@@ -3096,14 +3243,14 @@ function GameIntroScreen({
   }, [readyToStart]);
 
   useEffect(() => {
-    if (countdown === 0 && readyToStart) onDone();
+    if (countdown === 0 && readyToStart) fadeOutAndDone();
   }, [countdown]);
 
   // Both screens are always mounted — we switch between them via opacity so that
   // both Animated.Values remain attached to native views throughout (avoids
   // Animated.sequence silently aborting when it tries to animate a detached value).
   return (
-    <View style={introStyles.screen}>
+    <Animated.View style={[introStyles.screen, { opacity: exitOpacity }]}>
 
       {/* ── Context screen (shown first, fades out on "Let's spin!") ── */}
       <Animated.View
@@ -3231,7 +3378,7 @@ function GameIntroScreen({
                 </View>
               )}
               <Text style={introStyles.addedLabel}>Added to your timeline</Text>
-              <TouchableOpacity style={introStyles.startBtn} onPress={onDone} activeOpacity={0.8}>
+              <TouchableOpacity style={introStyles.startBtn} onPress={fadeOutAndDone} activeOpacity={0.8}>
                 <Text style={introStyles.startBtnText}>Let's start playing! 🎬</Text>
               </TouchableOpacity>
               <Text style={introStyles.countdownText}>Auto-starting in {countdown}s</Text>
@@ -3240,7 +3387,7 @@ function GameIntroScreen({
         </View>
       </Animated.View>
 
-    </View>
+    </Animated.View>
   );
 }
 

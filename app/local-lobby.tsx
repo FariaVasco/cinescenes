@@ -13,6 +13,8 @@ import {
   Platform,
   BackHandler,
   ActivityIndicator,
+  Animated,
+  Easing,
 } from 'react-native';
 
 const lcCrown    = require('../assets/lc-crown.png');
@@ -348,23 +350,22 @@ export default function LocalLobbyScreen() {
     try {
       let firstTurnMovie!: Movie;
       const startingMovieIdsList: string[] = [];
+      // One starting movie per player, by index
+      const startingMovies: Movie[] = [];
 
       if (localGame.game_mode === 'insane') {
-        const insaneMoviesBuffer: Movie[] = [];
         const usedYears = new Set<number>();
-        for (const player of localPlayers) {
+        for (const _ of localPlayers) {
           let m: Movie;
           let attempts = 0;
           do { m = await fetchRandomInsaneMovie(db); attempts++; }
           while (usedYears.has(m.year) && attempts < 30);
           usedYears.add(m.year);
           startingMovieIdsList.push(m.id);
-          insaneMoviesBuffer.push(m);
-          await db.from('players').update({ timeline: [m.year], coins: 5 }).eq('id', player.id);
+          startingMovies.push(m);
         }
         firstTurnMovie = await fetchRandomInsaneMovie(db);
-        insaneMoviesBuffer.push(firstTurnMovie);
-        setActiveMovies([...activeMovies, ...insaneMoviesBuffer]);
+        setActiveMovies([...activeMovies, ...startingMovies, firstTurnMovie]);
       } else {
         let pool: typeof activeMovies;
         if (localGame.game_mode === 'collection' && localGame.collection_id) {
@@ -384,9 +385,8 @@ export default function LocalLobbyScreen() {
         }
 
         for (let i = 0; i < localPlayers.length; i++) {
-          const startMovie = pool[i];
-          startingMovieIdsList.push(startMovie.id);
-          await db.from('players').update({ timeline: [startMovie.year], coins: 5 }).eq('id', localPlayers[i].id);
+          startingMovieIdsList.push(pool[i].id);
+          startingMovies.push(pool[i]);
         }
 
         const usedSet = new Set(startingMovieIdsList);
@@ -395,20 +395,29 @@ export default function LocalLobbyScreen() {
       }
 
       const firstPlayer = localPlayers[0];
-      await db.from('games').update({ status: 'active' }).eq('id', localGame.id);
 
+      // Batch all starting-state writes + game activation in parallel. Previously
+      // these ran sequentially (N player updates → N phantom inserts → 1 turn insert),
+      // which meant 2N+2 round-trips. Now it's one round-trip per group.
       setStartingMovieIds(startingMovieIdsList);
-      for (const [i, movieId] of startingMovieIdsList.entries()) {
-        const { error: phantomErr } = await db.from('turns').insert({
-          game_id: localGame.id,
-          active_player_id: localPlayers[i].id,
-          movie_id: movieId,
-          status: 'complete',
-          winner_id: localPlayers[i].id,
-        });
-        if (phantomErr) console.warn('[LOBBY] phantom turn insert failed:', phantomErr.message, phantomErr.code);
-      }
+      const phantomRows = startingMovieIdsList.map((movieId, i) => ({
+        game_id: localGame.id,
+        active_player_id: localPlayers[i].id,
+        movie_id: movieId,
+        status: 'complete',
+        winner_id: localPlayers[i].id,
+      }));
+      const [, , phantomResult] = await Promise.all([
+        db.from('games').update({ status: 'active' }).eq('id', localGame.id),
+        Promise.all(localPlayers.map((p, i) =>
+          db.from('players').update({ timeline: [startingMovies[i].year], coins: 5 }).eq('id', p.id)
+        )),
+        db.from('turns').insert(phantomRows),
+      ]);
+      if (phantomResult.error) console.warn('[LOBBY] phantom turn insert failed:', phantomResult.error.message);
 
+      // Insert the first real turn AFTER phantom rows exist so the poll() query
+      // (newest non-complete turn) can't ever return before the phantom backfill.
       await db.from('turns').insert({
         game_id: localGame.id,
         active_player_id: firstPlayer.id,
@@ -530,6 +539,7 @@ export default function LocalLobbyScreen() {
             <Text style={styles.waitingForHostText}>Waiting for host to start…</Text>
           </View>
         )}
+        {loading && localIsHost && <HandoffSplash />}
       </SafeAreaView>
     );
   }
@@ -616,6 +626,56 @@ export default function LocalLobbyScreen() {
     </SafeAreaView>
   );
 }
+
+// ── Handoff splash: themed overlay shown while the host starts the game ──
+
+function HandoffSplash() {
+  const fadeIn = useRef(new Animated.Value(0)).current;
+  const pulse  = useRef(new Animated.Value(1)).current;
+  const [dots, setDots] = useState('');
+  useEffect(() => {
+    Animated.timing(fadeIn, { toValue: 1, duration: 280, useNativeDriver: true }).start();
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1.08, duration: 750, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1,    duration: 750, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      ])
+    ).start();
+    const t = setInterval(() => setDots((d) => (d.length >= 3 ? '' : d + '.')), 400);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <Animated.View style={[StyleSheet.absoluteFillObject, handoffStyles.wrap, { opacity: fadeIn }]}>
+      <Animated.View style={{ transform: [{ scale: pulse }] }}>
+        <Image source={lcClapperboard} style={handoffStyles.icon} />
+      </Animated.View>
+      <Text style={handoffStyles.title}>Shuffling the deck{dots}</Text>
+      <Text style={handoffStyles.subtitle}>Dealing starting cards</Text>
+    </Animated.View>
+  );
+}
+
+const handoffStyles = StyleSheet.create({
+  wrap: {
+    backgroundColor: C.bg,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 18,
+    zIndex: 100,
+  },
+  icon: { width: 96, height: 96, resizeMode: 'contain' },
+  title: {
+    fontFamily: Fonts.display,
+    fontSize: FS.xl,
+    color: C.textPrimary,
+    letterSpacing: 0.4,
+  },
+  subtitle: {
+    fontFamily: Fonts.body,
+    fontSize: FS.base,
+    color: C.textSub,
+  },
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
