@@ -187,8 +187,8 @@ const styles = StyleSheet.create({
   // Hero
   hero: {
     alignItems: 'center',
-    paddingTop: SP.lg,
-    paddingBottom: SP.xl,
+    paddingTop: SP.sm,
+    paddingBottom: SP.md,
     gap: SP.sm,
   },
   logoIcon: {

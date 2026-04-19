@@ -700,6 +700,7 @@ const styles = StyleSheet.create({
   choiceCenter: {
     flex: 1, justifyContent: 'center',
     paddingHorizontal: SP.lg, gap: SP.lg,
+    paddingTop: SP.sm,
   },
   choiceHeader: { gap: 4 },
   sectionLabel: {
@@ -722,7 +723,7 @@ const styles = StyleSheet.create({
   choiceCard: {
     backgroundColor: C.surfaceWarm, borderRadius: R.card,
     borderWidth: 2, borderColor: C.ink,
-    padding: 28, alignItems: 'center', gap: 8,
+    padding: 20, alignItems: 'center', gap: 8,
   },
   choiceCardPrimary: { backgroundColor: C.ochre },
   choiceCardTitle: {

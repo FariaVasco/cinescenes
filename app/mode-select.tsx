@@ -3,7 +3,7 @@ import {
   View, Text, TouchableOpacity, StyleSheet, Modal,
   ScrollView, ActivityIndicator, Image,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { C, R, T, SP, Fonts, FS } from '@/constants/theme';
@@ -38,6 +38,7 @@ const DECOS = [
 ];
 
 export default function ModeSelectScreen() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { displayName } = useLocalSearchParams<{ displayName?: string }>();
   const {
@@ -243,7 +244,7 @@ export default function ModeSelectScreen() {
         onRequestClose={() => setCollectionPickerVisible(false)}
       >
         <View style={styles.overlay}>
-          <View style={styles.sheet}>
+          <View style={[styles.sheet, { paddingBottom: Math.max(SP.xl, insets.bottom + SP.md) }]}>
             <View style={styles.handle} />
             <Text style={styles.sheetOverline}>SELECT A COLLECTION</Text>
             <Text style={styles.sheetTitle}>What's tonight's theme?</Text>
@@ -426,7 +427,6 @@ const styles = StyleSheet.create({
     borderRightWidth: 2,
     borderColor: C.ink,
     padding: SP.lg,
-    paddingBottom: SP.xl,
     alignItems: 'center',
     gap: SP.md,
     maxHeight: '70%',
