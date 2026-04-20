@@ -51,13 +51,9 @@ export default function LandingScreen() {
 
       {/* Top bar — Account (left) + ? (right) */}
       <View style={styles.topBar}>
-        {authUser ? (
-          <TouchableOpacity style={styles.topBtn} onPress={() => presentCustomerCenter()} activeOpacity={0.7}>
-            <Text style={styles.topBtnText}>Account</Text>
-          </TouchableOpacity>
-        ) : (
-          <View />
-        )}
+        <TouchableOpacity style={styles.topBtn} onPress={() => presentCustomerCenter()} activeOpacity={0.7}>
+          <Text style={styles.topBtnText}>Account</Text>
+        </TouchableOpacity>
         <TouchableOpacity style={styles.topBtn} onPress={() => router.push('/rules')} activeOpacity={0.7}>
           <Text style={styles.topBtnText}>?</Text>
         </TouchableOpacity>

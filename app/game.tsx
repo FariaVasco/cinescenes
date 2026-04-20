@@ -147,6 +147,10 @@ export default function GameScreen() {
   // Floor for myTimeline: set when we win a card so the interval poll can't briefly
   // show a timeline missing the just-won card while the DB write is still in-flight.
   const myTimelineFloorRef = useRef<number[] | null>(null);
+  // Tracks previous placed_interval so the host can detect a non-null→null reset (= replay request).
+  const prevPlacedIntervalRef = useRef<number | null | undefined>(undefined);
+  // Prevents the challenger-timeline transition from being armed more than once per result phase.
+  const challengerSwitchArmed = useRef(false);
   const [showBetReveal, setShowBetReveal] = useState(false);
   const [betRevealCount, setBetRevealCount] = useState(0);
   const betRevealTriggered = useRef(false);
@@ -265,12 +269,18 @@ export default function GameScreen() {
   // After the result strip appears and the card drifts away from the active player's
   // timeline, transition to the challenger's timeline with a named overlay so everyone
   // knows whose timeline they're about to see.
+  // NOTE: `challenges` is in the dep array because it is fetched async at reveal start —
+  // if it hasn't landed by the time revealPhase becomes 'result' (4800ms in), the effect
+  // would see an empty array and bail early. Adding it here lets it re-fire once challenges
+  // arrive. `challengerSwitchArmed` prevents the timer from being set up twice.
   useEffect(() => {
     if (revealPhase !== 'result') {
       setShowChallengerTimeline(false);
       challengerTransitionOpacity.setValue(0);
+      challengerSwitchArmed.current = false;
       return;
     }
+    if (challengerSwitchArmed.current) return; // timer already running
     const ct = currentTurnRef.current;
     const m = movie;
     if (!ct || !m) return;
@@ -281,7 +291,8 @@ export default function GameScreen() {
       .filter(c => c.interval_index >= 0)
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
       .find(c => validIntervals.includes(c.interval_index));
-    if (!wc) return; // trashed — no switch needed
+    if (!wc) return; // trashed or challenges not yet loaded — will re-run when challenges arrive
+    challengerSwitchArmed.current = true;
     // Wait for the card drift animation to finish (trashAfter=1200 + 700ms fly = 1900ms),
     // then show challenger name overlay, then cross-fade to their timeline.
     const innerTimers: ReturnType<typeof setTimeout>[] = [];
@@ -303,7 +314,8 @@ export default function GameScreen() {
       clearTimeout(t);
       innerTimers.forEach(clearTimeout);
     };
-  }, [revealPhase]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revealPhase, challenges]);
 
   // Auto-advance to next turn 5 s after result appears (active player can still tap Next early)
   useEffect(() => {
@@ -382,6 +394,12 @@ export default function GameScreen() {
     const amHost = players.length > 0 && players[0].id === myPlayerId;
     if (trailerEnded && !readyToPlace && amActive) {
       setReadyToPlace(true); // skip guess screen — panel lives on placement screen
+    } else if (!trailerEnded && !readyToPlace && amActive && !amHost
+        && game?.visibility !== 'public'
+        && currentTurn?.placed_interval === -1) {
+      // Host's trailer ended and they wrote placed_interval=-1; advance the active
+      // non-host player to the placing screen without them pressing "I know it!".
+      setTrailerEnded(true);
     } else if (trailerEnded && !readyToPlace && !amActive && amHost
         && game?.visibility !== 'public'
         && currentTurn?.placed_interval === null) {
@@ -397,6 +415,25 @@ export default function GameScreen() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trailerEnded, readyToPlace, myPlayerId, currentTurn?.active_player_id, currentTurn?.status, currentTurn?.placed_interval, loading]);
+
+  // Host-side: detect when the active player (non-host, private game) resets placed_interval
+  // back to null after it was set — that's the signal that they want a replay.
+  useEffect(() => {
+    const curr = currentTurn?.placed_interval ?? null;
+    const prev = prevPlacedIntervalRef.current;
+    prevPlacedIntervalRef.current = curr;
+    const isHost = players.length > 0 && players[0].id === myPlayerId;
+    const isActive = myPlayerId === currentTurn?.active_player_id;
+    // Only act if: host, not their turn, private game, trailer already ended on host,
+    // and placed_interval just went from non-null back to null (= replay request).
+    if (isHost && !isActive && game?.visibility !== 'public'
+        && trailerEnded && prev !== undefined && prev !== null && curr === null) {
+      setTrailerEnded(false);
+      setUserPaused(false);
+      setTrailerKey(k => k + 1);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentTurn?.placed_interval]);
 
   // Skip-trailer gate: for public games, the active player must watch at least half
   // the safe window before "I know it!" becomes tappable.
@@ -632,6 +669,8 @@ export default function GameScreen() {
           challengeWindowStart.current = null;
           revealTriggered.current = false;
           nextTurnInProgress.current = false;
+          prevPlacedIntervalRef.current = undefined;
+          challengerSwitchArmed.current = false;
           setNextTurnPending(false);
           // New turn = new drawing phase. Reset the curtain so the trailer-
           // boundary fade is replayable for the next "Let's Guess".
@@ -700,7 +739,7 @@ export default function GameScreen() {
             challengeWindowStart.current = (allDecided && allSettled) ? Date.now() - 14000 : Date.now();
           }
           const elapsed = Date.now() - challengeWindowStart.current;
-          if ((allDecided && allSettled) || (elapsed > 6500 && allSettled) || elapsed > 15000) {
+          if ((allDecided && allSettled) || (elapsed > 10000 && allSettled) || elapsed > 15000) {
             revealTriggered.current = true;
             betRevealTriggered.current = true;
             setShowBetReveal(true);
@@ -1121,6 +1160,16 @@ export default function GameScreen() {
   // darkness persists across the phase switch.
   async function handleNextTurnWithFade() {
     if (nextTurnInProgress.current) return;
+    // Acquire the lock and kill the auto-advance countdown BEFORE the fade.
+    // Otherwise a countdown tick can fire handleNextTurnWithFade again after
+    // the first handleNextTurn completes and releases the lock — inserting a
+    // spurious successor turn that reverts the active player.
+    nextTurnInProgress.current = true;
+    setNextTurnPending(true);
+    if (autoNextIntervalRef.current) {
+      clearInterval(autoNextIntervalRef.current);
+      autoNextIntervalRef.current = null;
+    }
     await new Promise<void>((resolve) => {
       Animated.timing(lightsOnAnim, {
         toValue: 1,
@@ -1132,10 +1181,18 @@ export default function GameScreen() {
   }
 
   async function handleNextTurn() {
-    // Guard: prevent double-tap on this device
-    if (nextTurnInProgress.current) return;
-    nextTurnInProgress.current = true;
-    setNextTurnPending(true);
+    // Acquire the lock if we weren't called from handleNextTurnWithFade (which
+    // already acquired it). Without this branch, the fade-path call would hit
+    // the guard and return early.
+    if (!nextTurnInProgress.current) {
+      nextTurnInProgress.current = true;
+      setNextTurnPending(true);
+      if (autoNextIntervalRef.current) {
+        clearInterval(autoNextIntervalRef.current);
+        autoNextIntervalRef.current = null;
+      }
+    }
+    let succeeded = false;
     try {
       const g = game;
       // Use the ref so we never act on a stale closure value
@@ -1201,6 +1258,9 @@ export default function GameScreen() {
       const { data: existingNext } = existingNextResult;
       if (existingNext && existingNext.length > 0) {
         await poll();
+        // Another device already advanced — the game moved forward, so treat
+        // this as a success (poll's turnChanged branch will reset the lock).
+        succeeded = true;
         return;
       }
 
@@ -1247,6 +1307,7 @@ export default function GameScreen() {
             setPlayers(updatedPlayers);
             setGameOver({ ...winner, timeline: winnerNewTimeline });
             stopPolling();
+            succeeded = true;
             return;
           }
         }
@@ -1298,6 +1359,16 @@ export default function GameScreen() {
         nextMovieId = nextMovie.id;
       }
 
+      // Mark the outgoing turn 'complete' (with winner_id if any) BEFORE inserting
+      // the successor. The partial unique index turns_one_live_per_game_idx only
+      // allows one non-complete turn per game, so the old turn must exit the live
+      // set before the new one enters it. Combining status + winner_id in one
+      // update also means observer polls see a consistent winner_id whenever the
+      // new turn becomes visible.
+      const oldTurnUpdate: { status: 'complete'; winner_id?: string } = { status: 'complete' };
+      if (winnerId) oldTurnUpdate.winner_id = winnerId;
+      await db.from('turns').update(oldTurnUpdate).eq('id', ct.id);
+
       const { error: insertError } = await db.from('turns').insert({
         game_id: g.id,
         active_player_id: nextPlayer.id,
@@ -1305,33 +1376,43 @@ export default function GameScreen() {
         status: 'drawing',
       });
       if (insertError) {
+        // 23505 = unique_violation from turns_one_live_per_game_idx: another
+        // device already inserted the successor turn. Sync UI and exit cleanly.
+        if (insertError.code === '23505') {
+          await poll();
+          succeeded = true;
+          return;
+        }
         console.warn('[NXT] insert failed:', insertError.message, insertError.code);
         return;
       }
 
-      // New turn is in the DB — clear the spinner immediately.
-      nextTurnInProgress.current = false;
-      setNextTurnPending(false);
+      // Mark success as soon as the new turn is committed. The timeline write
+      // below can run async; the lock stays held until poll() → turnChanged
+      // resets it (line 634). This prevents a stale auto-advance tick from
+      // firing a second handleNextTurn in the window after finally releases
+      // but before poll has applied the new turn state locally.
+      succeeded = true;
 
-      // Await winner_id + timeline writes in parallel before firing poll.
-      // winner_id must be committed before poll so observer background queries
-      // (eq('winner_id', activePlayerId)) always see the just-won card. Running
-      // both writes together adds no extra latency vs awaiting timeline alone.
-      if (winnerId) {
-        await Promise.all([
-          db.from('turns').update({ winner_id: winnerId }).eq('id', ct.id),
-          winnerNewTimeline
-            ? db.from('players').update({ timeline: winnerNewTimeline }).eq('id', winnerId)
-            : Promise.resolve(),
-        ]);
+      // Timeline write runs AFTER the new turn is visible, to avoid the
+      // double-card flash where an observer sees the winner's updated timeline
+      // while currentTurn is still the old revealing turn (card appears both in
+      // reveal view and in the timeline). The previous turn is now 'complete'
+      // so the newest non-complete turn is always the new drawing turn.
+      if (winnerId && winnerNewTimeline) {
+        await db.from('players').update({ timeline: winnerNewTimeline }).eq('id', winnerId);
         if (winnerId === myPlayerId) myTimelineFloorRef.current = null;
       }
       // Fire-and-forget: sync all devices.
       poll();
     } finally {
-      // Safety net for error paths and early returns.
-      nextTurnInProgress.current = false;
       setNextTurnPending(false);
+      // Only release the lock on failure. On success, the lock stays set so a
+      // queued auto-advance tick (or repeat tap during the async poll window)
+      // cannot trigger another handleNextTurn before currentTurnRef is updated.
+      // poll()'s turnChanged branch (line ~634) resets the lock when the new
+      // turn is visible locally.
+      if (!succeeded) nextTurnInProgress.current = false;
     }
   }
 
@@ -1471,6 +1552,9 @@ export default function GameScreen() {
               : activeMovies[Math.floor(Math.random() * activeMovies.length)];
             leaveNextMovieId = nextMovie.id;
           }
+          // Mark the abandoned turn as 'complete' first so the turns_one_live_per_game
+          // unique index allows the successor insert. winner_id stays null (no card awarded).
+          await db.from('turns').update({ status: 'complete' }).eq('id', ct.id);
           await db.from('turns').insert({
             game_id: g.id,
             active_player_id: nextPlayer.id,
@@ -1578,14 +1662,18 @@ export default function GameScreen() {
     const PULL_TAB_VISUAL_H = 28;
     // CTA center at midpoint; subtract half primary button height (24px)
     const ctaBottom = Math.round((tlBottomFromBase + PULL_TAB_VISUAL_H) / 2) - 24;
+    const activePlayerIdx = players.findIndex(p => p.id === currentTurn.active_player_id);
+    const activePlayerColor = activePlayerIdx >= 0
+      ? PLAYER_CHIP_COLORS[activePlayerIdx % PLAYER_CHIP_COLORS.length]
+      : C.textSub;
 
     return (
       <>
       <SafeAreaView style={[styles.container, { backgroundColor: C.bg }]} edges={['top', 'bottom']}>
         <View style={styles.gameArea}>
           <View style={styles.timelineAreaFull}>
-            {/* Label — absolute top, doesn't affect centering */}
-            <Text style={[styles.drawingTurnLabel, { position: 'absolute', top: 20, left: 0, right: 0 }]}>
+            {/* Label — flows just above cards; both centered as a group */}
+            <Text style={[styles.drawingTurnLabel, { color: activePlayerColor }]}>
               {amActive ? 'Your turn' : `${activePlayer?.display_name}'s timeline`}
             </Text>
             {/* Timeline — minHeight prevents centering jump when going from 0 to 1 card */}
@@ -1665,7 +1753,24 @@ export default function GameScreen() {
               {amActive ? (
                 <>
                   {!hasReplayed && (
-                    <TouchableOpacity onPress={handleReplayBonus} style={styles.replayLink} activeOpacity={0.7}>
+                    <TouchableOpacity
+                      onPress={async () => {
+                        if (amHost || game?.visibility === 'public') {
+                          handleReplayBonus();
+                        } else {
+                          // Reset placed_interval → null so the host detects a replay request on next poll.
+                          // Host's useEffect fires when it sees non-null→null while trailerEnded=true.
+                          setHasReplayed(true);
+                          setReadyToPlace(false);
+                          setTrailerEnded(false);
+                          if (currentTurn) {
+                            await db.from('turns').update({ placed_interval: null }).eq('id', currentTurn.id);
+                          }
+                        }
+                      }}
+                      style={styles.replayLink}
+                      activeOpacity={0.7}
+                    >
                       <Text style={styles.replayLinkText}>↺ Replay</Text>
                     </TouchableOpacity>
                   )}
@@ -1673,6 +1778,10 @@ export default function GameScreen() {
                     <HourglassTimer durationMs={30000} size={40} onExpire={handlePlacementTimeout} label="to place the card in the timeline" />
                   </View>
                 </>
+              ) : !amActive && amHost && game?.visibility !== 'public' && !hasReplayed ? (
+                <TouchableOpacity onPress={handleReplayBonus} style={[styles.replayLink, { alignSelf: 'center', marginTop: 8 }]} activeOpacity={0.7}>
+                  <Text style={styles.replayLinkText}>↺ Replay</Text>
+                </TouchableOpacity>
               ) : (
                 <View style={styles.placePromptRow}>
                   <Image source={lcHourglass} style={styles.waitingHourglassIcon} tintColor={C.textSub} />
@@ -1891,7 +2000,7 @@ export default function GameScreen() {
     }
 
     // In private games, only the host's phone plays the actual video.
-    const showVideo = amHost || amActive || game?.visibility === 'public';
+    const showVideo = amHost || game?.visibility === 'public';
 
     // ── Trailer screen ──
     return (
@@ -1951,13 +2060,7 @@ export default function GameScreen() {
         {/* Controls: active player not watching video (private game, not host) — centered */}
         {amActive && !showVideo && (
           <SafeAreaView style={styles.activeNoVideoOverlay} edges={['top', 'bottom', 'left', 'right']} pointerEvents="box-none">
-            {/* Report — top right, secondary utility action */}
-            <View style={styles.activeNoVideoTopBar}>
-              <View />
-              <TouchableOpacity style={styles.reportButton} onPress={() => setShowReportDialog(true)}>
-                <Text style={styles.reportButtonText}>⚑ Report</Text>
-              </TouchableOpacity>
-            </View>
+            <View />
             {/* Primary CTA — centered */}
             <View style={styles.activeNoVideoCenter}>
               <Text style={styles.watchingBadgeText}>🎬 Trailer is on {players[0]?.display_name}'s screen</Text>
@@ -1977,17 +2080,27 @@ export default function GameScreen() {
                 <Text style={styles.knowItBtnText}>I know it! →</Text>
               </TouchableOpacity>
             </View>
-            <View />
+            {/* Report — bottom right */}
+            <View style={styles.activeNoVideoTopBar}>
+              <View />
+              <TouchableOpacity style={styles.reportButton} onPress={() => setShowReportDialog(true)}>
+                <Text style={styles.reportButtonText}>⚑ Report</Text>
+              </TouchableOpacity>
+            </View>
           </SafeAreaView>
         )}
 
         {/* Observer label — only shown when video is actually visible */}
         {!amActive && showVideo && (
-          <SafeAreaView style={styles.trailerControls} edges={['top']} pointerEvents="none">
+          <SafeAreaView style={styles.trailerControls} edges={['top']} pointerEvents="box-none">
             <View style={styles.watchingBadge}>
               <Text style={styles.watchingBadgeText}>👀 {activePlayer?.display_name} is playing</Text>
             </View>
-            <View />
+            {amHost && game?.visibility !== 'public' && !hasReplayed ? (
+              <TouchableOpacity onPress={handleReplayBonus} style={[styles.replayLink, { marginBottom: 16 }]} activeOpacity={0.7}>
+                <Text style={styles.replayLinkText}>↺ Replay</Text>
+              </TouchableOpacity>
+            ) : <View />}
           </SafeAreaView>
         )}
 
@@ -2335,7 +2448,7 @@ export default function GameScreen() {
               revealingMovie={revealPhase !== 'suspense' ? m : undefined}
               insertDelay={showChallengerTimeline && revealPhase !== 'suspense' ? 700 : undefined}
               trashAfter={(isTrash || (!!winningChallenger && !showChallengerTimeline)) && revealPhase === 'result' ? 1200 : undefined}
-              challengerPlacements={revealPhase !== 'suspense' ? revealChallengerPlacements : []}
+              challengerPlacements={revealPhase !== 'suspense' && !showChallengerTimeline ? revealChallengerPlacements : []}
             />
           </Animated.View>
           {showChallengerTimeline && winnerPlayer && (
@@ -2575,7 +2688,7 @@ function GameOverScreen({ winner, players, myId }: { winner: Player; players: Pl
         {/* ── Left panel: trophy + winner info + button ── */}
         <View style={styles.gameOverLeft}>
           <Animated.View style={{ transform: [{ scale: scaleAnim }], opacity: opacityAnim }}>
-            <Image source={lcTrophy} style={{ width: 96, height: 96, resizeMode: 'contain' }} tintColor={C.ochre} />
+            <Image source={lcTrophy} style={{ width: 96, height: 96, resizeMode: 'contain' }} />
           </Animated.View>
 
           <Text style={styles.gameOverLabel}>GAME OVER</Text>
@@ -2583,7 +2696,7 @@ function GameOverScreen({ winner, players, myId }: { winner: Player; players: Pl
             {isMe ? 'You win!' : `${winner.display_name} wins!`}
           </Text>
           <Text style={styles.gameOverCards}>
-            {winner.timeline.length} cards collected
+            {Math.min(winner.timeline.length, WIN_CARDS)} cards collected
           </Text>
 
           <TouchableOpacity style={[styles.revealNextBtn, { marginTop: 8, alignSelf: 'stretch' }]} onPress={() => router.replace('/local-lobby')} activeOpacity={0.85}>
@@ -3395,14 +3508,6 @@ function GameIntroScreen({
           {/* Footer floats at bottom — absolute so it doesn't shrink the wheel's centring space */}
           <SafeAreaView edges={['bottom']} style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}>
             <Animated.View style={[introStyles.footer, { opacity: tapHintOpacity }]}>
-              {startingMovie && (
-                <View style={introStyles.miniTimeline}>
-                  <View style={introStyles.miniGap} />
-                  <CardFront movie={startingMovie} width={56} height={78} />
-                  <View style={introStyles.miniGap} />
-                </View>
-              )}
-              <Text style={introStyles.addedLabel}>Added to your timeline</Text>
               <TouchableOpacity style={introStyles.startBtn} onPress={fadeOutAndDone} activeOpacity={0.8}>
                 <Text style={introStyles.startBtnText}>Let's start playing! 🎬</Text>
               </TouchableOpacity>
@@ -3574,14 +3679,13 @@ const styles = StyleSheet.create({
     paddingTop: 16,
   },
   drawingTurnLabel: {
-    color: C.textSub,
     fontFamily: Fonts.label,
-    fontSize: FS.base,
+    fontSize: FS.lg,
     textAlign: 'center',
-    letterSpacing: 1,
+    letterSpacing: 1.5,
     textTransform: 'uppercase',
     opacity: 0.9,
-    marginBottom: 2,
+    marginBottom: 8,
   },
   drawingCTAArea: {
     position: 'absolute',
@@ -3725,6 +3829,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    alignSelf: 'stretch',
     borderWidth: 2,
     borderColor: C.borderLight,
   },

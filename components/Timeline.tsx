@@ -65,6 +65,13 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
   const labelColor = dark ? C.ochre : C.textSub;
   const scrollRef = useRef<React.ElementRef<typeof ScrollView>>(null);
   const activeGapRef = useRef<View>(null);
+  const scrollViewWidthRef = useRef(0);
+  const contentWidthRef = useRef(0);
+
+  function scrollToCenter() {
+    const offset = (contentWidthRef.current - scrollViewWidthRef.current) / 2;
+    if (offset > 0) scrollRef.current?.scrollTo({ x: offset, animated: false });
+  }
 
   // Card insertion animation — reverse of the trash fly-off (starts at trash endpoint, reverses in)
   const [insertVisible, setInsertVisible] = useState(false);
@@ -376,6 +383,8 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
         style={styles.scroll}
         contentContainerStyle={styles.content}
         showsHorizontalScrollIndicator={false}
+        onLayout={e => { scrollViewWidthRef.current = e.nativeEvent.layout.width; scrollToCenter(); }}
+        onContentSizeChange={w => { contentWidthRef.current = w; scrollToCenter(); }}
       >
         {items}
       </ScrollView>
@@ -528,13 +537,13 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: 'rgba(245,197,24,0.5)',
-    backgroundColor: 'rgba(245,197,24,0.08)',
+    borderColor: 'rgba(255,255,255,0.55)',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   gapPlusText: {
-    color: 'rgba(245,197,24,0.8)',
+    color: 'rgba(255,255,255,0.85)',
     fontSize: 16,
     lineHeight: 20,
     fontFamily: Fonts.body,

@@ -176,6 +176,8 @@ export default function LocalLobbyScreen() {
         setGame(g);
         setGameId(gId);
         setIsHost(false);
+        setLoading(true);
+        await new Promise((resolve) => setTimeout(resolve, 1800));
         router.replace('/game');
       }
     }, POLL_MS);
@@ -548,7 +550,7 @@ export default function LocalLobbyScreen() {
             <Text style={styles.waitingForHostText}>Waiting for host to start…</Text>
           </View>
         )}
-        {loading && localIsHost && <HandoffSplash />}
+        {loading && <HandoffSplash />}
       </SafeAreaView>
     );
   }
