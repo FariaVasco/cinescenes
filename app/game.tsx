@@ -151,6 +151,10 @@ export default function GameScreen() {
   const prevPlacedIntervalRef = useRef<number | null | undefined>(undefined);
   // Prevents the challenger-timeline transition from being armed more than once per result phase.
   const challengerSwitchArmed = useRef(false);
+  // Timer refs for the challenger-timeline switch — stored in refs so that poll-driven
+  // challenges updates (same data, new array reference) cannot cancel them via effect cleanup.
+  const challengerSwitchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const challengerSwitchInnerTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const [showBetReveal, setShowBetReveal] = useState(false);
   const [betRevealCount, setBetRevealCount] = useState(0);
   const betRevealTriggered = useRef(false);
@@ -269,18 +273,29 @@ export default function GameScreen() {
   // After the result strip appears and the card drifts away from the active player's
   // timeline, transition to the challenger's timeline with a named overlay so everyone
   // knows whose timeline they're about to see.
-  // NOTE: `challenges` is in the dep array because it is fetched async at reveal start —
-  // if it hasn't landed by the time revealPhase becomes 'result' (4800ms in), the effect
-  // would see an empty array and bail early. Adding it here lets it re-fire once challenges
-  // arrive. `challengerSwitchArmed` prevents the timer from being set up twice.
+  // Effect 1: reset when the reveal phase leaves 'result'. Cancels any in-flight timers
+  // via refs so they are not affected by the arm-effect's dependency on `challenges`.
   useEffect(() => {
-    if (revealPhase !== 'result') {
-      setShowChallengerTimeline(false);
-      challengerTransitionOpacity.setValue(0);
-      challengerSwitchArmed.current = false;
-      return;
+    if (revealPhase === 'result') return;
+    if (challengerSwitchTimerRef.current) {
+      clearTimeout(challengerSwitchTimerRef.current);
+      challengerSwitchTimerRef.current = null;
     }
-    if (challengerSwitchArmed.current) return; // timer already running
+    challengerSwitchInnerTimersRef.current.forEach(clearTimeout);
+    challengerSwitchInnerTimersRef.current = [];
+    setShowChallengerTimeline(false);
+    challengerTransitionOpacity.setValue(0);
+    challengerSwitchArmed.current = false;
+  }, [revealPhase]);
+
+  // Effect 2: arm the challenger-timeline switch once a winning challenger is confirmed.
+  // `challenges` is included so the effect re-fires if challenges arrive after revealPhase
+  // becomes 'result'. Timers are stored in refs (not in a closure cleanup) so that
+  // subsequent poll-driven challenges updates — which always produce a new array reference
+  // even when data is unchanged — cannot cancel them via effect cleanup.
+  useEffect(() => {
+    if (revealPhase !== 'result') return;
+    if (challengerSwitchArmed.current) return; // timer already running, don't restart
     const ct = currentTurnRef.current;
     const m = movie;
     if (!ct || !m) return;
@@ -291,29 +306,26 @@ export default function GameScreen() {
       .filter(c => c.interval_index >= 0)
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
       .find(c => validIntervals.includes(c.interval_index));
-    if (!wc) return; // trashed or challenges not yet loaded — will re-run when challenges arrive
+    if (!wc) return; // trashed or challenges not yet loaded — re-fires when challenges arrive
     challengerSwitchArmed.current = true;
     // Wait for the card drift animation to finish (trashAfter=1200 + 700ms fly = 1900ms),
     // then show challenger name overlay, then cross-fade to their timeline.
-    const innerTimers: ReturnType<typeof setTimeout>[] = [];
-    const t = setTimeout(() => {
+    challengerSwitchTimerRef.current = setTimeout(() => {
+      challengerSwitchTimerRef.current = null;
       // Fade out active player's timeline
       Animated.timing(timelineFade, { toValue: 0, duration: 450, useNativeDriver: true }).start();
       // 150ms into fade-out: challenger name fades in
-      innerTimers.push(setTimeout(() => {
+      challengerSwitchInnerTimersRef.current.push(setTimeout(() => {
         Animated.timing(challengerTransitionOpacity, { toValue: 1, duration: 350, useNativeDriver: true }).start();
       }, 150));
       // 1100ms later: name fades out, switch to challenger timeline, fade in
-      innerTimers.push(setTimeout(() => {
+      challengerSwitchInnerTimersRef.current.push(setTimeout(() => {
         Animated.timing(challengerTransitionOpacity, { toValue: 0, duration: 350, useNativeDriver: true }).start();
         setShowChallengerTimeline(true);
         Animated.timing(timelineFade, { toValue: 1, duration: 550, useNativeDriver: true }).start();
       }, 1100));
     }, 1950);
-    return () => {
-      clearTimeout(t);
-      innerTimers.forEach(clearTimeout);
-    };
+    // No cleanup return — timers live in refs and are cancelled only by Effect 1 above.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [revealPhase, challenges]);
 
@@ -671,6 +683,9 @@ export default function GameScreen() {
           nextTurnInProgress.current = false;
           prevPlacedIntervalRef.current = undefined;
           challengerSwitchArmed.current = false;
+          if (challengerSwitchTimerRef.current) { clearTimeout(challengerSwitchTimerRef.current); challengerSwitchTimerRef.current = null; }
+          challengerSwitchInnerTimersRef.current.forEach(clearTimeout);
+          challengerSwitchInnerTimersRef.current = [];
           setNextTurnPending(false);
           // New turn = new drawing phase. Reset the curtain so the trailer-
           // boundary fade is replayable for the next "Let's Guess".
@@ -1760,6 +1775,16 @@ export default function GameScreen() {
                         } else {
                           // Reset placed_interval → null so the host detects a replay request on next poll.
                           // Host's useEffect fires when it sees non-null→null while trailerEnded=true.
+                          // Optimistically clear placed_interval in local state BEFORE the other state
+                          // changes fire: the effect at line ~407 checks placed_interval === -1 to advance
+                          // the player to the placing screen, so we must set it to null first or the
+                          // player is immediately bounced back to the timeline before seeing the
+                          // "Trailer is on host's screen" message.
+                          if (currentTurn) {
+                            const optimistic = { ...currentTurn, placed_interval: null };
+                            currentTurnRef.current = optimistic;
+                            setLocalTurn(optimistic);
+                          }
                           setHasReplayed(true);
                           setReadyToPlace(false);
                           setTrailerEnded(false);
@@ -2295,7 +2320,7 @@ export default function GameScreen() {
                   <Text style={styles.challengeBtnText}>
                     {hasCoins ? '⚡  Challenge' : 'No coins'}
                   </Text>
-                  {hasCoins && <Text style={styles.challengeBtnSub}>1 coin</Text>}
+                  <Text style={[styles.challengeBtnSub, !hasCoins && { opacity: 0 }]}>1 coin</Text>
                 </TouchableOpacity>
               ) : (
                 <View style={[styles.challengeBtn, styles.challengeBtnDisabled]}>
@@ -2380,18 +2405,26 @@ export default function GameScreen() {
     const winnerTimeline = winnerPlayer
       ? (winnerPlayer.timeline ?? []).slice().sort((a, b) => a - b)
       : timeline;
+    // For the challenger insert animation: the DB already has the won card's year in
+    // winnerTimeline, but we need to pass the timeline WITHOUT it so the insert animation
+    // has a clean gap to land in (otherwise the card appears as a duplicate static card
+    // right next to the animation slot, making the animation invisible).
+    const winnerTimelineWithoutCard = winnerTimeline.filter((y, i, arr) => i !== arr.indexOf(m.year));
     // For active-player wins: use their actual placed_interval (they chose the slot).
-    // For challenger wins: compute where the year falls in the challenger's own timeline.
+    // For challenger wins: compute where the year falls in the challenger's own timeline
+    // (without the card so the gap index is correct).
     // For trash: use placed_interval (shows where the active player put it).
     const revealInterval = (winnerPlayer && winnerId !== currentTurn.active_player_id)
-      ? computeCorrectInterval(m.year, winnerTimeline)
+      ? computeCorrectInterval(m.year, winnerTimelineWithoutCard)
       : currentTurn.placed_interval;
 
     // During flip: active player's timeline + placed_interval
     // During result before switch: still active player's timeline (so everyone sees the wrong placement)
-    // After showChallengerTimeline: winner's timeline at the correct interval
+    // After showChallengerTimeline: challenger's timeline minus the won card (insert animation fills the gap)
     const showWinnerView = revealPhase === 'result' && (showChallengerTimeline || activeCorrect);
-    const displayTimeline = showWinnerView ? winnerTimeline : timeline;
+    const displayTimeline = showWinnerView
+      ? (showChallengerTimeline && winningChallenger ? winnerTimelineWithoutCard : winnerTimeline)
+      : timeline;
     const displayInterval = showWinnerView ? revealInterval : currentTurn.placed_interval;
 
     // Pick the right pairs for resolveMovie depending on whose timeline is shown:
