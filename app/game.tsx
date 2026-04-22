@@ -37,7 +37,7 @@ import { ChallengeTimer } from '@/components/ChallengeTimer';
 import { HourglassTimer } from '@/components/AnimatedHourglass';
 import { CardBack, CardFront } from '@/components/MovieCard';
 import Svg, { Circle, Path } from 'react-native-svg';
-import { AirPlayButton } from 'airplay-picker';
+import { AirPlayButton, useAirPlayAvailable } from 'airplay-picker';
 import { CloseIcon, PlayIcon, CastToTVIcon } from '@/components/CinemaIcons';
 import { CinescenesMark } from '@/components/CinescenesMark';
 
@@ -70,6 +70,7 @@ const WIN_CARDS = 10;
 export default function GameScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const timelinePaddingBottom = Math.max(80, 78 + insets.top - insets.bottom);
   const {
     game,
     activeMovies,
@@ -101,6 +102,8 @@ export default function GameScreen() {
   const [trailerKey, setTrailerKey] = useState(0);
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
   const [castVisible, setCastVisible] = useState(false);
+  const [tvBannerDismissed, setTvBannerDismissed] = useState(false);
+  const airPlayAvailable = useAirPlayAvailable();
   const [bonusPanelOpen, setBonusPanelOpen] = useState(false);
 
   const [selectedInterval, setSelectedInterval] = useState<number | null>(null);
@@ -1660,6 +1663,18 @@ export default function GameScreen() {
       {leaveModal}
       {castFab}
       {castOverlay}
+      {airPlayAvailable && amHost && !castVisible && !tvMode && !tvBannerDismissed && (
+        <TouchableOpacity
+          style={[styles.tvDetectedBanner, { top: insets.top + 56 }]}
+          onPress={() => { setTvBannerDismissed(true); setCastVisible(true); }}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.tvDetectedBannerText}>📺 TV detected nearby — tap to connect</Text>
+          <TouchableOpacity onPress={() => setTvBannerDismissed(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={styles.tvDetectedBannerClose}>✕</Text>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      )}
     </>
   );
 
@@ -1686,7 +1701,7 @@ export default function GameScreen() {
       <>
       <SafeAreaView style={[styles.container, { backgroundColor: C.bg }]} edges={['top', 'bottom']}>
         <View style={styles.gameArea}>
-          <View style={styles.timelineAreaFull}>
+          <View style={[styles.timelineAreaFull, { paddingBottom: timelinePaddingBottom }]}>
             {/* Label — flows just above cards; both centered as a group */}
             <Text style={[styles.drawingTurnLabel, { color: activePlayerColor }]}>
               {amActive ? 'Your turn' : `${activePlayer?.display_name}'s timeline`}
@@ -1764,7 +1779,7 @@ export default function GameScreen() {
         <>
         <SafeAreaView style={[styles.container, { backgroundColor: C.bg }]} edges={['top', 'bottom']}>
           <View style={styles.gameArea}>
-            <Animated.View style={styles.timelineAreaFull}>
+            <Animated.View style={[styles.timelineAreaFull, { paddingBottom: timelinePaddingBottom }]}>
               {amActive ? (
                 <>
                   {!hasReplayed && (
@@ -1961,7 +1976,7 @@ export default function GameScreen() {
           <>
           <SafeAreaView style={[styles.container, { backgroundColor: C.bg }]} edges={['top', 'bottom']}>
             <View style={styles.gameArea}>
-              <View style={styles.timelineAreaFull}>
+              <View style={[styles.timelineAreaFull, { paddingBottom: timelinePaddingBottom }]}>
                 <View style={styles.placePromptRow}>
                   <Image source={lcHourglass} style={styles.waitingHourglassIcon} tintColor={C.textSub} />
                   <Text style={styles.placePromptText}>Waiting for {activePlayer?.display_name} to place the card…</Text>
@@ -2278,7 +2293,7 @@ export default function GameScreen() {
       <>
       <SafeAreaView style={[styles.container, { backgroundColor: C.bg }]} edges={['top', 'bottom']}>
         <View style={styles.gameArea}>
-          <Animated.View style={styles.timelineAreaFull}>
+          <Animated.View style={[styles.timelineAreaFull, { paddingBottom: timelinePaddingBottom }]}>
             <Timeline
               timeline={timeline}
               currentCardMovie={movie}
@@ -2467,7 +2482,7 @@ export default function GameScreen() {
       <>
       <SafeAreaView style={[styles.container, { backgroundColor: revealBgDark ? C.inkBg : C.bg }]} edges={['top', 'bottom']}>
         <View style={styles.gameArea}>
-          <Animated.View style={[styles.timelineAreaFull, { opacity: timelineFade }]}>
+          <Animated.View style={[styles.timelineAreaFull, { paddingBottom: timelinePaddingBottom, opacity: timelineFade }]}>
             <Timeline
               timeline={displayTimeline}
               currentCardMovie={m}
@@ -3787,7 +3802,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     paddingTop: 48,
-    paddingBottom: 80,
   },
 
   placePromptRow: {
@@ -4678,6 +4692,21 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center', justifyContent: 'center',
     zIndex: 10,
+  },
+  tvDetectedBanner: {
+    position: 'absolute', left: 16, right: 16,
+    backgroundColor: 'rgba(20,20,30,0.92)',
+    borderRadius: 10,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
+    paddingVertical: 10, paddingHorizontal: 14,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    zIndex: 20,
+  },
+  tvDetectedBannerText: {
+    color: '#fff', fontFamily: Fonts.label, fontSize: 13, flex: 1,
+  },
+  tvDetectedBannerClose: {
+    color: 'rgba(255,255,255,0.5)', fontFamily: Fonts.label, fontSize: 14, marginLeft: 12,
   },
   castSheet: {
     backgroundColor: C.surface,

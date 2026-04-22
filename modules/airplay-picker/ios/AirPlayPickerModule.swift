@@ -2,8 +2,38 @@ import ExpoModulesCore
 import AVKit
 
 public class AirPlayPickerModule: Module {
+  private let routeDetector = AVRouteDetector()
+  private var observer: NSObjectProtocol?
+
   public func definition() -> ModuleDefinition {
     Name("AirPlayPicker")
+
+    Events("onRoutesAvailableChanged")
+
+    OnCreate {
+      self.routeDetector.isRouteDetectionEnabled = true
+      self.observer = NotificationCenter.default.addObserver(
+        forName: NSNotification.Name("AVRouteDetectorMultipleRoutesDetectedDidChange"),
+        object: self.routeDetector,
+        queue: .main
+      ) { [weak self] _ in
+        guard let self = self else { return }
+        self.sendEvent("onRoutesAvailableChanged", [
+          "available": self.routeDetector.multipleRoutesDetected
+        ])
+      }
+    }
+
+    OnDestroy {
+      if let obs = self.observer {
+        NotificationCenter.default.removeObserver(obs)
+      }
+      self.routeDetector.isRouteDetectionEnabled = false
+    }
+
+    Function("isMultipleRoutesAvailable") { () -> Bool in
+      return self.routeDetector.multipleRoutesDetected
+    }
 
     View(AirPlayPickerView.self) {
       Prop("tintColor") { (view: AirPlayPickerView, value: String?) in
