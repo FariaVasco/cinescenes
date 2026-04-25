@@ -3161,14 +3161,15 @@ function BrandedLoader() {
   const [dots, setDots] = useState('');
   useEffect(() => {
     Animated.timing(fadeIn, { toValue: 1, duration: 280, useNativeDriver: true }).start();
-    Animated.loop(
+    const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(pulse, { toValue: 1.08, duration: 750, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
         Animated.timing(pulse, { toValue: 1,    duration: 750, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
       ])
-    ).start();
+    );
+    loop.start();
     const t = setInterval(() => setDots((d) => (d.length >= 3 ? '' : d + '.')), 400);
-    return () => clearInterval(t);
+    return () => { loop.stop(); clearInterval(t); };
   }, []);
   return (
     <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: C.bg, justifyContent: 'center', alignItems: 'center', gap: 18, opacity: fadeIn }]}>
