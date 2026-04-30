@@ -231,7 +231,6 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
         setLoading(true);
       },
       replay() {
-        playerRef.current?.mute();
         setLoading(true);
         shuffleDoneRef.current    = false;
         contentReadyRef.current   = false;
@@ -294,11 +293,6 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
       } catch (_) {}
     }
 
-    // Unmute exactly when the overlay render commits — no fixed-delay guessing
-    useEffect(() => {
-      if (!loading) playerRef.current?.unMute();
-    }, [loading]);
-
     useEffect(() => {
       return () => {
         if (timerRef.current) clearTimeout(timerRef.current);
@@ -314,10 +308,10 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
             width={playerW}
             videoId={movie.youtube_id!}
             play={playing}
+            mute={loading}
             initialPlayerParams={{
               start: safeStart,
               end: safeEnd,
-              mute: true,
               controls: false,
               rel: false,
               iv_load_policy: 3,
