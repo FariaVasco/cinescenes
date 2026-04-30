@@ -26,7 +26,7 @@ const CAROUSEL = [
 ];
 
 const SHUFFLE_INTERVALS = [90, 110, 140, 190, 270, 390, 580, 780];
-const SETTLE_DELAY = 500; // time after card selection animation before revealing
+const SETTLE_DELAY = 800; // time after card selection animation before revealing
 const SHUFFLE_TOTAL = SHUFFLE_INTERVALS.reduce((a, b) => a + b, 0) + 150 + SETTLE_DELAY; // ~3200ms
 
 // Unmute fires in sync with the reveal so audio never leaks into the overlay
