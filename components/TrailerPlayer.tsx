@@ -208,13 +208,8 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
 
     function onShuffleDone() {
       shuffleDoneRef.current = true;
-      if (contentReadyRef.current) {
-        doReveal();
-      } else {
-        // Video not confirmed playing yet — wait briefly then reveal anyway
-        if (fallbackRef.current) clearTimeout(fallbackRef.current);
-        fallbackRef.current = setTimeout(doReveal, 1000);
-      }
+      if (fallbackRef.current) clearTimeout(fallbackRef.current);
+      doReveal();
     }
 
     useImperativeHandle(ref, () => ({
@@ -236,6 +231,7 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
         setLoading(true);
       },
       replay() {
+        playerRef.current?.mute();
         setLoading(true);
         shuffleDoneRef.current    = false;
         contentReadyRef.current   = false;
@@ -278,11 +274,6 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
     }
 
     function handleYouTubeStateChange(state: string) {
-      if (state === 'playing' && !contentReadyRef.current) {
-        contentReadyRef.current   = true;
-        contentReadyAtRef.current = Date.now();
-        if (shuffleDoneRef.current) doReveal();
-      }
       if (state === 'ended') {
         if (timerRef.current) clearTimeout(timerRef.current);
         if (fallbackRef.current) clearTimeout(fallbackRef.current);
@@ -303,6 +294,11 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
       } catch (_) {}
     }
 
+    // Unmute exactly when the overlay render commits — no fixed-delay guessing
+    useEffect(() => {
+      if (!loading) playerRef.current?.unMute();
+    }, [loading]);
+
     useEffect(() => {
       return () => {
         if (timerRef.current) clearTimeout(timerRef.current);
@@ -318,10 +314,10 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
             width={playerW}
             videoId={movie.youtube_id!}
             play={playing}
-            mute={loading}
             initialPlayerParams={{
               start: safeStart,
               end: safeEnd,
+              mute: true,
               controls: false,
               rel: false,
               iv_load_policy: 3,
