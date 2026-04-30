@@ -26,17 +26,20 @@ const CAROUSEL = [
 ];
 
 const SHUFFLE_INTERVALS = [90, 110, 140, 190, 270, 390, 580, 780];
-const SETTLE_DELAY = 800; // time after card selection animation before revealing
-const SHUFFLE_TOTAL = SHUFFLE_INTERVALS.reduce((a, b) => a + b, 0) + 150 + SETTLE_DELAY; // ~3200ms
-
-// Unmute fires in sync with the reveal so audio never leaks into the overlay
-const UNMUTE_DELAY = SHUFFLE_TOTAL;
+const SETTLE_DELAY = 2300; // time after card selection animation before revealing
+const SHUFFLE_TOTAL = SHUFFLE_INTERVALS.reduce((a, b) => a + b, 0) + 150 + SETTLE_DELAY;
+const TITLE_CARD_BURN = 5500; // ms after seekTo before the YouTube title overlay is gone
 
 function makeYouTubeInject(safeStart: number) {
+  // Absolute timestamp baked in at render time so WebView clock and RN clock are aligned.
+  // The inject unmutes at the same wall-clock moment doReveal() drops the overlay.
+  const targetUnmuteAt = Date.now() + SHUFFLE_TOTAL;
   return `
 (function() {
+  var targetUnmuteAt = ${targetUnmuteAt};
   var notified = false;
   var muted = false;
+  var unmuted = false;
 
   setInterval(function() {
     var skip = document.querySelector(
@@ -57,12 +60,14 @@ function makeYouTubeInject(safeStart: number) {
         !document.documentElement.classList.contains('ad-showing')) {
       notified = true;
       window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'cs_content_ready' }));
-      setTimeout(function() {
-        window.player.unMute();
-        window.player.setVolume(100);
-      }, ${UNMUTE_DELAY});
     }
-  }, 300);
+
+    if (!unmuted && notified && Date.now() >= targetUnmuteAt) {
+      unmuted = true;
+      window.player.unMute();
+      window.player.setVolume(100);
+    }
+  }, 100);
 })();
 true;
 `;
@@ -185,6 +190,8 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
     const contentReadyRef  = useRef(false);
     const contentReadyAtRef = useRef(0);
 
+    const seekToTimeRef = useRef(0);
+
     const insaneMode = movie.safe_start === null;
     const safeStart  = movie.safe_start ?? 0;
     const safeEnd    = movie.safe_end ?? (insaneMode ? 99999 : 60);
@@ -215,10 +222,14 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
 
     function onShuffleDone() {
       shuffleDoneRef.current = true;
-      if (contentReadyRef.current) {
+      if (fallbackRef.current) clearTimeout(fallbackRef.current);
+      const remaining = seekToTimeRef.current > 0
+        ? Math.max(0, (seekToTimeRef.current + TITLE_CARD_BURN) - Date.now())
+        : 600;
+      if (remaining === 0) {
         doReveal();
       } else {
-        fallbackRef.current = setTimeout(doReveal, 600);
+        fallbackRef.current = setTimeout(doReveal, remaining);
       }
     }
 
@@ -256,7 +267,7 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
           fallbackRef.current = setTimeout(() => {
             setLoading(false);
             startEndTimer(insaneMode ? 30_000 : duration);
-          }, 3000);
+          }, SHUFFLE_TOTAL + 1000);
         }, 300);
       },
     }));
@@ -281,9 +292,9 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
           if (!contentReadyRef.current) doReveal();
         }, SHUFFLE_TOTAL + 3000);
       } else {
+        seekToTimeRef.current = Date.now();
         playerRef.current?.seekTo(safeStart, true);
         if (fallbackRef.current) clearTimeout(fallbackRef.current);
-        // Fallback in case cs_content_ready never fires
         fallbackRef.current = setTimeout(() => {
           if (!contentReadyRef.current) doReveal();
         }, SHUFFLE_TOTAL + 3000);
@@ -305,8 +316,6 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
         if (msg.type === 'cs_content_ready') {
           contentReadyRef.current   = true;
           contentReadyAtRef.current = Date.now();
-          if (shuffleDoneRef.current) doReveal();
-          // else: wait for shuffle to complete — onShuffleDone will trigger doReveal
         }
       } catch (_) {}
     }

@@ -4173,6 +4173,7 @@ const styles = StyleSheet.create({
   trailerControls: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
     alignItems: 'flex-end', justifyContent: 'space-between', padding: 16,
+    zIndex: 20,
   },
   cornerActions: { alignItems: 'flex-end', gap: 10 },
   reportButton: {

@@ -214,6 +214,6 @@ export function HourglassTimer({ durationMs, onExpire, size = 80, label }: Hourg
 }
 
 const hStyles = StyleSheet.create({
-  wrap: { alignItems: 'center', gap: 2 },
+  wrap: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   secs: { fontFamily: Fonts.display, lineHeight: 16, textAlign: 'center' },
 });
