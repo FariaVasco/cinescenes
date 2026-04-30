@@ -208,8 +208,13 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
 
     function onShuffleDone() {
       shuffleDoneRef.current = true;
-      if (fallbackRef.current) clearTimeout(fallbackRef.current);
-      doReveal();
+      if (contentReadyRef.current) {
+        doReveal();
+      } else {
+        // Video not confirmed playing yet — wait briefly then reveal anyway
+        if (fallbackRef.current) clearTimeout(fallbackRef.current);
+        fallbackRef.current = setTimeout(doReveal, 1000);
+      }
     }
 
     useImperativeHandle(ref, () => ({
@@ -273,6 +278,11 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
     }
 
     function handleYouTubeStateChange(state: string) {
+      if (state === 'playing' && !contentReadyRef.current) {
+        contentReadyRef.current   = true;
+        contentReadyAtRef.current = Date.now();
+        if (shuffleDoneRef.current) doReveal();
+      }
       if (state === 'ended') {
         if (timerRef.current) clearTimeout(timerRef.current);
         if (fallbackRef.current) clearTimeout(fallbackRef.current);
