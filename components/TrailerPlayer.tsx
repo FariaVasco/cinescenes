@@ -30,16 +30,12 @@ const SETTLE_DELAY = 2300; // time after card selection animation before reveali
 const SHUFFLE_TOTAL = SHUFFLE_INTERVALS.reduce((a, b) => a + b, 0) + 150 + SETTLE_DELAY;
 const TITLE_CARD_BURN = 5500; // ms after seekTo before the YouTube title overlay is gone
 
-function makeYouTubeInject(safeStart: number) {
-  // Absolute timestamp baked in at render time so WebView clock and RN clock are aligned.
-  // The inject unmutes at the same wall-clock moment doReveal() drops the overlay.
-  const targetUnmuteAt = Date.now() + SHUFFLE_TOTAL;
+function makeYouTubeInject() {
   return `
 (function() {
-  var targetUnmuteAt = ${targetUnmuteAt};
-  var notified = false;
   var muted = false;
   var unmuted = false;
+  var playerReadyAt = 0;
 
   setInterval(function() {
     var skip = document.querySelector(
@@ -49,23 +45,24 @@ function makeYouTubeInject(safeStart: number) {
     var close = document.querySelector('.ytp-ad-overlay-close-button');
     if (close) { close.click(); }
 
-    if (!notified && !muted && window.player && typeof window.player.mute === 'function') {
+    if (!window.player) return;
+
+    if (!playerReadyAt) {
+      playerReadyAt = Date.now();
+    }
+
+    if (!muted && typeof window.player.mute === 'function') {
       window.player.mute();
       muted = true;
     }
 
-    if (!notified && window.player &&
-        typeof window.player.getPlayerState === 'function' &&
-        window.player.getPlayerState() === 1 &&
-        !document.documentElement.classList.contains('ad-showing')) {
-      notified = true;
-      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'cs_content_ready' }));
-    }
-
-    if (!unmuted && notified && Date.now() >= targetUnmuteAt) {
+    if (!unmuted && Date.now() - playerReadyAt >= ${TITLE_CARD_BURN}) {
       unmuted = true;
-      window.player.unMute();
-      window.player.setVolume(100);
+      if (typeof window.player.unMute === 'function') {
+        window.player.unMute();
+        window.player.setVolume(100);
+      }
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'cs_content_ready' }));
     }
   }, 100);
 })();
@@ -196,7 +193,7 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
     const safeStart  = movie.safe_start ?? 0;
     const safeEnd    = movie.safe_end ?? (insaneMode ? 99999 : 60);
     const duration   = insaneMode ? 30_000 : Math.max(safeEnd - safeStart, 10) * 1000;
-    const youtubeInject = makeYouTubeInject(safeStart);
+    const youtubeInject = makeYouTubeInject();
 
     function startEndTimer(ms: number = duration) {
       if (timerRef.current) clearTimeout(timerRef.current);
