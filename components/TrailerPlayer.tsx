@@ -28,6 +28,9 @@ const CAROUSEL = [
 const SHUFFLE_INTERVALS = [90, 110, 140, 190, 270, 390, 580, 780];
 const SHUFFLE_TOTAL = SHUFFLE_INTERVALS.reduce((a, b) => a + b, 0) + 150; // ~2700ms
 
+// Unmute fires in sync with the reveal so audio never leaks into the overlay
+const UNMUTE_DELAY = SHUFFLE_TOTAL;
+
 function makeYouTubeInject(safeStart: number) {
   return `
 (function() {
@@ -53,6 +56,10 @@ function makeYouTubeInject(safeStart: number) {
         !document.documentElement.classList.contains('ad-showing')) {
       notified = true;
       window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'cs_content_ready' }));
+      setTimeout(function() {
+        window.player.unMute();
+        window.player.setVolume(100);
+      }, ${UNMUTE_DELAY});
     }
   }, 300);
 })();
@@ -209,7 +216,6 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
       if (contentReadyRef.current) {
         doReveal();
       } else {
-        if (fallbackRef.current) clearTimeout(fallbackRef.current);
         fallbackRef.current = setTimeout(doReveal, 600);
       }
     }
@@ -245,7 +251,10 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
         setTimeout(() => {
           playerRef.current?.seekTo(replayStart, true);
           setPlaying(true);
-          fallbackRef.current = setTimeout(doReveal, 3000);
+          fallbackRef.current = setTimeout(() => {
+            setLoading(false);
+            startEndTimer(insaneMode ? 30_000 : duration);
+          }, 3000);
         }, 300);
       },
     }));
@@ -315,10 +324,10 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
             width={playerW}
             videoId={movie.youtube_id!}
             play={playing}
-            mute={loading}
             initialPlayerParams={{
               start: safeStart,
               end: safeEnd,
+              mute: true,
               controls: false,
               rel: false,
               iv_load_policy: 3,
