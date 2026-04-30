@@ -199,8 +199,6 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
         ? Date.now() - contentReadyAtRef.current
         : SHUFFLE_TOTAL;
       setLoading(false);
-      // Unmute 50ms after hiding the overlay so the render commit lands first
-      fallbackRef.current = setTimeout(() => playerRef.current?.unMute(), 50);
       if (!skipEndTimerOnReady.current) {
         startEndTimer(Math.max(duration - played, 5000));
       }
@@ -235,7 +233,6 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
         setLoading(true);
       },
       replay() {
-        playerRef.current?.mute();
         setLoading(true);
         shuffleDoneRef.current  = false;
         contentReadyRef.current = false;
@@ -318,10 +315,10 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
             width={playerW}
             videoId={movie.youtube_id!}
             play={playing}
+            mute={loading}
             initialPlayerParams={{
               start: safeStart,
               end: safeEnd,
-              mute: true,
               controls: false,
               rel: false,
               iv_load_policy: 3,
