@@ -171,10 +171,10 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
     const skipEndTimerOnReady = useRef(false);
     const dynStartRef         = useRef<number>(0);
 
-    const shuffleDoneRef    = useRef(false);
-    const contentReadyRef   = useRef(false);
+    // Dual-gate reveal: fires only when both the shuffle is done AND content is ready
+    const shuffleDoneRef   = useRef(false);
+    const contentReadyRef  = useRef(false);
     const contentReadyAtRef = useRef(0);
-    const revealedRef       = useRef(false);
 
     const insaneMode = movie.safe_start === null;
     const safeStart  = movie.safe_start ?? 0;
@@ -194,13 +194,13 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
     }
 
     function doReveal() {
-      if (revealedRef.current) return;
-      revealedRef.current = true;
       if (fallbackRef.current) clearTimeout(fallbackRef.current);
       const played = contentReadyAtRef.current > 0
         ? Date.now() - contentReadyAtRef.current
         : SHUFFLE_TOTAL;
       setLoading(false);
+      // Unmute 50ms after hiding the overlay so the render commit lands first
+      fallbackRef.current = setTimeout(() => playerRef.current?.unMute(), 50);
       if (!skipEndTimerOnReady.current) {
         startEndTimer(Math.max(duration - played, 5000));
       }
@@ -208,8 +208,12 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
 
     function onShuffleDone() {
       shuffleDoneRef.current = true;
-      if (fallbackRef.current) clearTimeout(fallbackRef.current);
-      doReveal();
+      if (contentReadyRef.current) {
+        doReveal();
+      } else {
+        if (fallbackRef.current) clearTimeout(fallbackRef.current);
+        fallbackRef.current = setTimeout(doReveal, 600);
+      }
     }
 
     useImperativeHandle(ref, () => ({
@@ -233,10 +237,9 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
       replay() {
         playerRef.current?.mute();
         setLoading(true);
-        shuffleDoneRef.current    = false;
-        contentReadyRef.current   = false;
+        shuffleDoneRef.current  = false;
+        contentReadyRef.current = false;
         contentReadyAtRef.current = 0;
-        revealedRef.current       = false;
         if (timerRef.current) clearTimeout(timerRef.current);
         if (fallbackRef.current) clearTimeout(fallbackRef.current);
         skipEndTimerOnReady.current = false;
@@ -265,11 +268,17 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
         } catch (_) {
           dynStartRef.current = 0;
         }
-        fallbackRef.current = setTimeout(doReveal, SHUFFLE_TOTAL + 3000);
+        // Fallback in case cs_content_ready never fires
+        fallbackRef.current = setTimeout(() => {
+          if (!contentReadyRef.current) doReveal();
+        }, SHUFFLE_TOTAL + 3000);
       } else {
         playerRef.current?.seekTo(safeStart, true);
         if (fallbackRef.current) clearTimeout(fallbackRef.current);
-        fallbackRef.current = setTimeout(doReveal, SHUFFLE_TOTAL + 3000);
+        // Fallback in case cs_content_ready never fires
+        fallbackRef.current = setTimeout(() => {
+          if (!contentReadyRef.current) doReveal();
+        }, SHUFFLE_TOTAL + 3000);
       }
     }
 
@@ -293,11 +302,6 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
         }
       } catch (_) {}
     }
-
-    // Unmute exactly when the overlay render commits — no fixed-delay guessing
-    useEffect(() => {
-      if (!loading) playerRef.current?.unMute();
-    }, [loading]);
 
     useEffect(() => {
       return () => {
