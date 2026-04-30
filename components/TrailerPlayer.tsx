@@ -26,7 +26,8 @@ const CAROUSEL = [
 ];
 
 const SHUFFLE_INTERVALS = [90, 110, 140, 190, 270, 390, 580, 780];
-const SHUFFLE_TOTAL = SHUFFLE_INTERVALS.reduce((a, b) => a + b, 0) + 150; // ~2700ms
+const SETTLE_DELAY = 500; // time after card selection animation before revealing
+const SHUFFLE_TOTAL = SHUFFLE_INTERVALS.reduce((a, b) => a + b, 0) + 150 + SETTLE_DELAY; // ~3200ms
 
 // Unmute fires in sync with the reveal so audio never leaks into the overlay
 const UNMUTE_DELAY = SHUFFLE_TOTAL;
@@ -107,7 +108,7 @@ function CarouselOverlay({ onComplete }: { onComplete: () => void }) {
       timeouts.push(setTimeout(advance, elapsed));
     });
 
-    // Settle: pop the front card, dim the rest, notify parent
+    // Settle: pop the front card and dim the rest
     timeouts.push(setTimeout(() => {
       setSelected(true);
       const frontIdx = posRef.current.indexOf(0);
@@ -119,8 +120,9 @@ function CarouselOverlay({ onComplete }: { onComplete: () => void }) {
           Animated.timing(anim.opacity, { toValue: 0.2, duration: 300, useNativeDriver: true }).start();
         }
       });
-      onComplete();
     }, elapsed + 150));
+    // Notify parent after the card has settled and stood still briefly
+    timeouts.push(setTimeout(onComplete, elapsed + 150 + SETTLE_DELAY));
 
     return () => timeouts.forEach(clearTimeout);
   }, []);
