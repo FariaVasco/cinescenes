@@ -127,9 +127,6 @@ export default function GameScreen() {
   const bonusPanelAnim = useRef(new Animated.Value(0)).current;
   // "Lights on" transition: dark overlay that fades away when drawing phase appears after reveal
   const lightsOnAnim = useRef(new Animated.Value(0)).current;
-  // "Curtain" transition: fades drawing → black before the trailer mounts so the
-  // parchment → trailer hand-off isn't a hard color swap.
-  const curtainAnim = useRef(new Animated.Value(0)).current;
   const prevStatusRef = useRef<string | null>(null);
   const [flyVisible, setFlyVisible] = useState(false);
   const [flyStart, setFlyStart] = useState({ x: 0, y: 0 });
@@ -690,9 +687,6 @@ export default function GameScreen() {
           challengerSwitchInnerTimersRef.current.forEach(clearTimeout);
           challengerSwitchInnerTimersRef.current = [];
           setNextTurnPending(false);
-          // New turn = new drawing phase. Reset the curtain so the trailer-
-          // boundary fade is replayable for the next "Let's Guess".
-          curtainAnim.setValue(0);
           challengeDecisionMade.current = false;
           challengeConfirmedRef.current = false;
           betRevealTriggered.current = false;
@@ -868,15 +862,6 @@ export default function GameScreen() {
 
   async function handleLetsDraw() {
     if (!currentTurn) return;
-    // Close the curtain (parchment → black) BEFORE flipping the phase, so the
-    // trailer's black backdrop continues the fade without a jarring color swap.
-    await new Promise<void>((resolve) => {
-      Animated.timing(curtainAnim, {
-        toValue: 1,
-        duration: 320,
-        useNativeDriver: true,
-      }).start(() => resolve());
-    });
     const optimistic = { ...currentTurn, status: 'placing' as const };
     pendingTurnWrite.current = true;
     setLocalTurn(optimistic);
@@ -1528,6 +1513,14 @@ export default function GameScreen() {
   // Index-aligned cards for CollapsibleMyTimeline (undefined = movie not yet resolved).
   const myTimelineCards = myTimeline.map((_, i) => resolveMovie(myTimeline, i, myMoviePairs));
 
+  // Shared between drawing and placing-trailer phases
+  const drawingTimeline = amActive ? myTimeline : timeline;
+  const drawingPlacedMovies = amActive ? myPlacedMovies : placedMovies;
+  const activePlayerIdx = players.findIndex(p => p.id === currentTurn.active_player_id);
+  const activePlayerColor = activePlayerIdx >= 0
+    ? PLAYER_CHIP_COLORS[activePlayerIdx % PLAYER_CHIP_COLORS.length]
+    : C.textSub;
+
   // ── Leave game ──
   async function handleLeaveConfirmed() {
     setShowLeaveDialog(false);
@@ -1680,8 +1673,6 @@ export default function GameScreen() {
 
   // ── DRAWING ──
   if (currentTurn.status === 'drawing') {
-    const drawingTimeline = amActive ? myTimeline : timeline;
-    const drawingPlacedMovies = amActive ? myPlacedMovies : placedMovies;
     // Midpoint between timeline bottom and pull tab top (device-specific, uses onLayout measurement)
     const gameAreaH = screenHeight - insets.top - insets.bottom;
     // Distance from bottom of timelineAreaFull to bottom of timeline wrapper (measured via onLayout)
@@ -1692,10 +1683,6 @@ export default function GameScreen() {
     const PULL_TAB_VISUAL_H = 28;
     // CTA center at midpoint; subtract half primary button height (24px)
     const ctaBottom = Math.round((tlBottomFromBase + PULL_TAB_VISUAL_H) / 2) - 24;
-    const activePlayerIdx = players.findIndex(p => p.id === currentTurn.active_player_id);
-    const activePlayerColor = activePlayerIdx >= 0
-      ? PLAYER_CHIP_COLORS[activePlayerIdx % PLAYER_CHIP_COLORS.length]
-      : C.textSub;
 
     return (
       <>
@@ -1753,11 +1740,6 @@ export default function GameScreen() {
         <Animated.View
           pointerEvents="none"
           style={[StyleSheet.absoluteFillObject, { backgroundColor: C.inkBg, opacity: lightsOnAnim }]}
-        />
-        {/* Curtain: fades parchment → black before trailer mounts on "Let's Guess" */}
-        <Animated.View
-          pointerEvents="none"
-          style={[StyleSheet.absoluteFillObject, { backgroundColor: C.inkBg, opacity: curtainAnim }]}
         />
       </SafeAreaView>
       {persistentOverlays}
@@ -2042,30 +2024,58 @@ export default function GameScreen() {
     // In private games, only the host's phone plays the actual video.
     const showVideo = amHost || game?.visibility === 'public';
 
-    // ── Trailer screen ──
+    // ── Trailer screen (overlay on top of drawing timeline) ──
     return (
       <>
-      <View style={styles.trailerContainer}>
+      {/* Base: drawing timeline stays visible underneath the trailer overlay */}
+      <SafeAreaView style={[styles.container, { backgroundColor: C.bg }]} edges={['top', 'bottom']}>
+        <View style={styles.gameArea}>
+          <View style={[styles.timelineAreaFull, { paddingBottom: timelinePaddingBottom }]}>
+            <Text style={[styles.drawingTurnLabel, { color: activePlayerColor }]}>
+              {amActive ? 'Your turn' : `${activePlayer?.display_name}'s timeline`}
+            </Text>
+            <View style={{ minHeight: 148 }}>
+              {movie && (
+                <Timeline
+                  timeline={drawingTimeline}
+                  currentCardMovie={movie}
+                  interactive={false}
+                  selectedInterval={null}
+                  onIntervalSelect={() => {}}
+                  onConfirm={() => {}}
+                  placedMovies={drawingPlacedMovies}
+                  hideFloatingCard
+                />
+              )}
+            </View>
+          </View>
+        </View>
+        {myTimeline.length > 0 && (
+          <MyTimelinePanel timeline={myTimeline} cards={myTimelineCards} bottomInset={insets.bottom} screenHeight={screenHeight} />
+        )}
+      </SafeAreaView>
+
+      {/* Trailer overlay — covers the drawing screen */}
+      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: '#000' }]}>
         {/* Video: host's phone only in private games; all phones in public games */}
         {showVideo && (
-          <>
-            <TrailerPlayer
-              key={`${currentTurn.id}-${trailerKey}`}
-              ref={trailerRef}
-              movie={movie}
-              onEnded={() => { setTrailerEnded(true); setUserPaused(false); }}
-            />
-            {/* Touch blocker — prevents YouTube from showing title on tap */}
-            {!userPaused && (
-              <TouchableOpacity
-                style={StyleSheet.absoluteFillObject}
-                activeOpacity={1}
-                onPress={() => {
-                  if (amActive) { trailerRef.current?.pause(); setUserPaused(true); }
-                }}
-              />
-            )}
-          </>
+          <TrailerPlayer
+            key={`${currentTurn.id}-${trailerKey}`}
+            ref={trailerRef}
+            movie={movie}
+            onEnded={() => { setTrailerEnded(true); setUserPaused(false); }}
+          />
+        )}
+
+        {/* Touch blocker — prevents YouTube from showing title on tap */}
+        {showVideo && !userPaused && (
+          <TouchableOpacity
+            style={StyleSheet.absoluteFillObject}
+            activeOpacity={1}
+            onPress={() => {
+              if (amActive) { trailerRef.current?.pause(); setUserPaused(true); }
+            }}
+          />
         )}
 
         {/* Controls: active player watching video (host / public) — corner overlay */}
@@ -4169,7 +4179,6 @@ const styles = StyleSheet.create({
   revealNextBtnText: { color: C.textOnOchre, fontFamily: Fonts.display, fontSize: FS.md, letterSpacing: 0.4 },
 
   // ── Trailer overlay ──
-  trailerContainer: { flex: 1, backgroundColor: '#000' },
   trailerControls: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
     alignItems: 'flex-end', justifyContent: 'space-between', padding: 16,
