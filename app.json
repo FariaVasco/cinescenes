@@ -8,6 +8,7 @@
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "scheme": "cinescenes",
+    "platforms": ["ios", "android"],
     "splash": {
       "image": "./assets/lc-logo.png",
       "resizeMode": "contain",

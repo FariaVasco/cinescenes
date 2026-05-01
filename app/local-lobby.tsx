@@ -426,7 +426,7 @@ export default function LocalLobbyScreen() {
         game_id: localGame.id,
         active_player_id: firstPlayer.id,
         movie_id: firstTurnMovie.id,
-        status: 'drawing',
+        status: 'placing',
       });
 
       navigatedRef.current = true;

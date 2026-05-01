@@ -265,9 +265,11 @@ export function TrailerCountdown({ durationMs, onExpire }: TrailerCountdownProps
   return (
     <View style={cdStyles.wrap}>
       <Text style={cdStyles.label}>{'Trailer starts in'}</Text>
-      <Animated.Text style={[cdStyles.number, { transform: [{ scale: scaleAnim }], opacity: opacityAnim }]}>
-        {secsLeft}{' '}
-      </Animated.Text>
+      {secsLeft > 0 && (
+        <Animated.Text style={[cdStyles.number, { transform: [{ scale: scaleAnim }], opacity: opacityAnim }]}>
+          {secsLeft}{' '}
+        </Animated.Text>
+      )}
     </View>
   );
 }
