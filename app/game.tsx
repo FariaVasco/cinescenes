@@ -259,6 +259,15 @@ export default function GameScreen() {
     ]).start();
   }, [countdownDone, trailerRevealed]);
 
+  // Non-video devices (non-host in private game) never receive onRevealed from TrailerPlayer
+  // since TrailerPlayer is not rendered for them. Manually open the gate when countdown fires.
+  useEffect(() => {
+    if (!countdownDone) return;
+    const amHost_ = players.length > 0 && players[0].id === myPlayerId;
+    const showVideo_ = amHost_ || game?.visibility === 'public';
+    if (!showVideo_) setTrailerRevealed(true);
+  }, [countdownDone]);
+
   // Suspense → flip → result reveal sequence.
   // Challenges are fetched immediately (for the suspense overlay).
   // Phase timeline: 0ms suspense, 2400ms flip (card visible+flipping), 3800ms result (panel slides up).
@@ -522,20 +531,22 @@ export default function GameScreen() {
     }
   }, [currentTurn?.status, currentTurn?.id, game?.game_mode, game?.id]);
 
-  // Auto-reveal: trigger when all observers have committed (bypass lock) or when the
-  // lock expires with no pending pickers.
+  // Auto-reveal: start bet-reveal sequence only once all decisions are confirmed in local state.
+  // Does NOT fire on lock-expiry alone — that was racy (challenge row may not have arrived via poll yet).
+  // Timed fallbacks (10s soft / 60s hard) are handled by the poll.
   useEffect(() => {
     const amActive = myPlayerId === currentTurn?.active_player_id;
     if (currentTurn?.status !== 'challenging' || !amActive) return;
+    if (betRevealTriggered.current) return;
     const noPendingPickers = !challenges.some(c => c.interval_index === -1);
     const observers = players.filter(p => p.id !== currentTurn.active_player_id);
     const everybodyIn = observers.length > 0 && challenges.length >= observers.length && noPendingPickers;
-    const canReveal = everybodyIn || (!revealLocked && noPendingPickers);
-    if (!canReveal) return;
-    const t = setTimeout(() => { handleReveal(); }, 1000);
-    return () => clearTimeout(t);
+    if (!everybodyIn) return;
+    revealTriggered.current = true;
+    betRevealTriggered.current = true;
+    setShowBetReveal(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentTurn?.status, revealLocked, challenges, players, myPlayerId, currentTurn?.active_player_id]);
+  }, [currentTurn?.status, challenges, players, myPlayerId, currentTurn?.active_player_id]);
 
   // When reveal starts and a challenger won, fetch their existing won turns so all
   // devices can show the correct movies in the challenger's timeline without guessing.
@@ -772,7 +783,10 @@ export default function GameScreen() {
             challengeWindowStart.current = (allDecided && allSettled) ? Date.now() - 14000 : Date.now();
           }
           const elapsed = Date.now() - challengeWindowStart.current;
-          if ((allDecided && allSettled) || (elapsed > 10000 && allSettled) || elapsed > 15000) {
+          // 10s soft cutoff: fire if all settled (no pending picks) regardless of allDecided.
+          // 60s hard cutoff: unconditional safety net for device failure — in normal play
+          //   each picker's own 15s HourglassTimer will have fired handlePickerTimeout well before this.
+          if ((allDecided && allSettled) || (elapsed > 10000 && allSettled) || elapsed > 60000) {
             revealTriggered.current = true;
             betRevealTriggered.current = true;
             setShowBetReveal(true);
@@ -883,12 +897,13 @@ export default function GameScreen() {
 
   async function handleLetsDraw() {
     if (!currentTurn) return;
-    const optimistic = { ...currentTurn, status: 'placing' as const };
+    const placingStartedAt = new Date().toISOString();
+    const optimistic = { ...currentTurn, status: 'placing' as const, placing_started_at: placingStartedAt };
     pendingTurnWrite.current = true;
     setLocalTurn(optimistic);
     setCurrentTurn(optimistic);
     currentTurnRef.current = optimistic;
-    await db.from('turns').update({ status: 'placing' }).eq('id', currentTurn.id);
+    await db.from('turns').update({ status: 'placing', placing_started_at: placingStartedAt }).eq('id', currentTurn.id);
     pendingTurnWrite.current = false;
   }
 
@@ -1913,6 +1928,12 @@ export default function GameScreen() {
     // In private games, only the host's phone plays the actual video.
     const showVideo = amHost || game?.visibility === 'public';
 
+    // Remaining countdown duration — synced across devices via placing_started_at
+    // (requires DB migration: ALTER TABLE turns ADD COLUMN placing_started_at TIMESTAMPTZ)
+    const remainingPreview = currentTurn.placing_started_at
+      ? Math.max(1000, PREVIEW_DURATION - (Date.now() - new Date(currentTurn.placing_started_at).getTime()))
+      : PREVIEW_DURATION;
+
     // ── Trailer screen + countdown overlay ──
     return (
       <>
@@ -1953,7 +1974,7 @@ export default function GameScreen() {
             key={`${currentTurn.id}-${trailerKey}`}
             ref={trailerRef}
             movie={movie}
-            unmuteAfterMs={PREVIEW_DURATION + 200}
+            unmuteAfterMs={remainingPreview + 200}
             onEnded={() => { setTrailerEnded(true); setUserPaused(false); }}
             onRevealed={() => { console.log('[CS] onRevealed → setTrailerRevealed(true)'); setTrailerRevealed(true); }}
           />
@@ -2125,7 +2146,7 @@ export default function GameScreen() {
             </View>
             {/* Countdown — absolute at bottom, compact horizontal layout keeps it below centered cards */}
             <View style={{ position: 'absolute', bottom: PULL_TAB_H + 8, left: 0, right: 0, alignItems: 'center' }}>
-              <TrailerCountdown durationMs={PREVIEW_DURATION} onExpire={() => { console.log('[CS] countdown expired → setCountdownDone(true)'); setCountdownDone(true); }} />
+              <TrailerCountdown durationMs={remainingPreview} onExpire={() => { console.log('[CS] countdown expired → setCountdownDone(true)'); setCountdownDone(true); }} />
             </View>
             {myTimeline.length > 0 && (
               <MyTimelinePanel timeline={myTimeline} cards={myTimelineCards} bottomInset={insets.bottom} screenHeight={screenHeight} />
@@ -2176,7 +2197,7 @@ export default function GameScreen() {
     const pendingChallengers = challenges.some(c => c.interval_index === -1);
     const observerCount = players.filter(p => p.id !== currentTurn.active_player_id).length;
     const everybodyIn = observerCount > 0 && challenges.length >= observerCount && !pendingChallengers;
-    const canRevealNow = everybodyIn || (!revealLocked && !pendingChallengers);
+    const canRevealNow = everybodyIn;
     const myPlayerObj = players.find(p => p.id === myPlayerId);
     const hasCoins = (myPlayerObj?.coins ?? 0) > 0;
 
@@ -2264,7 +2285,7 @@ export default function GameScreen() {
 
           {/* Challenge/Pass row — in normal flow so timeline is never covered */}
           {showChallengePanel && (
-            <Animated.View style={[styles.challengeBottomPanel, { transform: [{ translateY: challengePanelY }] }]}>
+            <Animated.View style={[styles.challengeBottomPanel, { transform: [{ translateY: challengePanelY }], paddingBottom: insets.bottom || 10 }]}>
               <HourglassTimer durationMs={10000} onExpire={handlePass} size={36} />
               <TouchableOpacity onPress={handlePass} activeOpacity={0.7} style={styles.passBtn}>
                 <Text style={styles.passBtnLabel}>Pass</Text>
@@ -2290,7 +2311,7 @@ export default function GameScreen() {
 
           {/* Picking-phase row: hourglass + optional withdraw — in normal flow */}
           {isPickingInterval && (
-            <View style={styles.challengePickRow}>
+            <View style={[styles.challengePickRow, { paddingBottom: insets.bottom || 10 }]}>
               <HourglassTimer durationMs={15000} size={36} onExpire={handlePickerTimeout} />
               {!amFirstChallenger && (
                 <TouchableOpacity style={styles.withdrawOverlayBtn} onPress={handleWithdrawChallenge} activeOpacity={0.7}>
@@ -2869,9 +2890,9 @@ function RevealResult({
           </TouchableOpacity>
         ) : (
           <View style={styles.resultBannerCountdown}>
-            {countdown <= 0
-              ? <ActivityIndicator size="small" color={C.textSub} />
-              : <Text style={styles.resultBannerCountdownText}>{countdown}</Text>}
+            {countdown > 0 && (
+              <Text style={styles.resultBannerCountdownText}>{countdown}</Text>
+            )}
           </View>
         )}
       </View>

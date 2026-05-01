@@ -297,7 +297,7 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
         <View key={`gap-${index}`} style={styles.coinWrap} onStartShouldSetResponder={() => true}>
           {coins.map((coin, i) => (
             <View key={i} style={[styles.coinCircle, !dark && { borderColor: 'rgba(26,26,26,0.3)', backgroundColor: 'rgba(26,26,26,0.07)' }]}>
-              <Text style={[styles.coinInitials, { color: labelColor }]}>{coin.label.charAt(0).toUpperCase()}</Text>
+              <Text style={[styles.coinInitials, { color: labelColor }]}>{coin.label.charAt(0).toUpperCase()}{' '}</Text>
             </View>
           ))}
         </View>

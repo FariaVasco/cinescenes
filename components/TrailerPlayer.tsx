@@ -22,15 +22,19 @@ interface TrailerPlayerProps {
 
 const TITLE_CARD_BURN = 3500; // ms after player ready before the YouTube title overlay is gone
 
-function makeYouTubeInject(unmuteAtMs: number | null) {
-  const delayExpr = unmuteAtMs != null
+function makeYouTubeInject(unmuteAtMs: number | null, endMuteAtMs: number | null) {
+  const unmuteDelayExpr = unmuteAtMs != null
     ? `Math.max(0, ${unmuteAtMs} - Date.now())`
     : '300';
+  const endMuteDelayExpr = endMuteAtMs != null
+    ? `Math.max(0, ${endMuteAtMs} - Date.now())`
+    : null;
 
   return `
 (function() {
   var muted = false;
   var unmuted = false;
+  var endMuteScheduled = false;
   var playerReadyAt = 0;
 
   setInterval(function() {
@@ -59,7 +63,14 @@ function makeYouTubeInject(unmuteAtMs: number | null) {
           window.player.unMute();
           window.player.setVolume(100);
         }
-      }, ${delayExpr});
+        ${endMuteDelayExpr != null ? `
+        if (!endMuteScheduled) {
+          endMuteScheduled = true;
+          setTimeout(function() {
+            if (typeof window.player.mute === 'function') { window.player.mute(); }
+          }, ${endMuteDelayExpr});
+        }` : ''}
+      }, ${unmuteDelayExpr});
     }
   }, 100);
 })();
@@ -79,9 +90,11 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
     const playerW  = byWidth.h <= height ? byWidth.w : byHeight.w;
     const playerH  = byWidth.h <= height ? byWidth.h : byHeight.h;
 
-    const [playing, setPlaying] = useState(true);
+    const [playing, setPlaying]         = useState(true);
+    const [endOverlay, setEndOverlay]   = useState(false);
 
     const timerRef            = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const overlayTimerRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
     const fallbackRef         = useRef<ReturnType<typeof setTimeout> | null>(null);
     const timerStartRef       = useRef<number>(0);
     const remainingRef        = useRef<number>(0);
@@ -102,9 +115,13 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
     const duration   = insaneMode ? 30_000 : Math.max(safeEnd - safeStart, 10) * 1000;
 
     // Injection captured at mount so Date.now() reflects the actual mount time.
-    const [youtubeInject] = useState(() =>
-      makeYouTubeInject(unmuteAfterMs != null ? Date.now() + unmuteAfterMs : null)
-    );
+    const [youtubeInject] = useState(() => {
+      const now = Date.now();
+      return makeYouTubeInject(
+        unmuteAfterMs != null ? now + unmuteAfterMs : null,
+        now + duration - 800,  // mute audio 800ms before clip end
+      );
+    });
 
     useEffect(() => {
       console.log(`[CS] TrailerPlayer mounted  t=0  unmuteAfterMs=${unmuteAfterMs}  TITLE_CARD_BURN=${TITLE_CARD_BURN}`);
@@ -112,8 +129,11 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
 
     function startEndTimer(ms_: number = duration) {
       if (timerRef.current) clearTimeout(timerRef.current);
+      if (overlayTimerRef.current) clearTimeout(overlayTimerRef.current);
       timerStartRef.current = Date.now();
       remainingRef.current  = ms_;
+      // Black overlay appears 1s before screen switch, hiding any YouTube end card.
+      overlayTimerRef.current = setTimeout(() => setEndOverlay(true), Math.max(ms_ - 1000, 0));
       timerRef.current = setTimeout(() => {
         setPlaying(false);
         onEnded?.();
@@ -125,7 +145,7 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
       if (fallbackRef.current) clearTimeout(fallbackRef.current);
       onRevealed?.();
       if (!skipEndTimerOnReady.current) {
-        startEndTimer(Math.max(duration - 1000, 1000));
+        startEndTimer(Math.max(duration - 200, 1000));
       }
     }
 
@@ -149,8 +169,10 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
       replay() {
         contentReadyRef.current = false;
         if (timerRef.current) clearTimeout(timerRef.current);
+        if (overlayTimerRef.current) clearTimeout(overlayTimerRef.current);
         if (fallbackRef.current) clearTimeout(fallbackRef.current);
         skipEndTimerOnReady.current = false;
+        setEndOverlay(false);
         setPlaying(false);
         const replayStart = insaneMode ? dynStartRef.current : safeStart;
         setTimeout(() => {
@@ -208,6 +230,7 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
     useEffect(() => {
       return () => {
         if (timerRef.current) clearTimeout(timerRef.current);
+        if (overlayTimerRef.current) clearTimeout(overlayTimerRef.current);
         if (fallbackRef.current) clearTimeout(fallbackRef.current);
       };
     }, []);
@@ -215,6 +238,7 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
     return (
       <View style={styles.container}>
         <YoutubePlayer
+
             ref={playerRef}
             height={playerH}
             width={playerW}
@@ -238,6 +262,9 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
               injectedJavaScript: youtubeInject,
             }}
           />
+        {endOverlay && (
+          <View style={[StyleSheet.absoluteFillObject, { backgroundColor: '#000' }]} />
+        )}
       </View>
     );
   }

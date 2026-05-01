@@ -141,6 +141,7 @@ export interface Database {
           placed_interval: number | null;
           status: 'drawing' | 'placing' | 'challenging' | 'revealing' | 'complete';
           created_at: string;
+          placing_started_at?: string | null;
         };
         Insert: {
           id?: string;
@@ -150,6 +151,7 @@ export interface Database {
           placed_interval?: number | null;
           status?: 'drawing' | 'placing' | 'challenging' | 'revealing' | 'complete';
           created_at?: string;
+          placing_started_at?: string | null;
         };
         Update: Partial<Database['public']['Tables']['turns']['Insert']>;
       };
