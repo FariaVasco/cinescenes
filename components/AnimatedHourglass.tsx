@@ -151,9 +151,11 @@ interface HourglassTimerProps {
   onExpire?: () => void;
   size?: number;
   label?: string;
+  labelBefore?: string; // renders as "{labelBefore}{secsLeft}s"
+  textSize?: number;    // overrides computed font size
 }
 
-export function HourglassTimer({ durationMs, onExpire, size = 80, label }: HourglassTimerProps) {
+export function HourglassTimer({ durationMs, onExpire, size = 80, label, labelBefore, textSize }: HourglassTimerProps) {
   const [progress, setProgress] = useState(0);
   const firedRef = useRef(false);
   const shakeAnim = useRef(new Animated.Value(0)).current;
@@ -206,8 +208,8 @@ export function HourglassTimer({ durationMs, onExpire, size = 80, label }: Hourg
   return (
     <Animated.View style={[hStyles.wrap, { transform: [{ translateX: shakeAnim }] }]}>
       <AnimatedHourglass durationMs={durationMs} progress={progress} size={size} urgent={urgent} />
-      <Text style={[hStyles.secs, { fontSize: Math.max(10, size * 0.22), color: urgent ? VERMILLION : OCHRE }]}>
-        {secsLeft}s{label ? ` ${label}` : ''}
+      <Text style={[hStyles.secs, { fontSize: textSize ?? Math.max(10, size * 0.22), color: urgent ? VERMILLION : OCHRE }]}>
+        {labelBefore ? `${labelBefore}${secsLeft}s` : `${secsLeft}s${label ? ` ${label}` : ''}`}
       </Text>
     </Animated.View>
   );
@@ -216,4 +218,62 @@ export function HourglassTimer({ durationMs, onExpire, size = 80, label }: Hourg
 const hStyles = StyleSheet.create({
   wrap: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   secs: { fontFamily: Fonts.display, lineHeight: 16, textAlign: 'center' },
+});
+
+// ── TrailerCountdown ──────────────────────────────────────────────────────────
+// Calm New-Year's-Eve-style big-number countdown — no urgency, no shaking.
+
+interface TrailerCountdownProps {
+  durationMs: number;
+  onExpire?: () => void;
+}
+
+export function TrailerCountdown({ durationMs, onExpire }: TrailerCountdownProps) {
+  const [secsLeft, setSecsLeft] = useState(Math.ceil(durationMs / 1000));
+  const scaleAnim   = useRef(new Animated.Value(1.35)).current;
+  const opacityAnim = useRef(new Animated.Value(0.4)).current;
+  const firedRef    = useRef(false);
+
+  useEffect(() => {
+    firedRef.current = false;
+    const start = Date.now();
+    const id = setInterval(() => {
+      const elapsed = Date.now() - start;
+      const p       = Math.min(elapsed / durationMs, 1);
+      const secs    = Math.ceil((1 - p) * durationMs / 1000);
+      setSecsLeft(secs);
+      if (p >= 1 && !firedRef.current) {
+        firedRef.current = true;
+        clearInterval(id);
+        onExpire?.();
+      }
+    }, 50);
+    return () => clearInterval(id);
+  }, []);
+
+  // Zoom-settle on each new second (like a scoreboard flip)
+  useEffect(() => {
+    scaleAnim.setValue(1.35);
+    opacityAnim.setValue(0.4);
+    Animated.parallel([
+      Animated.timing(scaleAnim,   { toValue: 1.0, duration: 500, useNativeDriver: true }),
+      Animated.timing(opacityAnim, { toValue: 1.0, duration: 350, useNativeDriver: true }),
+    ]).start();
+  }, [secsLeft]);
+
+  // Horizontal row: label on left, number on right — keeps total height ~46px to fit below centered cards
+  return (
+    <View style={cdStyles.wrap}>
+      <Text style={cdStyles.label}>{'Trailer starts in'}</Text>
+      <Animated.Text style={[cdStyles.number, { transform: [{ scale: scaleAnim }], opacity: opacityAnim }]}>
+        {secsLeft}{' '}
+      </Animated.Text>
+    </View>
+  );
+}
+
+const cdStyles = StyleSheet.create({
+  wrap:   { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  label:  { fontFamily: Fonts.body, fontSize: 12, color: '#999', letterSpacing: 0.3, textAlign: 'right', lineHeight: 17 },
+  number: { fontFamily: Fonts.display, fontSize: 44, color: OCHRE, lineHeight: 50 },
 });

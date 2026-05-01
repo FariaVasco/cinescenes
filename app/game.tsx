@@ -34,7 +34,7 @@ import { Challenge, Movie, Player, Turn } from '@/lib/database.types';
 import { TrailerPlayer, TrailerPlayerHandle } from '@/components/TrailerPlayer';
 import { Timeline, TimelineHandle } from '@/components/Timeline';
 import { ChallengeTimer } from '@/components/ChallengeTimer';
-import { HourglassTimer } from '@/components/AnimatedHourglass';
+import { HourglassTimer, TrailerCountdown } from '@/components/AnimatedHourglass';
 import { CardBack, CardFront } from '@/components/MovieCard';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { AirPlayButton, useAirPlayAvailable } from 'airplay-picker';
@@ -65,6 +65,7 @@ const REPORT_OPTIONS = [
 const db = supabase as unknown as { from: (t: string) => any };
 const POLL_MS = 2000;
 const WIN_CARDS = 10;
+const PREVIEW_DURATION = 5500; // ms — timeline study countdown before trailer reveals
 
 
 export default function GameScreen() {
@@ -89,6 +90,8 @@ export default function GameScreen() {
   const [challenges, setLocalChallenges] = useState<Challenge[]>([]);
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const [trailerEnded, setTrailerEnded] = useState(false);
+  const [trailerRevealed, setTrailerRevealed] = useState(false);
+  const [countdownDone, setCountdownDone] = useState(false);
   const [canSkipTrailer, setCanSkipTrailer] = useState(true);
   const skipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [readyToPlace, setReadyToPlace] = useState(false);
@@ -127,6 +130,9 @@ export default function GameScreen() {
   const bonusPanelAnim = useRef(new Animated.Value(0)).current;
   // "Lights on" transition: dark overlay that fades away when drawing phase appears after reveal
   const lightsOnAnim = useRef(new Animated.Value(0)).current;
+  // Cross-fade between countdown overlay and trailer overlay
+  const trailerRevealAnim = useRef(new Animated.Value(0)).current;
+  const countdownFadeAnim = useRef(new Animated.Value(1)).current;
   const prevStatusRef = useRef<string | null>(null);
   const [flyVisible, setFlyVisible] = useState(false);
   const [flyStart, setFlyStart] = useState({ x: 0, y: 0 });
@@ -180,8 +186,6 @@ export default function GameScreen() {
   const introShownRef = useRef(false);
   // Insane mode: current turn's movie may not be in the activeMovies store
   const [movieOverride, setMovieOverride] = useState<Movie | null>(null);
-  // Bottom Y of the drawing-phase timeline wrapper within timelineAreaFull (set by onLayout)
-  const [drawingTLLayoutBottom, setDrawingTLLayoutBottom] = useState(0);
   // Cache of insane mode movies keyed by id (not in activeMovies classic pool)
   const insaneMoviesCacheRef = useRef<Map<string, Movie>>(new Map());
   // Prefetched next-turn movie promise for insane mode — started during challenging phase
@@ -236,13 +240,24 @@ export default function GameScreen() {
     return () => { show.remove(); hide.remove(); };
   }, []);
 
-  // Fade the "lights on" overlay from opaque → transparent when drawing phase appears after reveal.
+  // Fade the "lights on" overlay from opaque → transparent when the placing phase appears after reveal.
   // The setValue(1) happens synchronously in the render body so the first painted frame is already dark.
   useEffect(() => {
-    if (currentTurn?.status !== 'drawing') return;
+    if (currentTurn?.status !== 'placing') return;
     Animated.timing(lightsOnAnim, { toValue: 0, duration: 700, useNativeDriver: true }).start();
     return () => lightsOnAnim.stopAnimation();
   }, [currentTurn?.status]);
+
+  // Cross-fade: snap to trailer the moment both gates open.
+  useEffect(() => {
+    console.log(`[CS] gates update  countdownDone=${countdownDone} trailerRevealed=${trailerRevealed}`);
+    if (!countdownDone || !trailerRevealed) return;
+    console.log('[CS] BOTH GATES OPEN — starting cross-fade');
+    Animated.parallel([
+      Animated.timing(countdownFadeAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
+      Animated.timing(trailerRevealAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
+    ]).start();
+  }, [countdownDone, trailerRevealed]);
 
   // Suspense → flip → result reveal sequence.
   // Challenges are fetched immediately (for the suspense overlay).
@@ -345,7 +360,6 @@ export default function GameScreen() {
       if (remaining <= 0) {
         clearInterval(autoNextIntervalRef.current!);
         autoNextIntervalRef.current = null;
-        if (isActive) handleNextTurnWithFade();
       }
     }, 1000);
     return () => {
@@ -441,7 +455,10 @@ export default function GameScreen() {
     if (isHost && !isActive && game?.visibility !== 'public'
         && trailerEnded && prev !== undefined && prev !== null && curr === null) {
       setTrailerEnded(false);
+      setTrailerRevealed(false);
       setUserPaused(false);
+      trailerRevealAnim.setValue(0);
+      countdownFadeAnim.setValue(1);
       setTrailerKey(k => k + 1);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -663,6 +680,10 @@ export default function GameScreen() {
 
         if (turnChanged) {
           setTrailerEnded(false);
+          setTrailerRevealed(false);
+          setCountdownDone(false);
+          trailerRevealAnim.setValue(0);
+          countdownFadeAnim.setValue(1);
           setReadyToPlace(false);
           setUserPaused(false);
           setHasReplayed(false);
@@ -1153,7 +1174,10 @@ export default function GameScreen() {
     setHasReplayed(true);
     setReadyToPlace(false);
     setTrailerEnded(false);
+    setTrailerRevealed(false);
     setUserPaused(false);
+    trailerRevealAnim.setValue(0);
+    countdownFadeAnim.setValue(1);
     setTrailerKey(k => k + 1);
   }
 
@@ -1376,7 +1400,7 @@ export default function GameScreen() {
         game_id: g.id,
         active_player_id: nextPlayer.id,
         movie_id: nextMovieId,
-        status: 'drawing',
+        status: 'placing',
       });
       if (insertError) {
         // 23505 = unique_violation from turns_one_live_per_game_idx: another
@@ -1570,7 +1594,7 @@ export default function GameScreen() {
             game_id: g.id,
             active_player_id: nextPlayer.id,
             movie_id: leaveNextMovieId,
-            status: 'drawing',
+            status: 'placing',
           });
         }
       }
@@ -1641,7 +1665,7 @@ export default function GameScreen() {
   {
     const _prev = prevStatusRef.current;
     prevStatusRef.current = currentTurn?.status ?? null;
-    if (_prev === 'revealing' && currentTurn?.status === 'drawing') {
+    if (_prev === 'revealing' && currentTurn?.status === 'placing') {
       lightsOnAnim.setValue(1);
     }
   }
@@ -1671,82 +1695,6 @@ export default function GameScreen() {
     </>
   );
 
-  // ── DRAWING ──
-  if (currentTurn.status === 'drawing') {
-    // Midpoint between timeline bottom and pull tab top (device-specific, uses onLayout measurement)
-    const gameAreaH = screenHeight - insets.top - insets.bottom;
-    // Distance from bottom of timelineAreaFull to bottom of timeline wrapper (measured via onLayout)
-    const tlBottomFromBase = drawingTLLayoutBottom > 0
-      ? gameAreaH - drawingTLLayoutBottom
-      : 80 + Math.max(0, (gameAreaH - 276) / 2); // fallback before first layout
-    // Pull tab visual height (~28dp): paddingTop(5)+handle(4)+gap(2)+label(~13)+paddingBottom(4)
-    const PULL_TAB_VISUAL_H = 28;
-    // CTA center at midpoint; subtract half primary button height (24px)
-    const ctaBottom = Math.round((tlBottomFromBase + PULL_TAB_VISUAL_H) / 2) - 24;
-
-    return (
-      <>
-      <SafeAreaView style={[styles.container, { backgroundColor: C.bg }]} edges={['top', 'bottom']}>
-        <View style={styles.gameArea}>
-          <View style={[styles.timelineAreaFull, { paddingBottom: timelinePaddingBottom }]}>
-            {/* Label — flows just above cards; both centered as a group */}
-            <Text style={[styles.drawingTurnLabel, { color: activePlayerColor }]}>
-              {amActive ? 'Your turn' : `${activePlayer?.display_name}'s timeline`}
-            </Text>
-            {/* Timeline — minHeight prevents centering jump when going from 0 to 1 card */}
-            <View
-              style={{ minHeight: 148 }}
-              onLayout={e => {
-                const { y, height } = e.nativeEvent.layout;
-                setDrawingTLLayoutBottom(y + height);
-              }}
-            >
-              {movie && (
-                <Timeline
-                  timeline={drawingTimeline}
-                  currentCardMovie={movie}
-                  interactive={false}
-                  selectedInterval={null}
-                  onIntervalSelect={() => {}}
-                  onConfirm={() => {}}
-                  placedMovies={drawingPlacedMovies}
-                  hideFloatingCard
-                />
-              )}
-            </View>
-            {/* CTA — absolute, vertically centered between timeline bottom and pull tab top */}
-            <View style={[styles.drawingCTAArea, { bottom: ctaBottom }]}>
-              {amActive ? (
-                <TouchableOpacity style={styles.primaryBtn} onPress={handleLetsDraw}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    <Image source={lcPopcorn} style={{ width: 28, height: 28 }} />
-                    <Text style={styles.primaryBtnText}>Let's Guess</Text>
-                  </View>
-                </TouchableOpacity>
-              ) : (
-                <View style={styles.drawingWaitingRow}>
-                  <Image source={lcHourglass} style={styles.waitingHourglassIcon} tintColor={C.textSub} />
-                  <Text style={styles.drawingWaitingText}>{activePlayer?.display_name} is thinking…</Text>
-                </View>
-              )}
-            </View>
-          </View>
-        </View>
-
-        {myTimeline.length > 0 && (
-          <MyTimelinePanel timeline={myTimeline} cards={myTimelineCards} bottomInset={insets.bottom} screenHeight={screenHeight} />
-        )}
-        {/* Lights-on overlay: fades from dark → transparent after reveal */}
-        <Animated.View
-          pointerEvents="none"
-          style={[StyleSheet.absoluteFillObject, { backgroundColor: C.inkBg, opacity: lightsOnAnim }]}
-        />
-      </SafeAreaView>
-      {persistentOverlays}
-      </>
-    );
-  }
-
   // ── PLACING ──
   if (currentTurn.status === 'placing') {
     if (!movie) return <LoadingScreen />;
@@ -1763,47 +1711,9 @@ export default function GameScreen() {
           <View style={styles.gameArea}>
             <Animated.View style={[styles.timelineAreaFull, { paddingBottom: timelinePaddingBottom }]}>
               {amActive ? (
-                <>
-                  {!hasReplayed && (
-                    <TouchableOpacity
-                      onPress={async () => {
-                        if (amHost || game?.visibility === 'public') {
-                          handleReplayBonus();
-                        } else {
-                          // Reset placed_interval → null so the host detects a replay request on next poll.
-                          // Host's useEffect fires when it sees non-null→null while trailerEnded=true.
-                          // Optimistically clear placed_interval in local state BEFORE the other state
-                          // changes fire: the effect at line ~407 checks placed_interval === -1 to advance
-                          // the player to the placing screen, so we must set it to null first or the
-                          // player is immediately bounced back to the timeline before seeing the
-                          // "Trailer is on host's screen" message.
-                          if (currentTurn) {
-                            const optimistic = { ...currentTurn, placed_interval: null };
-                            currentTurnRef.current = optimistic;
-                            setLocalTurn(optimistic);
-                          }
-                          setHasReplayed(true);
-                          setReadyToPlace(false);
-                          setTrailerEnded(false);
-                          if (currentTurn) {
-                            await db.from('turns').update({ placed_interval: null }).eq('id', currentTurn.id);
-                          }
-                        }
-                      }}
-                      style={styles.replayLink}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={styles.replayLinkText}>↺ Replay</Text>
-                    </TouchableOpacity>
-                  )}
-                  <View style={{ position: 'absolute', top: 8, left: 0, right: 0, alignItems: 'center' }}>
-                    <HourglassTimer durationMs={30000} size={40} onExpire={handlePlacementTimeout} label="to place the card in the timeline" />
-                  </View>
-                </>
-              ) : !amActive && amHost && game?.visibility !== 'public' && !hasReplayed ? (
-                <TouchableOpacity onPress={handleReplayBonus} style={[styles.replayLink, { alignSelf: 'center', marginTop: 8 }]} activeOpacity={0.7}>
-                  <Text style={styles.replayLinkText}>↺ Replay</Text>
-                </TouchableOpacity>
+                <View style={{ position: 'absolute', top: 8, left: 0, right: 0, alignItems: 'center' }}>
+                  <HourglassTimer durationMs={30000} size={40} onExpire={handlePlacementTimeout} label="to place the card in the timeline" />
+                </View>
               ) : (
                 <View style={styles.placePromptRow}>
                   <Image source={lcHourglass} style={styles.waitingHourglassIcon} tintColor={C.textSub} />
@@ -2000,34 +1910,13 @@ export default function GameScreen() {
       }
 
 
-    // ── Non-host observers in private games: show waiting screen ──
-    // (Active player always falls through to the trailer block so they get controls)
-    if (!amHost && !amActive && game?.visibility !== 'public') {
-      const hostPlayer = players[0];
-      return (
-        <>
-        <View style={styles.endedOverlay}>
-          <SafeAreaView style={styles.endedInner} edges={['top', 'bottom']}>
-            <View style={styles.endedCenter}>
-              <Image source={lcPopcorn} style={styles.endedTitleIcon} />
-              <Text style={styles.endedWaiting}>
-                {hostPlayer?.display_name} is watching the trailer…
-              </Text>
-            </View>
-          </SafeAreaView>
-        </View>
-        {persistentOverlays}
-        </>
-      );
-    }
-
     // In private games, only the host's phone plays the actual video.
     const showVideo = amHost || game?.visibility === 'public';
 
-    // ── Trailer screen (overlay on top of drawing timeline) ──
+    // ── Trailer screen + countdown overlay ──
     return (
       <>
-      {/* Base: drawing timeline stays visible underneath the trailer overlay */}
+      {/* Base: drawing timeline underneath (visible only when trailer overlay is absent) */}
       <SafeAreaView style={[styles.container, { backgroundColor: C.bg }]} edges={['top', 'bottom']}>
         <View style={styles.gameArea}>
           <View style={[styles.timelineAreaFull, { paddingBottom: timelinePaddingBottom }]}>
@@ -2055,16 +1944,27 @@ export default function GameScreen() {
         )}
       </SafeAreaView>
 
-      {/* Trailer overlay — covers the drawing screen */}
-      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: '#000' }]}>
+      {/* Trailer overlay — always rendered here so TrailerPlayer never remounts */}
+      <Animated.View style={[StyleSheet.absoluteFillObject, { backgroundColor: '#000', opacity: trailerRevealAnim }]}
+        pointerEvents={(countdownDone && trailerRevealed) ? 'auto' : 'none'}>
         {/* Video: host's phone only in private games; all phones in public games */}
         {showVideo && (
           <TrailerPlayer
             key={`${currentTurn.id}-${trailerKey}`}
             ref={trailerRef}
             movie={movie}
+            unmuteAfterMs={PREVIEW_DURATION + 200}
             onEnded={() => { setTrailerEnded(true); setUserPaused(false); }}
+            onRevealed={() => { console.log('[CS] onRevealed → setTrailerRevealed(true)'); setTrailerRevealed(true); }}
           />
+        )}
+
+        {/* Non-host observers: waiting message */}
+        {!showVideo && !amActive && (
+          <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }} edges={['top', 'bottom']}>
+            <Image source={lcPopcorn} style={styles.endedTitleIcon} />
+            <Text style={styles.endedWaiting}>{players[0]?.display_name} is watching the trailer…</Text>
+          </SafeAreaView>
         )}
 
         {/* Touch blocker — prevents YouTube from showing title on tap */}
@@ -2073,13 +1973,13 @@ export default function GameScreen() {
             style={StyleSheet.absoluteFillObject}
             activeOpacity={1}
             onPress={() => {
-              if (amActive) { trailerRef.current?.pause(); setUserPaused(true); }
+              if (amActive && trailerRevealed) { trailerRef.current?.pause(); setUserPaused(true); }
             }}
           />
         )}
 
         {/* Controls: active player watching video (host / public) — corner overlay */}
-        {amActive && showVideo && (
+        {amActive && showVideo && trailerRevealed && (
           <SafeAreaView style={styles.trailerControls} edges={['top', 'bottom', 'right']} pointerEvents="box-none">
             <View />
             <View style={styles.cornerActions}>
@@ -2108,10 +2008,9 @@ export default function GameScreen() {
         )}
 
         {/* Controls: active player not watching video (private game, not host) — centered */}
-        {amActive && !showVideo && (
+        {amActive && !showVideo && countdownDone && (
           <SafeAreaView style={styles.activeNoVideoOverlay} edges={['top', 'bottom', 'left', 'right']} pointerEvents="box-none">
             <View />
-            {/* Primary CTA — centered */}
             <View style={styles.activeNoVideoCenter}>
               <Text style={styles.watchingBadgeText}>🎬 Trailer is on {players[0]?.display_name}'s screen</Text>
               <TouchableOpacity
@@ -2130,7 +2029,6 @@ export default function GameScreen() {
                 <Text style={styles.knowItBtnText}>I know it! →</Text>
               </TouchableOpacity>
             </View>
-            {/* Report — bottom right */}
             <View style={styles.activeNoVideoTopBar}>
               <View />
               <TouchableOpacity style={styles.reportButton} onPress={() => setShowReportDialog(true)}>
@@ -2140,21 +2038,16 @@ export default function GameScreen() {
           </SafeAreaView>
         )}
 
-        {/* Observer label — only shown when video is actually visible */}
-        {!amActive && showVideo && (
+        {/* Observer label */}
+        {!amActive && showVideo && trailerRevealed && (
           <SafeAreaView style={styles.trailerControls} edges={['top']} pointerEvents="box-none">
             <View style={styles.watchingBadge}>
               <Text style={styles.watchingBadgeText}>👀 {activePlayer?.display_name} is playing</Text>
             </View>
-            {amHost && game?.visibility !== 'public' && !hasReplayed ? (
-              <TouchableOpacity onPress={handleReplayBonus} style={[styles.replayLink, { marginBottom: 16 }]} activeOpacity={0.7}>
-                <Text style={styles.replayLinkText}>↺ Replay</Text>
-              </TouchableOpacity>
-            ) : <View />}
           </SafeAreaView>
         )}
 
-        {/* Pause overlay — active player only, video must be playing (fades in/out) */}
+        {/* Pause overlay */}
         {amActive && showVideo && (
           <FadePauseOverlay
             visible={userPaused}
@@ -2163,7 +2056,7 @@ export default function GameScreen() {
           />
         )}
 
-        {/* Report overlay — absolute layer instead of Modal to avoid WebView/UIKit crash on iOS */}
+        {/* Report overlay */}
         {showReportDialog && (
           <TouchableOpacity
             style={[StyleSheet.absoluteFill, styles.modalBackdrop]}
@@ -2203,7 +2096,47 @@ export default function GameScreen() {
             revealCount={betRevealCount}
           />
         )}
-      </View>
+      </Animated.View>
+
+      {/* Countdown overlay — fades out when both gates open; always in tree so TrailerCountdown starts on mount */}
+      <Animated.View style={[StyleSheet.absoluteFillObject, { backgroundColor: C.bg, opacity: countdownFadeAnim }]}
+        pointerEvents={(countdownDone && trailerRevealed) ? 'none' : 'auto'}>
+          <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+            <View style={styles.gameArea}>
+              <View style={[styles.timelineAreaFull, { paddingBottom: timelinePaddingBottom }]}>
+                <Text style={[styles.drawingTurnLabel, { color: activePlayerColor }]}>
+                  {amActive ? 'Your turn' : `${activePlayer?.display_name}'s timeline`}
+                </Text>
+                <View style={{ minHeight: 148 }}>
+                  {movie && (
+                    <Timeline
+                      timeline={drawingTimeline}
+                      currentCardMovie={movie}
+                      interactive={false}
+                      selectedInterval={null}
+                      onIntervalSelect={() => {}}
+                      onConfirm={() => {}}
+                      placedMovies={drawingPlacedMovies}
+                      hideFloatingCard
+                    />
+                  )}
+                </View>
+              </View>
+            </View>
+            {/* Countdown — absolute at bottom, compact horizontal layout keeps it below centered cards */}
+            <View style={{ position: 'absolute', bottom: PULL_TAB_H + 8, left: 0, right: 0, alignItems: 'center' }}>
+              <TrailerCountdown durationMs={PREVIEW_DURATION} onExpire={() => { console.log('[CS] countdown expired → setCountdownDone(true)'); setCountdownDone(true); }} />
+            </View>
+            {myTimeline.length > 0 && (
+              <MyTimelinePanel timeline={myTimeline} cards={myTimelineCards} bottomInset={insets.bottom} screenHeight={screenHeight} />
+            )}
+            <Animated.View
+              pointerEvents="none"
+              style={[StyleSheet.absoluteFillObject, { backgroundColor: C.inkBg, opacity: lightsOnAnim }]}
+            />
+          </SafeAreaView>
+      </Animated.View>
+
       {persistentOverlays}
       </>
     );
@@ -2932,7 +2865,7 @@ function RevealResult({
           <TouchableOpacity style={styles.resultBannerBtn} onPress={onNext} activeOpacity={0.85} disabled={nextPending}>
             {nextPending
               ? <ActivityIndicator size="small" color={C.textSub} />
-              : <Text style={styles.resultBannerBtnText}>Next →</Text>}
+              : <Text style={styles.resultBannerBtnText}>Next round →</Text>}
           </TouchableOpacity>
         ) : (
           <View style={styles.resultBannerCountdown}>
@@ -3746,13 +3679,6 @@ const styles = StyleSheet.create({
     opacity: 0.9,
     marginBottom: 8,
   },
-  drawingCTAArea: {
-    position: 'absolute',
-    bottom: PULL_TAB_H + 8, // fallback; overridden inline with dynamic midpoint
-    left: 32,
-    right: 32,
-    alignItems: 'center',
-  },
   drawingWaitingRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -4463,13 +4389,6 @@ const styles = StyleSheet.create({
   },
   bonusFabMainRow: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
-  },
-  replayLink: {
-    position: 'absolute', top: 8, left: 12, zIndex: 2,
-    paddingVertical: 4, paddingHorizontal: 8,
-  },
-  replayLinkText: {
-    color: C.textMuted, fontFamily: Fonts.label, fontSize: FS.sm,
   },
   bonusFabTip: {
     flexDirection: 'row', alignItems: 'center', gap: 4,

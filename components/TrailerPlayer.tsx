@@ -1,10 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { Animated, Image, View, Text, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, StyleSheet, useWindowDimensions } from 'react-native';
 import YoutubePlayer from 'react-native-youtube-iframe';
 import { Movie } from '@/lib/database.types';
-import { C, Fonts, FS } from '@/constants/theme';
-
-const lcMysteryCard = require('@/assets/lc-mystery-card.png');
 
 export interface TrailerPlayerHandle {
   pause: () => void;
@@ -16,21 +13,20 @@ export interface TrailerPlayerHandle {
 interface TrailerPlayerProps {
   movie: Movie;
   onEnded?: () => void;
+  onRevealed?: () => void;
   onWindowCalculated?: (start: number, end: number) => void;
+  // Duration from mount until audio unmutes. Baked into the injection as an
+  // absolute timestamp so the WebView fires at the right wall-clock moment.
+  unmuteAfterMs?: number;
 }
 
-const CAROUSEL = [
-  { tx: 0,   ty: 22,  scale: 1.00, zIndex: 3 },
-  { tx: 52,  ty: -18, scale: 0.60, zIndex: 2 },
-  { tx: -52, ty: -18, scale: 0.60, zIndex: 1 },
-];
+const TITLE_CARD_BURN = 3500; // ms after player ready before the YouTube title overlay is gone
 
-const SHUFFLE_INTERVALS = [90, 110, 140, 190, 270, 390, 580, 780];
-const SETTLE_DELAY = 2300; // time after card selection animation before revealing
-const SHUFFLE_TOTAL = SHUFFLE_INTERVALS.reduce((a, b) => a + b, 0) + 150 + SETTLE_DELAY;
-const TITLE_CARD_BURN = 5500; // ms after seekTo before the YouTube title overlay is gone
+function makeYouTubeInject(unmuteAtMs: number | null) {
+  const delayExpr = unmuteAtMs != null
+    ? `Math.max(0, ${unmuteAtMs} - Date.now())`
+    : '300';
 
-function makeYouTubeInject() {
   return `
 (function() {
   var muted = false;
@@ -58,11 +54,12 @@ function makeYouTubeInject() {
 
     if (!unmuted && Date.now() - playerReadyAt >= ${TITLE_CARD_BURN}) {
       unmuted = true;
-      if (typeof window.player.unMute === 'function') {
-        window.player.unMute();
-        window.player.setVolume(100);
-      }
-      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'cs_content_ready' }));
+      setTimeout(function() {
+        if (typeof window.player.unMute === 'function') {
+          window.player.unMute();
+          window.player.setVolume(100);
+        }
+      }, ${delayExpr});
     }
   }, 100);
 })();
@@ -70,99 +67,10 @@ true;
 `;
 }
 
-// ── Carousel overlay ──────────────────────────────────────────────────────────
-
-function CarouselOverlay({ onComplete }: { onComplete: () => void }) {
-  const posRef              = useRef([0, 1, 2]);
-  const [zs, setZs]         = useState([3, 2, 1]);
-  const [selected, setSelected] = useState(false);
-  const fadeIn              = useRef(new Animated.Value(0)).current;
-
-  const anims = useRef(
-    CAROUSEL.map(p => ({
-      scale:   new Animated.Value(p.scale),
-      tx:      new Animated.Value(p.tx),
-      ty:      new Animated.Value(p.ty),
-      opacity: new Animated.Value(1),
-    }))
-  ).current;
-
-  useEffect(() => {
-    Animated.timing(fadeIn, { toValue: 1, duration: 300, useNativeDriver: true }).start();
-
-    const timeouts: ReturnType<typeof setTimeout>[] = [];
-    let elapsed = 0;
-
-    const advance = () => {
-      posRef.current = posRef.current.map(p => (p + 1) % 3);
-      setZs(posRef.current.map(p => CAROUSEL[p].zIndex));
-      anims.forEach((anim, i) => {
-        const pos = CAROUSEL[posRef.current[i]];
-        const cfg = { friction: 8, tension: 120, useNativeDriver: true };
-        Animated.spring(anim.scale, { toValue: pos.scale, ...cfg }).start();
-        Animated.spring(anim.tx,    { toValue: pos.tx,    ...cfg }).start();
-        Animated.spring(anim.ty,    { toValue: pos.ty,    ...cfg }).start();
-      });
-    };
-
-    SHUFFLE_INTERVALS.forEach(gap => {
-      elapsed += gap;
-      timeouts.push(setTimeout(advance, elapsed));
-    });
-
-    // Settle: pop the front card and dim the rest
-    timeouts.push(setTimeout(() => {
-      setSelected(true);
-      const frontIdx = posRef.current.indexOf(0);
-      Animated.spring(anims[frontIdx].scale, {
-        toValue: 1.13, friction: 4, tension: 90, useNativeDriver: true,
-      }).start();
-      anims.forEach((anim, i) => {
-        if (i !== frontIdx) {
-          Animated.timing(anim.opacity, { toValue: 0.2, duration: 300, useNativeDriver: true }).start();
-        }
-      });
-    }, elapsed + 150));
-    // Notify parent after the card has settled and stood still briefly
-    timeouts.push(setTimeout(onComplete, elapsed + 150 + SETTLE_DELAY));
-
-    return () => timeouts.forEach(clearTimeout);
-  }, []);
-
-  return (
-    <Animated.View style={[overlayStyles.container, { opacity: fadeIn }]}>
-      <View style={overlayStyles.cardArea}>
-        {anims.map((anim, i) => (
-          <Animated.View
-            key={i}
-            style={[overlayStyles.card, {
-              zIndex: zs[i],
-              opacity: anim.opacity,
-              transform: [
-                { translateX: anim.tx },
-                { translateY: anim.ty },
-                { scale: anim.scale },
-              ],
-            }]}
-          >
-            <Image source={lcMysteryCard} style={overlayStyles.cardImg} />
-          </Animated.View>
-        ))}
-      </View>
-      <Text style={overlayStyles.title}>
-        {selected ? 'Here it comes…' : 'Picking your trailer'}
-      </Text>
-      <Text style={overlayStyles.sub}>
-        {selected ? 'Get ready' : 'Mystery incoming'}
-      </Text>
-    </Animated.View>
-  );
-}
-
 // ── TrailerPlayer ─────────────────────────────────────────────────────────────
 
 export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>(
-  function TrailerPlayer({ movie, onEnded, onWindowCalculated }, ref) {
+  function TrailerPlayer({ movie, onEnded, onRevealed, onWindowCalculated, unmuteAfterMs }, ref) {
     const { width, height } = useWindowDimensions();
 
     const ratio    = 16 / 9;
@@ -171,7 +79,6 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
     const playerW  = byWidth.h <= height ? byWidth.w : byHeight.w;
     const playerH  = byWidth.h <= height ? byWidth.h : byHeight.h;
 
-    const [loading, setLoading] = useState(true);
     const [playing, setPlaying] = useState(true);
 
     const timerRef            = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -182,51 +89,43 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
     const skipEndTimerOnReady = useRef(false);
     const dynStartRef         = useRef<number>(0);
 
-    // Dual-gate reveal: fires only when both the shuffle is done AND content is ready
-    const shuffleDoneRef   = useRef(false);
-    const contentReadyRef  = useRef(false);
-    const contentReadyAtRef = useRef(0);
+    const contentReadyRef = useRef(false);
+    const seekToTimeRef   = useRef(0);
 
-    const seekToTimeRef = useRef(0);
+    // T0 = mount time; all [CS] timestamps are ms relative to this.
+    const t0Ref = useRef(Date.now());
+    const ms = () => Date.now() - t0Ref.current;
 
     const insaneMode = movie.safe_start === null;
     const safeStart  = movie.safe_start ?? 0;
     const safeEnd    = movie.safe_end ?? (insaneMode ? 99999 : 60);
     const duration   = insaneMode ? 30_000 : Math.max(safeEnd - safeStart, 10) * 1000;
-    const youtubeInject = makeYouTubeInject();
 
-    function startEndTimer(ms: number = duration) {
+    // Injection captured at mount so Date.now() reflects the actual mount time.
+    const [youtubeInject] = useState(() =>
+      makeYouTubeInject(unmuteAfterMs != null ? Date.now() + unmuteAfterMs : null)
+    );
+
+    useEffect(() => {
+      console.log(`[CS] TrailerPlayer mounted  t=0  unmuteAfterMs=${unmuteAfterMs}  TITLE_CARD_BURN=${TITLE_CARD_BURN}`);
+    }, []);
+
+    function startEndTimer(ms_: number = duration) {
       if (timerRef.current) clearTimeout(timerRef.current);
       timerStartRef.current = Date.now();
-      remainingRef.current  = ms;
+      remainingRef.current  = ms_;
       timerRef.current = setTimeout(() => {
         setPlaying(false);
-        setLoading(true);
         onEnded?.();
-      }, ms);
+      }, ms_);
     }
 
     function doReveal() {
+      console.log(`[CS] doReveal              t=${ms()}`);
       if (fallbackRef.current) clearTimeout(fallbackRef.current);
-      const played = contentReadyAtRef.current > 0
-        ? Date.now() - contentReadyAtRef.current
-        : SHUFFLE_TOTAL;
-      setLoading(false);
+      onRevealed?.();
       if (!skipEndTimerOnReady.current) {
-        startEndTimer(Math.max(duration - played, 5000));
-      }
-    }
-
-    function onShuffleDone() {
-      shuffleDoneRef.current = true;
-      if (fallbackRef.current) clearTimeout(fallbackRef.current);
-      const remaining = seekToTimeRef.current > 0
-        ? Math.max(0, (seekToTimeRef.current + TITLE_CARD_BURN) - Date.now())
-        : 600;
-      if (remaining === 0) {
-        doReveal();
-      } else {
-        fallbackRef.current = setTimeout(doReveal, remaining);
+        startEndTimer(Math.max(duration - 1000, 1000));
       }
     }
 
@@ -246,13 +145,9 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
         if (timerRef.current) clearTimeout(timerRef.current);
         if (fallbackRef.current) clearTimeout(fallbackRef.current);
         setPlaying(false);
-        setLoading(true);
       },
       replay() {
-        setLoading(true);
-        shuffleDoneRef.current  = false;
         contentReadyRef.current = false;
-        contentReadyAtRef.current = 0;
         if (timerRef.current) clearTimeout(timerRef.current);
         if (fallbackRef.current) clearTimeout(fallbackRef.current);
         skipEndTimerOnReady.current = false;
@@ -262,14 +157,14 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
           playerRef.current?.seekTo(replayStart, true);
           setPlaying(true);
           fallbackRef.current = setTimeout(() => {
-            setLoading(false);
-            startEndTimer(insaneMode ? 30_000 : duration);
-          }, SHUFFLE_TOTAL + 1000);
+            doReveal();
+          }, TITLE_CARD_BURN + 1000);
         }, 300);
       },
     }));
 
     async function handleYouTubeReady() {
+      console.log(`[CS] YouTube player ready  t=${ms()}`);
       if (insaneMode) {
         skipEndTimerOnReady.current = true;
         if (fallbackRef.current) clearTimeout(fallbackRef.current);
@@ -284,37 +179,30 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
         } catch (_) {
           dynStartRef.current = 0;
         }
-        // Fallback in case cs_content_ready never fires
+        console.log(`[CS] burn timer set        t=${ms()}  fires in ${TITLE_CARD_BURN}ms`);
         fallbackRef.current = setTimeout(() => {
+          console.log(`[CS] burn timer fired      t=${ms()}`);
           if (!contentReadyRef.current) doReveal();
-        }, SHUFFLE_TOTAL + 3000);
+        }, TITLE_CARD_BURN);
       } else {
         seekToTimeRef.current = Date.now();
         playerRef.current?.seekTo(safeStart, true);
         if (fallbackRef.current) clearTimeout(fallbackRef.current);
+        console.log(`[CS] burn timer set        t=${ms()}  fires in ${TITLE_CARD_BURN}ms`);
         fallbackRef.current = setTimeout(() => {
+          console.log(`[CS] burn timer fired      t=${ms()}`);
           if (!contentReadyRef.current) doReveal();
-        }, SHUFFLE_TOTAL + 3000);
+        }, TITLE_CARD_BURN);
       }
     }
 
     function handleYouTubeStateChange(state: string) {
+      console.log(`[CS] YouTube state change  t=${ms()}  state=${state}`);
       if (state === 'ended') {
         if (timerRef.current) clearTimeout(timerRef.current);
         if (fallbackRef.current) clearTimeout(fallbackRef.current);
-        setLoading(true);
         onEnded?.();
       }
-    }
-
-    function handleWebViewMessage(event: { nativeEvent: { data: string } }) {
-      try {
-        const msg = JSON.parse(event.nativeEvent.data);
-        if (msg.type === 'cs_content_ready') {
-          contentReadyRef.current   = true;
-          contentReadyAtRef.current = Date.now();
-        }
-      } catch (_) {}
     }
 
     useEffect(() => {
@@ -348,15 +236,8 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
               allowsInlineMediaPlayback: true,
               mediaPlaybackRequiresUserAction: false,
               injectedJavaScript: youtubeInject,
-              onMessage: handleWebViewMessage,
             }}
           />
-
-        {loading && (
-          <View style={styles.loader}>
-            <CarouselOverlay key={String(loading)} onComplete={onShuffleDone} />
-          </View>
-        )}
       </View>
     );
   }
@@ -364,54 +245,11 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-const overlayStyles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 24,
-  },
-  cardArea: {
-    width: 180,
-    height: 210,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  card: {
-    position: 'absolute',
-  },
-  cardImg: {
-    width: 115,
-    height: 161,
-    resizeMode: 'contain',
-  },
-  title: {
-    fontFamily: Fonts.display,
-    fontSize: FS.xl,
-    color: C.textPrimary,
-    letterSpacing: 0.4,
-  },
-  sub: {
-    fontFamily: Fonts.label,
-    fontSize: FS.xs,
-    color: C.textSub,
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
-  },
-});
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  loader: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: C.bg,
-    zIndex: 10,
   },
 });
