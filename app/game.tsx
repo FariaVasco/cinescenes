@@ -101,7 +101,6 @@ export default function GameScreen() {
   const [snackMessage, setSnackMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [showIntro, setShowIntro] = useState(false);
-  const [showLandscapePrompt, setShowLandscapePrompt] = useState(false);
   const [trailerKey, setTrailerKey] = useState(0);
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
   const [castVisible, setCastVisible] = useState(false);
@@ -167,8 +166,6 @@ export default function GameScreen() {
   const betRevealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [revealPhase, setRevealPhase] = useState<'suspense' | 'flip' | 'result'>('suspense');
   const [revealBgDark, setRevealBgDark] = useState(false);
-  const [autoNextCountdown, setAutoNextCountdown] = useState(5);
-  const autoNextIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [showChallengerTimeline, setShowChallengerTimeline] = useState(false);
   const [movieGuess, setMovieGuess] = useState('');
   const [directorGuess, setDirectorGuess] = useState('');
@@ -184,6 +181,7 @@ export default function GameScreen() {
   const [winnerPairs, setWinnerPairs] = useState<{ year: number; id: string }[]>([]);
   const [gameOver, setGameOver] = useState<Player | null>(null);
   const introShownRef = useRef(false);
+  const showIntroRef  = useRef(false);
   // Insane mode: current turn's movie may not be in the activeMovies store
   const [movieOverride, setMovieOverride] = useState<Movie | null>(null);
   // Cache of insane mode movies keyed by id (not in activeMovies classic pool)
@@ -209,14 +207,15 @@ export default function GameScreen() {
   const currentTurnRef = useRef<Turn | null>(null);
   const gameIdRef = useRef<string | null>(null);
 
-  // Portrait during intro + landscape prompt; landscape for everything after
+  // Portrait during intro; landscape for everything after
   useEffect(() => {
-    if (loading || showIntro || showLandscapePrompt) {
+    showIntroRef.current = showIntro;
+    if (loading || showIntro) {
       ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
     } else {
       ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
     }
-  }, [loading, showIntro, showLandscapePrompt]);
+  }, [loading, showIntro]);
 
   useEffect(() => {
     if (!game) { router.replace('/'); return; }
@@ -353,32 +352,6 @@ export default function GameScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [revealPhase, challenges]);
 
-  // Auto-advance to next turn 5 s after result appears (active player can still tap Next early)
-  useEffect(() => {
-    if (autoNextIntervalRef.current) {
-      clearInterval(autoNextIntervalRef.current);
-      autoNextIntervalRef.current = null;
-    }
-    setAutoNextCountdown(5);
-    if (revealPhase !== 'result') return;
-    const isActive = isActivePlayer();
-    let remaining = 5;
-    autoNextIntervalRef.current = setInterval(() => {
-      remaining -= 1;
-      setAutoNextCountdown(remaining);
-      if (remaining <= 0) {
-        clearInterval(autoNextIntervalRef.current!);
-        autoNextIntervalRef.current = null;
-      }
-    }, 1000);
-    return () => {
-      if (autoNextIntervalRef.current) {
-        clearInterval(autoNextIntervalRef.current);
-        autoNextIntervalRef.current = null;
-      }
-    };
-  }, [revealPhase]);
-
   // Bet-reveal animation: counts up betRevealCount once per participant, then calls handleReveal()
   useEffect(() => {
     if (!showBetReveal) return;
@@ -415,11 +388,24 @@ export default function GameScreen() {
   useEffect(() => {
     if (currentTurn?.status !== 'challenging') { setRevealLocked(true); return; }
     setRevealLocked(true);
+    // Reset bet-reveal refs each time a new challenging phase starts so a stuck ref
+    // from the previous round (race condition: handleNextTurn updates currentTurnRef
+    // before the poll's turnChanged block fires) doesn't block the fast-path trigger.
+    betRevealTriggered.current = false;
+    revealTriggered.current = false;
+    challengeWindowStart.current = null;
     challengePanelY.setValue(200);
     Animated.spring(challengePanelY, { toValue: 0, damping: 30, stiffness: 160, useNativeDriver: true }).start();
     const t = setTimeout(() => setRevealLocked(false), 5500);
     return () => clearTimeout(t);
   }, [currentTurn?.id, currentTurn?.status]);
+
+  // Non-host exits the intro screen when the host writes placing_started_at
+  useEffect(() => {
+    if (showIntro && currentTurn?.placing_started_at) {
+      setShowIntro(false);
+    }
+  }, [currentTurn?.placing_started_at, showIntro]);
 
   // Pause polling while the active player is typing on the guess screen.
   // Without this, the 2-second poll triggers state updates → KeyboardAvoidingView
@@ -442,11 +428,11 @@ export default function GameScreen() {
       // Write placed_interval=-1 so the active player's poll unblocks them.
       db.from('turns').update({ placed_interval: -1 }).eq('id', currentTurn!.id);
     } else if (!loading) {
-      // Poll faster during placing so observers react quickly when the active player
-      // clicks "I know it!" — the placed_interval=-1 signal shows up within ~750 ms
-      // instead of up to 2 s.
+      // Poll faster during placing (observer reacts to "I know it!") and during
+      // challenging (all devices see allDecided within ~750 ms instead of up to 2 s).
       const isObserverWatchingTrailer = !amActive && currentTurn?.status === 'placing';
-      startPolling(isObserverWatchingTrailer ? 750 : POLL_MS);
+      const isChallengingPhase = currentTurn?.status === 'challenging';
+      startPolling(isObserverWatchingTrailer || isChallengingPhase ? 750 : POLL_MS);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trailerEnded, readyToPlace, myPlayerId, currentTurn?.active_player_id, currentTurn?.status, currentTurn?.placed_interval, loading]);
@@ -609,8 +595,10 @@ export default function GameScreen() {
     ]);
 
     // Heartbeat — fire and forget, no await so poll isn't delayed
-    if (myPlayerId) {
-      db.from('players').update({ last_seen: new Date().toISOString() }).eq('id', myPlayerId);
+    // Only runs after intro is done so last_seen=null reliably means "hasn't spun yet".
+    // .then(() => {}) forces the Supabase v2 lazy query to actually execute.
+    if (myPlayerId && introShownRef.current) {
+      db.from('players').update({ last_seen: new Date().toISOString() }).eq('id', myPlayerId).then(() => {});
     }
 
     if (gameRow?.status === 'finished') {
@@ -626,6 +614,19 @@ export default function GameScreen() {
       return;
     }
 
+    // During the intro (spinning wheel) refresh players every tick so all devices
+    // see who has written last_seen and the host's "ready" list stays current.
+    // Preserve any locally-optimistic last_seen: if the DB row still shows null but
+    // local state already has a value (write in-flight), keep the local value so the
+    // UI doesn't flicker back to "Spinning" while waiting for the round-trip.
+    if (showIntroRef.current && freshPlayers) {
+      setLocalPlayers(prev => (freshPlayers as Player[]).map(fp => {
+        const local = prev.find(p => p.id === fp.id);
+        return (local?.last_seen && !fp.last_seen) ? local : fp;
+      }));
+      setPlayers(freshPlayers as Player[]);
+    }
+
     if (latestTurn) {
       const prevTurn = currentTurnRef.current;
       const turnChanged = !prevTurn || prevTurn.id !== latestTurn.id;
@@ -634,8 +635,9 @@ export default function GameScreen() {
 
       // If a local write is in-flight, skip overwriting our optimistic turn state
       // with stale DB data. The next poll (after the write lands) will catch up.
+      const placingStartedAtChanged = prevTurn?.placing_started_at !== latestTurn.placing_started_at;
       const shouldUpdateTurn = !pendingTurnWrite.current
-        ? (turnChanged || statusChanged || placedIntervalChanged)
+        ? (turnChanged || statusChanged || placedIntervalChanged || placingStartedAtChanged)
         : turnChanged; // only allow cross-turn updates while pending
 
       if (shouldUpdateTurn) {
@@ -895,15 +897,15 @@ export default function GameScreen() {
 
   // ── Actions (with optimistic updates so UI responds instantly) ──
 
-  async function handleLetsDraw() {
+  async function handleStartGame() {
     if (!currentTurn) return;
-    const placingStartedAt = new Date().toISOString();
-    const optimistic = { ...currentTurn, status: 'placing' as const, placing_started_at: placingStartedAt };
+    const now = new Date().toISOString();
+    const optimistic = { ...currentTurn, placing_started_at: now };
     pendingTurnWrite.current = true;
     setLocalTurn(optimistic);
     setCurrentTurn(optimistic);
     currentTurnRef.current = optimistic;
-    await db.from('turns').update({ status: 'placing', placing_started_at: placingStartedAt }).eq('id', currentTurn.id);
+    await db.from('turns').update({ placing_started_at: now }).eq('id', currentTurn.id);
     pendingTurnWrite.current = false;
   }
 
@@ -1208,10 +1210,6 @@ export default function GameScreen() {
     // spurious successor turn that reverts the active player.
     nextTurnInProgress.current = true;
     setNextTurnPending(true);
-    if (autoNextIntervalRef.current) {
-      clearInterval(autoNextIntervalRef.current);
-      autoNextIntervalRef.current = null;
-    }
     await new Promise<void>((resolve) => {
       Animated.timing(lightsOnAnim, {
         toValue: 1,
@@ -1229,10 +1227,6 @@ export default function GameScreen() {
     if (!nextTurnInProgress.current) {
       nextTurnInProgress.current = true;
       setNextTurnPending(true);
-      if (autoNextIntervalRef.current) {
-        clearInterval(autoNextIntervalRef.current);
-        autoNextIntervalRef.current = null;
-      }
     }
     let succeeded = false;
     try {
@@ -1416,6 +1410,7 @@ export default function GameScreen() {
         active_player_id: nextPlayer.id,
         movie_id: nextMovieId,
         status: 'placing',
+        placing_started_at: new Date().toISOString(),
       });
       if (insertError) {
         // 23505 = unique_violation from turns_one_live_per_game_idx: another
@@ -1475,22 +1470,32 @@ export default function GameScreen() {
     const startingMovie = startingPair
       ? (activeMovies.find(m => m.id === startingPair.id) ?? activeMovies.find(m => m.year === startingYear) ?? null)
       : (activeMovies.find(m => m.year === startingYear) ?? null);
+    const amHostIntro = players.length > 0 && players[0].id === myPlayerId;
+    const allPlayersReady = players.length > 0 && players.every(p => p.last_seen !== null);
     return (
       <GameIntroScreen
         startingMovie={startingMovie}
         playerName={myPlayer?.display_name ?? 'Player'}
         onDone={() => {
-          introShownRef.current = true;
           setShowIntro(false);
-          setShowLandscapePrompt(true);
+          handleStartGame();
+        }}
+        onSpinComplete={() => {
+          introShownRef.current = true;
+          if (myPlayerId) {
+            const now = new Date().toISOString();
+            // Optimistic: show current player as ready immediately
+            setLocalPlayers(prev => prev.map(p => p.id === myPlayerId ? { ...p, last_seen: now } : p));
+            // .then(() => {}) forces the Supabase v2 lazy query to actually execute
+            db.from('players').update({ last_seen: now }).eq('id', myPlayerId).then(() => {});
+          }
         }}
         allMovies={activeMovies}
+        players={players}
+        amHost={amHostIntro}
+        allPlayersReady={allPlayersReady}
       />
     );
-  }
-
-  if (showLandscapePrompt) {
-    return <LandscapePromptScreen onDone={() => setShowLandscapePrompt(false)} />;
   }
 
   const movie = getMovie();
@@ -1610,6 +1615,7 @@ export default function GameScreen() {
             active_player_id: nextPlayer.id,
             movie_id: leaveNextMovieId,
             status: 'placing',
+            placing_started_at: new Date().toISOString(),
           });
         }
       }
@@ -2494,7 +2500,6 @@ export default function GameScreen() {
               onNext={handleNextTurnWithFade}
               showNext={amActive}
               nextPending={nextTurnPending}
-              countdown={autoNextCountdown}
             />
           )}
         </View>
@@ -2837,7 +2842,6 @@ function RevealResult({
   onNext,
   showNext,
   nextPending,
-  countdown,
 }: {
   icon: string;
   resultName: string;
@@ -2846,7 +2850,6 @@ function RevealResult({
   onNext: () => void;
   showNext: boolean;
   nextPending: boolean;
-  countdown: number;
 }) {
   const slideAnim = useRef(new Animated.Value(120)).current;
 
@@ -2889,11 +2892,7 @@ function RevealResult({
               : <Text style={styles.resultBannerBtnText}>Next round →</Text>}
           </TouchableOpacity>
         ) : (
-          <View style={styles.resultBannerCountdown}>
-            {countdown > 0 && (
-              <Text style={styles.resultBannerCountdownText}>{countdown}</Text>
-            )}
-          </View>
+          <View style={styles.resultBannerCountdown} />
         )}
       </View>
     </Animated.View>
@@ -3186,87 +3185,24 @@ const WHEEL_POSITIONS = Array.from({ length: WHEEL_CARD_COUNT }, (_, i) => {
   };
 });
 
-// ── Landscape orientation prompt ──
-
-function LandscapePromptScreen({ onDone }: { onDone: () => void }) {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const { width, height } = useWindowDimensions();
-  const isLandscape = width > height;
-  const mountedAtRef = useRef(Date.now());
-  const exitingRef = useRef(false);
-
-  function fadeOutAndDone() {
-    if (exitingRef.current) return;
-    exitingRef.current = true;
-    Animated.timing(fadeAnim, { toValue: 0, duration: 420, useNativeDriver: true }).start(() => onDone());
-  }
-
-  useEffect(() => {
-    Animated.timing(fadeAnim, { toValue: 1, duration: 350, useNativeDriver: true }).start();
-  }, []);
-
-  // Dismiss as soon as the device is actually in landscape, but keep a minimum
-  // display time so the prompt doesn't flash and vanish.
-  useEffect(() => {
-    if (!isLandscape) return;
-    const MIN_MS = 900;
-    const elapsed = Date.now() - mountedAtRef.current;
-    const wait = Math.max(MIN_MS - elapsed, 0);
-    const t = setTimeout(fadeOutAndDone, wait);
-    return () => clearTimeout(t);
-  }, [isLandscape]);
-
-  // Fallback: if the user never rotates, auto-dismiss after 4s.
-  useEffect(() => {
-    const t = setTimeout(fadeOutAndDone, 4000);
-    return () => clearTimeout(t);
-  }, []);
-
-  return (
-    <Animated.View style={[lsStyles.screen, { opacity: fadeAnim }]}>
-      <Text style={lsStyles.icon}>📱</Text>
-      <Text style={lsStyles.title}>Rotate your device</Text>
-      <Text style={lsStyles.subtitle}>The rest of the game is played in landscape mode</Text>
-    </Animated.View>
-  );
-}
-
-const lsStyles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: C.inkBg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 14,
-    paddingHorizontal: 40,
-  },
-  icon: { fontSize: 56 },
-  title: {
-    color: C.textPrimaryDark,
-    fontFamily: Fonts.display,
-    fontSize: FS.xl,
-    textAlign: 'center',
-    letterSpacing: 0.3,
-  },
-  subtitle: {
-    color: C.textSubDark,
-    fontFamily: Fonts.body,
-    fontSize: FS.base,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-});
-
 function GameIntroScreen({
   startingMovie,
   playerName,
   onDone,
   allMovies: _allMovies,
+  players,
+  amHost,
+  allPlayersReady,
+  onSpinComplete,
 }: {
   startingMovie: Movie | null;
   playerName: string;
   onDone: () => void;
   allMovies: Movie[];
+  players: Player[];
+  amHost: boolean;
+  allPlayersReady: boolean;
+  onSpinComplete: () => void;
 }) {
   const { width: screenWidth } = useWindowDimensions();
   const arrowRight = screenWidth / 2 - WHEEL_RADIUS - CARD_W / 2 - 4;
@@ -3277,9 +3213,8 @@ function GameIntroScreen({
   const canDismiss = useRef(false);
   // All cards look identical during the spin; only the highlight reveals after stopping
   const [spinDone, setSpinDone] = useState(false);
-  // True once flip + reveal is fully complete — shows the start button + countdown
+  // True once flip + reveal is fully complete — shows the host button and player status
   const [readyToStart, setReadyToStart] = useState(false);
-  const [countdown, setCountdown] = useState(10);
 
   const wheelRotation  = useRef(new Animated.Value(0)).current;
   const otherOpacity   = useRef(new Animated.Value(1)).current;
@@ -3378,24 +3313,10 @@ function GameIntroScreen({
       ]).start(() => {
         canDismiss.current = true;
         setReadyToStart(true);
+        onSpinComplete();
       });
     });
   }, [started]);
-
-  useEffect(() => {
-    if (!readyToStart) return;
-    const t = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) { clearInterval(t); return 0; }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(t);
-  }, [readyToStart]);
-
-  useEffect(() => {
-    if (countdown === 0 && readyToStart) fadeOutAndDone();
-  }, [countdown]);
 
   // Both screens are always mounted — we switch between them via opacity so that
   // both Animated.Values remain attached to native views throughout (avoids
@@ -3521,10 +3442,31 @@ function GameIntroScreen({
           {/* Footer floats at bottom — absolute so it doesn't shrink the wheel's centring space */}
           <SafeAreaView edges={['bottom']} style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}>
             <Animated.View style={[introStyles.footer, { opacity: tapHintOpacity }]}>
-              <TouchableOpacity style={introStyles.startBtn} onPress={fadeOutAndDone} activeOpacity={0.8}>
-                <Text style={introStyles.startBtnText}>Let's start playing! 🎬</Text>
-              </TouchableOpacity>
-              <Text style={introStyles.countdownText}>Auto-starting in {countdown}s</Text>
+              {players.length > 1 && (
+                <View style={introStyles.playerList}>
+                  {players.map(p => (
+                    <View key={p.id} style={introStyles.playerRow}>
+                      <Text style={introStyles.playerRowName}>{p.display_name}</Text>
+                      <Text style={[introStyles.playerRowStatus, p.last_seen ? introStyles.playerReady : introStyles.playerWaiting]}>
+                        {p.last_seen ? 'Ready ✓' : 'Spinning…'}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+              {amHost ? (
+                <TouchableOpacity
+                  style={[introStyles.startBtn, !allPlayersReady && introStyles.startBtnDisabled]}
+                  onPress={allPlayersReady ? fadeOutAndDone : undefined}
+                  activeOpacity={allPlayersReady ? 0.8 : 1}
+                >
+                  <Text style={[introStyles.startBtnText, !allPlayersReady && { color: 'rgba(0,0,0,0.35)' }]}>
+                    {allPlayersReady ? "Let's start playing! 🎬" : 'Waiting for everyone…'}
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <Text style={introStyles.waitingHostText}>Waiting for host to start…</Text>
+              )}
             </Animated.View>
           </SafeAreaView>
         </View>
@@ -3636,10 +3578,44 @@ const introStyles = StyleSheet.create({
     fontSize: FS.base,
     letterSpacing: 0.4,
   },
-  countdownText: {
-    color: 'rgba(255,255,255,0.25)',
+  startBtnDisabled: {
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderColor: 'transparent',
+  },
+  playerList: {
+    width: '100%',
+    gap: 6,
+    paddingHorizontal: 16,
+  },
+  playerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 8,
+  },
+  playerRowName: {
+    color: C.textPrimaryDark,
+    fontFamily: Fonts.body,
+    fontSize: FS.sm,
+  },
+  playerRowStatus: {
     fontFamily: Fonts.label,
-    fontSize: FS.xs,
+    fontSize: FS.sm,
+  },
+  playerReady: {
+    color: '#4CAF50',
+  },
+  playerWaiting: {
+    color: 'rgba(255,255,255,0.35)',
+  },
+  waitingHostText: {
+    color: 'rgba(255,255,255,0.4)',
+    fontFamily: Fonts.body,
+    fontSize: FS.sm,
+    textAlign: 'center',
   },
   // Context screen (before spin starts)
   contextInner: {
@@ -4719,3 +4695,4 @@ const styles = StyleSheet.create({
     height: 44,
   },
 });
+

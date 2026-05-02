@@ -214,7 +214,7 @@ export default function LocalLobbyScreen() {
 
       const { data: newPlayer, error: playerErr } = await db
         .from('players')
-        .insert({ game_id: newGame.id, display_name: displayName.trim() })
+        .insert({ game_id: newGame.id, display_name: displayName.trim(), last_seen: null })
         .select()
         .single() as { data: Player | null; error: any };
       if (playerErr || !newPlayer) throw playerErr ?? new Error('No player');
@@ -266,7 +266,7 @@ export default function LocalLobbyScreen() {
 
       const { data: newPlayer, error: playerErr } = await db
         .from('players')
-        .insert({ game_id: foundGame.id, display_name: name })
+        .insert({ game_id: foundGame.id, display_name: name, last_seen: null })
         .select()
         .single() as { data: Player | null; error: any };
       if (playerErr || !newPlayer) throw playerErr ?? new Error('Could not join game');
