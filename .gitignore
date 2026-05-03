@@ -43,3 +43,12 @@ yarn-error.*
 
 # design references
 ligne-claire-design-system/
+
+# test coverage
+coverage/
+
+# Supabase CLI cache
+supabase/.temp/
+
+# script output (logs, generated SQL, audit reports, HTML previews)
+scripts/output/
