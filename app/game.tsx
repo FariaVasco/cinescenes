@@ -65,7 +65,7 @@ const REPORT_OPTIONS = [
 const db = supabase as unknown as { from: (t: string) => any };
 const POLL_MS = 2000;
 const WIN_CARDS = 10;
-const PREVIEW_DURATION = 5500; // ms — timeline study countdown before trailer reveals
+const PREVIEW_DURATION = 6000; // ms — timeline study countdown before trailer reveals
 
 
 export default function GameScreen() {
@@ -207,14 +207,10 @@ export default function GameScreen() {
   const currentTurnRef = useRef<Turn | null>(null);
   const gameIdRef = useRef<string | null>(null);
 
-  // Portrait during intro; landscape for everything after
+  // Whole game is landscape from intro through play.
   useEffect(() => {
     showIntroRef.current = showIntro;
-    if (loading || showIntro) {
-      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
-    } else {
-      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
-    }
+    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
   }, [loading, showIntro]);
 
   useEffect(() => {
@@ -1307,9 +1303,11 @@ export default function GameScreen() {
       const refundWrites: Promise<any>[] = [];
       for (const c of challenges) {
         if (c.interval_index < 0) continue; // passed / withdrew / unpicked
-        const shouldRefund =
-          (activeCorrect && validIntervals.includes(c.interval_index)) ||
-          (winnerId && winnerId !== ct.active_player_id && validIntervals.includes(c.interval_index));
+        // Refund a challenger only when they picked a valid interval AND did NOT win the card.
+        // Winning the card already pays them; the coin refund is consolation for being right but losing the tie-break.
+        const pickedValid = validIntervals.includes(c.interval_index);
+        const isWinner    = winnerId === c.challenger_id;
+        const shouldRefund = pickedValid && !isWinner;
         if (shouldRefund) {
           const p = playersAfterRefunds.find(pl => pl.id === c.challenger_id);
           if (p) {
@@ -1625,8 +1623,8 @@ export default function GameScreen() {
     } catch (_) {
       // Best-effort — navigate away regardless.
     }
-    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
-    router.replace('/local-lobby');
+    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+    router.replace('/');
   }
 
   // ── Leave dialog — absolute overlay instead of Modal to preserve landscape lock on iOS ──
@@ -2716,8 +2714,8 @@ function GameOverScreen({ winner, players, myId }: { winner: Player; players: Pl
             {Math.min(winner.timeline.length, WIN_CARDS)} cards collected
           </Text>
 
-          <TouchableOpacity style={[styles.revealNextBtn, { marginTop: 8, alignSelf: 'stretch' }]} onPress={() => router.replace('/local-lobby')} activeOpacity={0.85}>
-            <Text style={styles.revealNextBtnText}>Back to Lobby</Text>
+          <TouchableOpacity style={[styles.revealNextBtn, { marginTop: 8, alignSelf: 'stretch' }]} onPress={() => router.replace('/')} activeOpacity={0.85}>
+            <Text style={styles.revealNextBtnText}>Back to Home</Text>
           </TouchableOpacity>
         </View>
 
@@ -3166,11 +3164,11 @@ function BrandedLoader() {
 
 // ── Game intro: Price Is Right spinning wheel ──
 
-const CARD_W = 72;
-const CARD_H = 100;
+const CARD_W = 58;
+const CARD_H = 80;
 // Always exactly 12 slots — enough to fill the wheel visually without gaps.
 const WHEEL_CARD_COUNT = 12;
-const WHEEL_RADIUS = 150;
+const WHEEL_RADIUS = 115;
 // HIGHLIGHT_IDX = 4 starts at (4/12)*360 = 120°.
 // After WHEEL_TOTAL_SPIN, it lands at 90° (3 o'clock):
 //   (120 + WHEEL_TOTAL_SPIN) mod 360 = 90  →  WHEEL_TOTAL_SPIN = 5*360 + 90 - 120 = 1770°
@@ -3221,6 +3219,7 @@ function GameIntroScreen({
   const arrowOpacity   = useRef(new Animated.Value(1)).current;
   // After wheel stops: card slides toward screen center (translateX = -WHEEL_RADIUS)
   const highlightX     = useRef(new Animated.Value(0)).current;
+  const highlightY     = useRef(new Animated.Value(0)).current;
   const highlightScale = useRef(new Animated.Value(1)).current;
   // flipAnim: 0 = back visible, 1 = front visible (3D rotateY card flip)
   const flipAnim       = useRef(new Animated.Value(0)).current;
@@ -3228,6 +3227,8 @@ function GameIntroScreen({
   const tapHintOpacity = useRef(new Animated.Value(0)).current;
   const screenOpacity  = useRef(new Animated.Value(0)).current;
   const contextOpacity = useRef(new Animated.Value(1)).current;
+  // Center text fades out when the highlighted card starts moving to centre
+  const headerOpacity  = useRef(new Animated.Value(1)).current;
   // Fades the whole intro out before handing off to the landscape prompt so the
   // swap isn't a hard cut.
   const exitOpacity    = useRef(new Animated.Value(1)).current;
@@ -3301,7 +3302,9 @@ function GameIntroScreen({
         Animated.parallel([
           Animated.timing(otherOpacity,   { toValue: 0,             duration: 350, useNativeDriver: true }),
           Animated.timing(arrowOpacity,   { toValue: 0,             duration: 250, useNativeDriver: true }),
+          Animated.timing(headerOpacity,  { toValue: 0,             duration: 300, useNativeDriver: true }),
           Animated.timing(highlightX,     { toValue: -WHEEL_RADIUS, duration: 700, easing: Easing.out(Easing.cubic),      useNativeDriver: true }),
+          Animated.timing(highlightY,     { toValue: -70,           duration: 700, easing: Easing.out(Easing.cubic),      useNativeDriver: true }),
           Animated.timing(highlightScale, { toValue: 1.8,           duration: 700, easing: Easing.out(Easing.back(1.1)), useNativeDriver: true }),
         ]),
         Animated.delay(150),
@@ -3343,7 +3346,7 @@ function GameIntroScreen({
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
               <Image source={require('../assets/lc-spinning-wheel.png')} style={{ width: 40, height: 40 }} />
-              <Text style={introStyles.spinBtnText}>Let's spin!</Text>
+              <Text style={introStyles.spinBtnText}>Let's spin! </Text>
             </View>
           </TouchableOpacity>
           <View style={{ height: 32 }} />
@@ -3356,13 +3359,20 @@ function GameIntroScreen({
         pointerEvents={started ? 'auto' : 'none'}
       >
         <View style={{ flex: 1 }}>
-          {/* Header floats at top — kept out of normal flow so it doesn't push the wheel off-centre */}
-          <SafeAreaView edges={['top']} style={{ alignItems: 'center' }}>
+          {/* Header sits at the centre of the wheel (the empty middle) and fades
+              out when the highlighted card starts moving to centre */}
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              StyleSheet.absoluteFillObject,
+              { justifyContent: 'center', alignItems: 'center', opacity: headerOpacity },
+            ]}
+          >
             <View style={introStyles.header}>
               <Text style={introStyles.headline}>Your starting card</Text>
               <Text style={introStyles.subtext}>Draw from the deck, {playerName}</Text>
             </View>
-          </SafeAreaView>
+          </Animated.View>
 
           {/* Wheel — centred against the full screen height */}
           <View style={[StyleSheet.absoluteFillObject, { justifyContent: 'center', alignItems: 'center' }]}>
@@ -3386,7 +3396,7 @@ function GameIntroScreen({
                 {WHEEL_POSITIONS.map((pos, i) => {
                   const isHighlight = i === WHEEL_HIGHLIGHT_IDX;
                   const cardTransform: any[] = isHighlight
-                    ? [{ rotate: counterRotStr }, { translateX: highlightX }, { scale: highlightScale }]
+                    ? [{ rotate: counterRotStr }, { translateX: highlightX }, { translateY: highlightY }, { scale: highlightScale }]
                     : [{ rotate: counterRotStr }];
 
                   return (
@@ -3460,9 +3470,16 @@ function GameIntroScreen({
                   onPress={allPlayersReady ? fadeOutAndDone : undefined}
                   activeOpacity={allPlayersReady ? 0.8 : 1}
                 >
-                  <Text style={[introStyles.startBtnText, !allPlayersReady && { color: 'rgba(0,0,0,0.35)' }]}>
-                    {allPlayersReady ? "Let's start playing! 🎬" : 'Waiting for everyone…'}
-                  </Text>
+                  {allPlayersReady ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Text style={introStyles.startBtnText}>Let's start playing! </Text>
+                      <Image source={require('../assets/lc-clapperboard.png')} style={{ width: 18, height: 18 }} />
+                    </View>
+                  ) : (
+                    <Text style={[introStyles.startBtnText, { color: 'rgba(0,0,0,0.35)' }]}>
+                      Waiting for everyone…
+                    </Text>
+                  )}
                 </TouchableOpacity>
               ) : (
                 <Text style={introStyles.waitingHostText}>Waiting for host to start…</Text>
@@ -3493,7 +3510,6 @@ const introStyles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    paddingTop: 14,
     gap: 5,
   },
   headline: {
@@ -3540,8 +3556,8 @@ const introStyles = StyleSheet.create({
   },
   footer: {
     alignItems: 'center',
-    paddingBottom: 14,
-    gap: 10,
+    paddingBottom: 18,
+    gap: 14,
   },
   tapHint: {
     color: 'rgba(255,255,255,0.35)',
@@ -3569,13 +3585,13 @@ const introStyles = StyleSheet.create({
     borderRadius: R.btn,
     borderWidth: 2,
     borderColor: C.ink,
-    paddingHorizontal: 36,
-    paddingVertical: 14,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
   },
   startBtnText: {
     color: C.textOnOchre,
     fontFamily: Fonts.display,
-    fontSize: FS.base,
+    fontSize: FS.sm,
     letterSpacing: 0.4,
   },
   startBtnDisabled: {
@@ -3583,27 +3599,31 @@ const introStyles = StyleSheet.create({
     borderColor: 'transparent',
   },
   playerList: {
-    width: '100%',
-    gap: 6,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
     paddingHorizontal: 16,
+    maxWidth: '100%',
   },
   playerRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 8,
+    gap: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: R.full,
   },
   playerRowName: {
     color: C.textPrimaryDark,
     fontFamily: Fonts.body,
-    fontSize: FS.sm,
+    fontSize: FS.xs,
   },
   playerRowStatus: {
     fontFamily: Fonts.label,
-    fontSize: FS.sm,
+    fontSize: FS.xs,
   },
   playerReady: {
     color: '#4CAF50',

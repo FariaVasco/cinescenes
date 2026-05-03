@@ -56,7 +56,7 @@ export default function TrailerScreen() {
   const [snackMessage, setSnackMessage] = useState('');
 
   if (!currentMovie) {
-    router.replace('/play');
+    router.replace('/');
     return null;
   }
 
@@ -254,7 +254,7 @@ export default function TrailerScreen() {
               <CinemaButton
                 variant="ghost"
                 size="sm"
-                onPress={() => { setShowExitDialog(false); setFromScanner(false); router.replace('/play'); }}
+                onPress={() => { setShowExitDialog(false); setFromScanner(false); router.replace('/'); }}
               >
                 Leave →
               </CinemaButton>

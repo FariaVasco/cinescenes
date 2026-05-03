@@ -22,19 +22,16 @@ interface TrailerPlayerProps {
 
 const TITLE_CARD_BURN = 3500; // ms after player ready before the YouTube title overlay is gone
 
-function makeYouTubeInject(unmuteAtMs: number | null, endMuteAtMs: number | null) {
+function makeYouTubeInject(unmuteAtMs: number | null, endMuteAtVideoSec: number | null) {
   const unmuteDelayExpr = unmuteAtMs != null
     ? `Math.max(0, ${unmuteAtMs} - Date.now())`
     : '300';
-  const endMuteDelayExpr = endMuteAtMs != null
-    ? `Math.max(0, ${endMuteAtMs} - Date.now())`
-    : null;
 
   return `
 (function() {
   var muted = false;
   var unmuted = false;
-  var endMuteScheduled = false;
+  var endMuted = false;
   var playerReadyAt = 0;
 
   setInterval(function() {
@@ -63,15 +60,21 @@ function makeYouTubeInject(unmuteAtMs: number | null, endMuteAtMs: number | null
           window.player.unMute();
           window.player.setVolume(100);
         }
-        ${endMuteDelayExpr != null ? `
-        if (!endMuteScheduled) {
-          endMuteScheduled = true;
-          setTimeout(function() {
-            if (typeof window.player.mute === 'function') { window.player.mute(); }
-          }, ${endMuteDelayExpr});
-        }` : ''}
       }, ${unmuteDelayExpr});
     }
+
+    ${endMuteAtVideoSec != null ? `
+    // End-mute is keyed off video time (not wall clock) so load/seek delay can't
+    // throw it off — it always fires at the same point in the trailer playback.
+    if (!endMuted && unmuted && typeof window.player.getCurrentTime === 'function') {
+      try {
+        var t = window.player.getCurrentTime();
+        if (typeof t === 'number' && t >= ${endMuteAtVideoSec}) {
+          endMuted = true;
+          if (typeof window.player.mute === 'function') { window.player.mute(); }
+        }
+      } catch (e) {}
+    }` : ''}
   }, 100);
 })();
 true;
@@ -111,33 +114,71 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
 
     const insaneMode = movie.safe_start === null;
     const safeStart  = movie.safe_start ?? 0;
-    const safeEnd    = movie.safe_end ?? (insaneMode ? 99999 : 60);
-    const duration   = insaneMode ? 30_000 : Math.max(safeEnd - safeStart, 10) * 1000;
+    const rawSafeEnd = movie.safe_end ?? (insaneMode ? 99999 : 60);
+    // Cut a couple of seconds off the safe window so we stop before YouTube's end-of-video
+    // title overlay flashes. Falls back to a 10s minimum so we don't shave a too-short window to nothing.
+    const END_TRIM_SEC = 2;
+    const safeEnd      = insaneMode ? rawSafeEnd : Math.max(rawSafeEnd - END_TRIM_SEC, safeStart + 10);
+    const duration     = insaneMode ? 30_000 : Math.max(safeEnd - safeStart, 10) * 1000;
 
     // Injection captured at mount so Date.now() reflects the actual mount time.
+    // End-mute uses video-time (seconds), aligned ~0.5s before our active end-trigger
+    // (videoTime >= safeEnd - 0.3) so audio fades out just before the screen switches.
     const [youtubeInject] = useState(() => {
       const now = Date.now();
       return makeYouTubeInject(
         unmuteAfterMs != null ? now + unmuteAfterMs : null,
-        now + duration - 800,  // mute audio 800ms before clip end
+        insaneMode ? null : safeEnd - 0.8,
       );
     });
 
     useEffect(() => {
-      console.log(`[CS] TrailerPlayer mounted  t=0  unmuteAfterMs=${unmuteAfterMs}  TITLE_CARD_BURN=${TITLE_CARD_BURN}`);
+      console.log(`[CS] TrailerPlayer mounted  t=0  movie="${movie.title}"  insaneMode=${insaneMode}  safeStart=${safeStart}s  rawSafeEnd=${rawSafeEnd}s  trimmedSafeEnd=${safeEnd}s  duration=${duration}ms  unmuteAfterMs=${unmuteAfterMs}  TITLE_CARD_BURN=${TITLE_CARD_BURN}`);
     }, []);
+
+    // Active end-trigger: poll the video's playhead and stop ourselves before YouTube's
+    // own `ended` event fires. The title overlay can appear in the seconds leading up to
+    // YouTube's natural end, so waiting for `state === 'ended'` is too late.
+    const activeEndFiredRef = useRef(false);
+    useEffect(() => {
+      const id = setInterval(async () => {
+        try {
+          const t = await playerRef.current?.getCurrentTime?.();
+          if (typeof t !== 'number') return;
+          console.log(`[CS] tick                  t=${ms()}  videoTime=${t.toFixed(2)}s  (window ${safeStart}→${safeEnd}s)`);
+          if (!activeEndFiredRef.current && !insaneMode && t >= safeEnd - 0.3) {
+            activeEndFiredRef.current = true;
+            console.log(`[CS] active end fired      t=${ms()}  videoTime=${t.toFixed(2)}s  → onEnded()`);
+            if (timerRef.current)        clearTimeout(timerRef.current);
+            if (overlayTimerRef.current) clearTimeout(overlayTimerRef.current);
+            if (fallbackRef.current)     clearTimeout(fallbackRef.current);
+            setEndOverlay(true);
+            setPlaying(false);
+            onEnded?.();
+          }
+        } catch (_) {}
+      }, 250);
+      return () => clearInterval(id);
+    }, [safeEnd, insaneMode]);
 
     function startEndTimer(ms_: number = duration) {
       if (timerRef.current) clearTimeout(timerRef.current);
       if (overlayTimerRef.current) clearTimeout(overlayTimerRef.current);
       timerStartRef.current = Date.now();
       remainingRef.current  = ms_;
-      // Black overlay appears 1s before screen switch, hiding any YouTube end card.
-      overlayTimerRef.current = setTimeout(() => setEndOverlay(true), Math.max(ms_ - 1000, 0));
+      // Switch screens 1s before the safe end so the YouTube title never flashes.
+      // Black overlay fires at the same instant as a safety net in case onEnded is debounced upstream.
+      const switchAt = Math.max(ms_ - 1000, 0);
+      console.log(`[CS] startEndTimer          t=${ms()}  ms_=${ms_}  switchAt=${switchAt}  (overlay+onEnded fire in ${switchAt}ms)`);
+      overlayTimerRef.current = setTimeout(() => {
+        console.log(`[CS] endOverlay shown       t=${ms()}`);
+        setEndOverlay(true);
+      }, switchAt);
       timerRef.current = setTimeout(() => {
+        console.log(`[CS] JS endTimer fired      t=${ms()}  → onEnded()`);
         setPlaying(false);
         onEnded?.();
-      }, ms_);
+      }, switchAt);
     }
 
     function doReveal() {
@@ -221,6 +262,7 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
     function handleYouTubeStateChange(state: string) {
       console.log(`[CS] YouTube state change  t=${ms()}  state=${state}`);
       if (state === 'ended') {
+        console.log(`[CS] → ended branch         t=${ms()}  calling onEnded() now`);
         if (timerRef.current) clearTimeout(timerRef.current);
         if (fallbackRef.current) clearTimeout(fallbackRef.current);
         onEnded?.();

@@ -4,13 +4,10 @@ import {
   Text,
   Image,
   TouchableOpacity,
-  TextInput,
   ScrollView,
   StyleSheet,
   Alert,
   Clipboard,
-  KeyboardAvoidingView,
-  Platform,
   BackHandler,
   ActivityIndicator,
   Animated,
@@ -27,8 +24,6 @@ import { C, R, FS, Fonts, SP } from '@/constants/theme';
 import { CinemaButton } from '@/components/CinemaButton';
 import { BackButton } from '@/components/BackButton';
 const lcClapperboard = require('../assets/lc-clapperboard.png');
-const lcMovieTicket  = require('../assets/lc-movie-ticket.png');
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
 import { Game, Movie, Player } from '@/lib/database.types';
@@ -63,17 +58,18 @@ export default function LocalLobbyScreen() {
     return (meta.given_name || meta.full_name?.split(' ')[0] || meta.name?.split(' ')[0] || '').trim();
   }
 
-  const [displayName, setDisplayName] = useState(getDefaultName);
+  const [displayName] = useState(getDefaultName);
   const [loading, setLoading] = useState(false);
   const [localGame, setLocalGame] = useState<Game | null>(null);
   const [localPlayers, setLocalPlayers] = useState<Player[]>([]);
   const [localPlayerId, setLocalPlayerId] = useState<string | null>(null);
   const [localIsHost, setLocalIsHost] = useState(false);
-  const [nameEntered, setNameEntered] = useState(false);
   const [maxPlayers, setMaxPlayers] = useState(8);
   const [codeCopied, setCodeCopied] = useState(false);
 
-  const nameInputRef = useRef<TextInput>(null);
+  // Lobby is "ready" once we've created or joined a game.
+  const lobbyReady = !!localGame;
+
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const gameIdRef = useRef<string | null>(null);
   const isHostRef = useRef(false);
@@ -82,7 +78,7 @@ export default function LocalLobbyScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
     }, [])
   );
 
@@ -90,33 +86,16 @@ export default function LocalLobbyScreen() {
     return () => stopPolling();
   }, []);
 
-  // Load cached name (only if no auth name and no param)
-  useEffect(() => {
-    if (displayNameParam || getDefaultName()) return;
-    AsyncStorage.getItem('player_display_name').then((saved) => {
-      if (saved) setDisplayName(saved);
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Save name to cache whenever it changes
-  useEffect(() => {
-    if (displayName.trim()) AsyncStorage.setItem('player_display_name', displayName.trim());
-  }, [displayName]);
-
-  // Auto-create when arriving from mode-select
+  // Auto-create or auto-join based on params. If neither is provided we bounce back —
+  // this screen no longer renders a Create/Join chooser (see app/local.tsx, app/online.tsx).
   useEffect(() => {
     if (startView === 'create') {
       handleCreateGame();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Auto-join if arriving with a joinCode (e.g. from lobby browser)
-  useEffect(() => {
-    if (joinCodeParam) {
+    } else if (joinCodeParam) {
       const name = displayNameParam || getDefaultName();
       handleJoinGame(name, joinCodeParam);
+    } else {
+      router.back();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -224,7 +203,6 @@ export default function LocalLobbyScreen() {
       playerIdRef.current = newPlayer.id;
       setLocalIsHost(true);
       setLocalPlayers([newPlayer]);
-      setNameEntered(true);
 
       setGame(newGame);
       setGameId(newGame.id);
@@ -276,7 +254,6 @@ export default function LocalLobbyScreen() {
       playerIdRef.current = newPlayer.id;
       setLocalIsHost(false);
       setMaxPlayers(foundGame.max_players ?? 8);
-      setNameEntered(true);
 
       setGame(foundGame);
       setGameId(foundGame.id);
@@ -326,25 +303,25 @@ export default function LocalLobbyScreen() {
   }
 
   useEffect(() => {
-    if (!nameEntered) return;
+    if (!lobbyReady) return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       handleLeaveWaitingRoom();
       return true;
     });
     return () => sub.remove();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nameEntered, localGame, localIsHost]);
+  }, [lobbyReady, localGame, localIsHost]);
 
   // Cancel game when host navigates away without tapping Cancel (e.g. iOS swipe-back)
   useEffect(() => {
-    if (!nameEntered || !localIsHost) return;
+    if (!lobbyReady || !localIsHost) return;
     return () => {
       if (!navigatedRef.current && gameIdRef.current) {
         db.from('games').update({ status: 'cancelled' }).eq('id', gameIdRef.current);
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nameEntered, localIsHost]);
+  }, [lobbyReady, localIsHost]);
 
   async function handleStartGame() {
     if (!localGame || localPlayers.length < 1) return;
@@ -456,17 +433,37 @@ export default function LocalLobbyScreen() {
 
   // ── Waiting room ─────────────────────────────────────────────────────────────
 
-  if (nameEntered && localGame) {
+  if (!lobbyReady || !localGame) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={C.ochre} />
+      </SafeAreaView>
+    );
+  }
+
+  const isPrivate = localGame.visibility === 'invite_only';
+
+  return (
+    <SafeAreaView style={styles.container}>
+      {/* Compact header — Back left, title + visibility centered */}
+      <View style={styles.header}>
         <BackButton
           onPress={handleLeaveWaitingRoom}
           label={localIsHost ? 'Cancel' : 'Leave'}
+          style={styles.backBtn}
         />
+        <View style={styles.headerTitleWrap}>
+          <Text style={styles.headerTitle} numberOfLines={1} adjustsFontSizeToFit>
+            LOBBY {}
+          </Text>
+        </View>
+        <View style={styles.headerSpacer} />
+      </View>
 
-        {/* Game code block */}
-        <View style={styles.waitingHeader}>
-          <Text style={styles.waitingLabel}>Game Code</Text>
+      {/* Body — two columns */}
+      <View style={styles.body}>
+        {/* LEFT — Game code + max players stepper */}
+        <View style={styles.leftCol}>
           <TouchableOpacity
             onPress={handleCopyCode}
             style={styles.codeCard}
@@ -475,24 +472,10 @@ export default function LocalLobbyScreen() {
             <Text style={styles.gameCode}>{localGame.game_code}</Text>
             <Text style={styles.copyHint}>{codeCopied ? 'Copied!' : 'tap to copy'}</Text>
           </TouchableOpacity>
-          <View style={styles.visibilityHintRow}>
-            <Image
-              source={localGame.visibility === 'invite_only' ? lcLock : lcGlobePin}
-              style={styles.visibilityHintIcon}
-            />
-            <Text style={styles.codeHint}>
-              {localGame.visibility === 'invite_only'
-                ? 'Private · join by code only'
-                : 'Public · visible in lobby browser'}
-            </Text>
-          </View>
-        </View>
 
-        {/* Player count / max stepper */}
-        <View style={styles.playerCountRow}>
-          {localIsHost ? (
+          {localIsHost && (
             <View style={styles.maxStepperWrap}>
-              <Text style={styles.maxStepperLabel}>Max players</Text>
+              <Text style={styles.colLabel}>MAX PLAYERS</Text>
               <View style={styles.maxPlayersStepper}>
                 <TouchableOpacity
                   onPress={() => handleMaxPlayersChange(-1)}
@@ -512,128 +495,51 @@ export default function LocalLobbyScreen() {
                   <Text style={[styles.stepperBtnText, maxPlayers >= 10 && styles.stepperBtnDisabled]}>+</Text>
                 </TouchableOpacity>
               </View>
-              <Text style={styles.playerCountText}>{localPlayers.length} joined</Text>
             </View>
-          ) : (
-            <Text style={styles.playerCountText}>{localPlayers.length} / {maxPlayers} players</Text>
           )}
         </View>
 
-        {/* Player list */}
-        <ScrollView style={styles.playerList} contentContainerStyle={styles.playerListContent}>
-          {localPlayers.map((p, i) => {
-            const isHost = i === 0;
-            return (
-              <View key={p.id} style={styles.playerChip}>
-                <View style={styles.playerAvatar}>
-                  <Text style={styles.playerAvatarText}>{initials(p.display_name)}</Text>
-                </View>
-                <Text style={styles.playerName}>{p.display_name}</Text>
-                {isHost && <Image source={lcCrown} style={styles.hostCrownIcon} />}
-                {p.id === localPlayerId && <View style={styles.youBadge}><Text style={styles.youBadgeText}>you</Text></View>}
-              </View>
-            );
-          })}
-        </ScrollView>
-
-        {localIsHost ? (
-          <CinemaButton
-            size="lg"
-            onPress={handleStartGame}
-            disabled={localPlayers.length < 1 || loading}
-            style={styles.startBtn}
-          >
-            {loading ? 'Starting…' : 'Start Game →'}
-          </CinemaButton>
-        ) : (
-          <View style={styles.waitingForHost}>
-            <Text style={styles.waitingForHostText}>Waiting for host to start…</Text>
+        {/* RIGHT — Player list + Start */}
+        <View style={styles.rightCol}>
+          <View style={styles.colHeader}>
+            <Text style={styles.colLabel}>PLAYERS</Text>
+            <Text style={styles.colCount}>{localPlayers.length} / {maxPlayers}</Text>
           </View>
-        )}
-        {loading && <HandoffSplash />}
-      </SafeAreaView>
-    );
-  }
 
-  // ── Spinner for auto-create / auto-join ───────────────────────────────────────
+          <ScrollView style={styles.playerList} contentContainerStyle={styles.playerListContent}>
+            {localPlayers.map((p, i) => {
+              const isHost = i === 0;
+              return (
+                <View key={p.id} style={styles.playerChip}>
+                  <View style={styles.playerAvatar}>
+                    <Text style={styles.playerAvatarText}>{initials(p.display_name)}</Text>
+                  </View>
+                  <Text style={styles.playerName} numberOfLines={1}>{p.display_name}</Text>
+                  {isHost && <Image source={lcCrown} style={styles.hostCrownIcon} />}
+                  {p.id === localPlayerId && <View style={styles.youBadge}><Text style={styles.youBadgeText}>you</Text></View>}
+                </View>
+              );
+            })}
+          </ScrollView>
 
-  if ((startView === 'create' || !!joinCodeParam) && !nameEntered) {
-    return (
-      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color={C.ochre} />
-      </SafeAreaView>
-    );
-  }
-
-  // ── Choice view ───────────────────────────────────────────────────────────────
-
-  const nameReady = displayName.trim().length > 0;
-  return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.accentTopRight} pointerEvents="none" />
-      <BackButton onPress={() => router.back()} />
-
-      {/* Header + cards — unaffected by keyboard */}
-      <View style={styles.choiceCenter}>
-        <View style={styles.choiceHeader}>
-          <Text style={styles.sectionLabel}>Multiplayer</Text>
-          <Text style={styles.title}>Go Digital</Text>
-          <View style={styles.titleUnderline} />
-          <Text style={styles.subtitle}>Up to 10 players — each on their own phone</Text>
+          {localIsHost ? (
+            <CinemaButton
+              size="lg"
+              onPress={handleStartGame}
+              disabled={localPlayers.length < 1 || loading}
+              style={styles.startBtn}
+            >
+              {loading ? 'Starting…' : 'Start Game →'}
+            </CinemaButton>
+          ) : (
+            <View style={styles.waitingForHost}>
+              <Text style={styles.waitingForHostText}>Waiting for host…</Text>
+            </View>
+          )}
         </View>
-
-        <View style={styles.choiceCards}>
-          <TouchableOpacity
-            style={[styles.choiceCard, styles.choiceCardPrimary, !nameReady && styles.choiceCardDisabled]}
-            onPress={() => {
-              if (!nameReady) return;
-              router.push({ pathname: '/mode-select', params: { displayName: displayName.trim() } });
-            }}
-            activeOpacity={0.85}
-          >
-            <Image source={lcClapperboard} style={{ width: 56, height: 56, resizeMode: 'contain' }} />
-            <Text style={[styles.choiceCardTitle, { color: C.ink }]}>Create Game</Text>
-            <Text style={[styles.choiceCardSub, { color: 'rgba(26,26,26,0.6)' }]}>Share the code with friends</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.choiceCard, !nameReady && styles.choiceCardDisabled]}
-            onPress={() => {
-              if (!nameReady) return;
-              router.push({ pathname: '/lobby-browser', params: { displayName: displayName.trim() } });
-            }}
-            activeOpacity={0.85}
-          >
-            <Image source={lcMovieTicket} style={{ width: 56, height: 56, resizeMode: 'contain' }} />
-            <Text style={styles.choiceCardTitle}>Join Game</Text>
-            <Text style={styles.choiceCardSub}>Browse open games or enter an invite code</Text>
-          </TouchableOpacity>
-        </View>
-
-        {!nameReady && (
-          <Text style={styles.namePrompt}>Enter your name above to continue</Text>
-        )}
       </View>
 
-      {/* Name input pinned to bottom — lifts with keyboard */}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={0}
-      >
-        <View style={styles.nameBar}>
-          <Text style={styles.inputLabel}>Your name</Text>
-          <TextInput
-            ref={nameInputRef}
-            style={styles.input}
-            value={displayName}
-            onChangeText={setDisplayName}
-            placeholder="Enter your name"
-            placeholderTextColor={C.textMuted}
-            maxLength={20}
-            returnKeyType="done"
-          />
-        </View>
-      </KeyboardAvoidingView>
+      {loading && <HandoffSplash />}
     </SafeAreaView>
   );
 }
@@ -691,175 +597,188 @@ const handoffStyles = StyleSheet.create({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
 
-  // Geometric accents
-  accentTopRight: {
-    position: 'absolute', top: -70, right: -70,
-    width: 180, height: 180, borderRadius: 90,
-    backgroundColor: 'rgba(232,55,42,0.06)',
+  // Header — Back + title centered
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SP.sm,
+    paddingTop: 4,
+    paddingBottom: 4,
   },
-
-  // Choice view
-  choiceCenter: {
-    flex: 1, justifyContent: 'center',
-    paddingHorizontal: SP.lg, gap: SP.lg,
-    paddingTop: SP.sm,
+  backBtn: { marginHorizontal: 0, marginTop: 0 },
+  headerTitleWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  choiceHeader: { gap: 4 },
-  sectionLabel: {
-    fontFamily: Fonts.label,
-    fontSize: FS.xs, letterSpacing: 2.5,
-    textTransform: 'uppercase', color: C.textMuted,
-  },
-  title: {
+  headerTitle: {
     fontFamily: Fonts.display,
-    fontSize: FS['2xl'], color: C.ink, letterSpacing: 0.5,
+    fontSize: FS['2xl'],
+    color: C.ochre,
+    letterSpacing: 1,
   },
-  titleUnderline: {
-    width: 40, height: 2, backgroundColor: C.ochre, marginTop: 6,
-  },
-  subtitle: {
-    fontFamily: Fonts.body,
-    fontSize: FS.base, color: C.textSub, marginTop: 4,
-  },
-  choiceCards: { gap: SP.md },
-  choiceCard: {
-    backgroundColor: C.surfaceWarm, borderRadius: R.card,
-    borderWidth: 2, borderColor: C.ink,
-    padding: 20, alignItems: 'center', gap: 8,
-  },
-  choiceCardPrimary: { backgroundColor: C.ochre },
-  choiceCardTitle: {
-    fontFamily: Fonts.display,
-    fontSize: FS.xl, color: C.ink, letterSpacing: 0.5,
-  },
-  choiceCardSub: {
-    fontFamily: Fonts.label,
-    fontSize: FS.sm, color: C.textSub, textAlign: 'center',
-  },
-  choiceCardDisabled: { opacity: 0.35 },
-
-  namePrompt: {
+  headerSub: {
     fontFamily: Fonts.label,
     fontSize: FS.sm,
     color: C.textMuted,
-    textAlign: 'center',
+    letterSpacing: 0.5,
   },
+  headerSpacer: { width: 84 },
 
-  nameBar: {
-    paddingHorizontal: SP.lg,
-    paddingTop: SP.sm,
+  // Body
+  body: {
+    flex: 1,
+    flexDirection: 'row',
+    paddingHorizontal: SP.md,
+    paddingTop: 4,
     paddingBottom: SP.md,
+    gap: SP.sm,
+  },
+
+  // Column header (label + optional count)
+  colHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+    marginBottom: 6,
     gap: 6,
-    borderTopWidth: 2,
-    borderTopColor: C.inkFaint,
-    backgroundColor: C.bg,
+  },
+  colHeaderIcon: { width: 14, height: 14, resizeMode: 'contain' },
+  colLabel: {
+    fontFamily: Fonts.label,
+    fontSize: FS.xs,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    color: C.textMuted,
+    flex: 1,
+  },
+  colCount: {
+    fontFamily: Fonts.display,
+    fontSize: FS.sm,
+    color: C.ochre,
+    letterSpacing: 0.5,
   },
 
-  inputLabel: {
-    fontFamily: Fonts.label,
-    fontSize: FS.xs, letterSpacing: 1.5,
-    textTransform: 'uppercase', color: C.textSub,
-  },
-  input: {
-    fontFamily: Fonts.body,
-    backgroundColor: C.surfaceWarm, borderRadius: R.md,
-    borderWidth: 2, borderColor: C.ink,
-    color: C.textPrimary, fontSize: FS.md,
-    paddingHorizontal: SP.md, paddingVertical: 14,
-  },
-
-  // Waiting room
-  waitingHeader: {
-    alignItems: 'center', paddingTop: SP.lg,
-    paddingBottom: SP.md, paddingHorizontal: SP.lg, gap: 8,
-  },
-  waitingLabel: {
-    fontFamily: Fonts.label,
-    fontSize: FS.xs, letterSpacing: 2,
-    textTransform: 'uppercase', color: C.textMuted,
+  // Left column — code + max players
+  leftCol: {
+    flex: 1,
+    gap: SP.sm,
   },
   codeCard: {
-    borderWidth: 2, borderColor: C.ink,
-    borderRadius: R.card, backgroundColor: C.surfaceWarm,
-    paddingHorizontal: SP.xl, paddingVertical: SP.md,
-    alignItems: 'center', gap: 4,
+    backgroundColor: C.surfaceWarm,
+    borderRadius: R.card,
+    borderWidth: 2,
+    borderColor: C.ink,
+    paddingHorizontal: SP.md,
+    paddingVertical: SP.sm,
+    alignItems: 'center',
+    gap: 2,
   },
   gameCode: {
     fontFamily: Fonts.display,
-    color: C.ochre, fontSize: 48,
-    letterSpacing: 10,
+    color: C.ochre,
+    fontSize: 36,
+    letterSpacing: 8,
   },
   copyHint: {
     fontFamily: Fonts.label,
-    fontSize: FS.xs, color: C.textMuted, letterSpacing: 1,
+    fontSize: FS.xs,
+    color: C.textMuted,
+    letterSpacing: 1,
   },
-  codeHint: {
-    fontFamily: Fonts.label,
-    color: C.textMuted, fontSize: FS.sm,
-  },
-  visibilityHintRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-  },
-  visibilityHintIcon: { width: 18, height: 18 },
-  playerCountRow: { alignItems: 'center', paddingVertical: SP.sm },
-  playerCountText: {
-    fontFamily: Fonts.label,
-    color: C.textSub, fontSize: FS.sm,
-  },
-  maxStepperWrap: { alignItems: 'center', gap: 4 },
-  maxStepperLabel: {
-    fontFamily: Fonts.label,
-    color: C.textMuted, fontSize: FS.xs,
-    letterSpacing: 1, textTransform: 'uppercase',
+  maxStepperWrap: {
+    alignItems: 'center',
+    backgroundColor: C.surfaceWarm,
+    borderRadius: R.card,
+    borderWidth: 2,
+    borderColor: C.ink,
+    paddingHorizontal: SP.sm,
+    paddingVertical: 4,
+    gap: 2,
   },
   maxPlayersStepper: { flexDirection: 'row', alignItems: 'center' },
-  stepperBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  stepperBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   stepperBtnText: {
     fontFamily: Fonts.display,
-    color: C.ochre, fontSize: 28,
+    color: C.ochre,
+    fontSize: 24,
   },
   stepperBtnDisabled: { color: C.inkFaint },
   stepperCount: {
     fontFamily: Fonts.display,
-    color: C.ink, fontSize: FS['2xl'],
-    minWidth: 44, textAlign: 'center',
+    color: C.ink,
+    fontSize: FS.xl,
+    minWidth: 36,
+    textAlign: 'center',
   },
-  playerList: { flex: 1, paddingHorizontal: SP.lg },
-  playerListContent: { gap: 10, paddingBottom: SP.md },
-  playerChip: {
+
+  // Right column — player list + start
+  rightCol: {
+    flex: 1.3,
     backgroundColor: C.surfaceWarm,
-    borderRadius: R.md, borderWidth: 2, borderColor: C.ink,
-    paddingHorizontal: SP.md, paddingVertical: 10,
-    flexDirection: 'row', alignItems: 'center', gap: 12,
+    borderRadius: R.card,
+    borderWidth: 2,
+    borderColor: C.ink,
+    paddingHorizontal: SP.sm,
+    paddingVertical: SP.sm,
+  },
+  playerList: { flex: 1 },
+  playerListContent: { gap: 6, paddingBottom: 4 },
+  playerChip: {
+    backgroundColor: C.bg,
+    borderRadius: R.md,
+    borderWidth: 2,
+    borderColor: C.ink,
+    paddingHorizontal: SP.sm,
+    paddingVertical: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   playerAvatar: {
-    width: 36, height: 36, borderRadius: R.full,
-    backgroundColor: C.ochre, borderWidth: 2, borderColor: C.ink,
-    alignItems: 'center', justifyContent: 'center',
+    width: 28,
+    height: 28,
+    borderRadius: R.full,
+    backgroundColor: C.ochre,
+    borderWidth: 2,
+    borderColor: C.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   playerAvatarText: {
     fontFamily: Fonts.display,
-    color: C.ink, fontSize: FS.sm,
-    lineHeight: FS.sm, includeFontPadding: false,
+    color: C.ink,
+    fontSize: FS.xs,
+    lineHeight: FS.xs,
+    includeFontPadding: false,
   },
   playerName: {
     fontFamily: Fonts.bodyBold,
-    color: C.textPrimary, fontSize: FS.base, flex: 1,
+    color: C.textPrimary,
+    fontSize: FS.sm,
+    flex: 1,
   },
-  hostCrownIcon: { width: 32, height: 32 },
+  hostCrownIcon: { width: 22, height: 22 },
   youBadge: {
-    backgroundColor: C.ochre, borderRadius: R.xs,
-    borderWidth: 2, borderColor: C.ink,
-    paddingHorizontal: 8, paddingVertical: 2,
+    backgroundColor: C.ochre,
+    borderRadius: R.xs,
+    borderWidth: 2,
+    borderColor: C.ink,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
   },
   youBadgeText: {
     fontFamily: Fonts.label,
-    color: C.ink, fontSize: FS.xs, letterSpacing: 0.5,
+    color: C.ink,
+    fontSize: FS.xs,
+    letterSpacing: 0.5,
   },
-  startBtn: { marginHorizontal: SP.lg, marginBottom: SP.lg },
-  waitingForHost: { marginHorizontal: SP.lg, marginBottom: SP.lg, paddingVertical: 18, alignItems: 'center' },
+  startBtn: { marginTop: 6 },
+  waitingForHost: { marginTop: 6, paddingVertical: 10, alignItems: 'center' },
   waitingForHostText: {
     fontFamily: Fonts.body,
-    color: C.textSub, fontSize: FS.base,
+    color: C.textSub,
+    fontSize: FS.sm,
   },
 });
