@@ -411,6 +411,13 @@ export default function GameScreen() {
     const amHost = players.length > 0 && players[0].id === myPlayerId;
     if (trailerEnded && !readyToPlace && amActive) {
       setReadyToPlace(true); // skip guess screen — panel lives on placement screen
+      // Private games: only the host plays the trailer. When the host is ALSO the active
+      // player, branch 3 below never fires, so we still need to write placed_interval=-1
+      // here so non-host observers exit the "is watching the trailer" overlay and start
+      // seeing the active player's timeline.
+      if (amHost && game?.visibility !== 'public' && currentTurn?.placed_interval === null) {
+        db.from('turns').update({ placed_interval: -1 }).eq('id', currentTurn!.id);
+      }
     } else if (!trailerEnded && !readyToPlace && amActive && !amHost
         && game?.visibility !== 'public'
         && currentTurn?.placed_interval === -1) {
@@ -1731,7 +1738,7 @@ export default function GameScreen() {
             <Animated.View style={[styles.timelineAreaFull, { paddingBottom: timelinePaddingBottom }]}>
               {amActive ? (
                 <View style={{ position: 'absolute', top: 8, left: 0, right: 0, alignItems: 'center' }}>
-                  <HourglassTimer durationMs={30000} size={40} onExpire={handlePlacementTimeout} label="to place the card in the timeline" />
+                  <HourglassTimer durationMs={30000} size={40} onExpire={handlePlacementTimeout} label="to place the card in the timeline" paused={bonusPanelOpen} />
                 </View>
               ) : (
                 <View style={styles.placePromptRow}>

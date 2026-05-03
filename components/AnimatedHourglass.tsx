@@ -153,20 +153,30 @@ interface HourglassTimerProps {
   label?: string;
   labelBefore?: string; // renders as "{labelBefore}{secsLeft}s"
   textSize?: number;    // overrides computed font size
+  paused?: boolean;     // when true, freezes elapsed time without losing progress
 }
 
-export function HourglassTimer({ durationMs, onExpire, size = 80, label, labelBefore, textSize }: HourglassTimerProps) {
+export function HourglassTimer({ durationMs, onExpire, size = 80, label, labelBefore, textSize, paused = false }: HourglassTimerProps) {
   const [progress, setProgress] = useState(0);
   const firedRef = useRef(false);
+  const elapsedRef = useRef(0);
+  const pausedRef = useRef(paused);
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const shakeLoopRef = useRef<Animated.CompositeAnimation | null>(null);
 
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
+
   useEffect(() => {
     firedRef.current = false;
-    const start = Date.now();
+    elapsedRef.current = 0;
+    let last = Date.now();
     const id = setInterval(() => {
-      const elapsed = Date.now() - start;
-      const p = Math.min(elapsed / durationMs, 1);
+      const now = Date.now();
+      if (!pausedRef.current) {
+        elapsedRef.current += now - last;
+      }
+      last = now;
+      const p = Math.min(elapsedRef.current / durationMs, 1);
       setProgress(p);
       if (p >= 1 && !firedRef.current) {
         firedRef.current = true;

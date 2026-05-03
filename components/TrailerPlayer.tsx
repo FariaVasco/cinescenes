@@ -104,6 +104,9 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
     const playerRef           = useRef<any>(null);
     const skipEndTimerOnReady = useRef(false);
     const dynStartRef         = useRef<number>(0);
+    // Dynamic-window end (video-time seconds). Set in handleYouTubeReady once we know
+    // the trailer duration; the tick uses this to actively stop playback.
+    const dynEndRef           = useRef<number>(0);
 
     const contentReadyRef = useRef(false);
     const seekToTimeRef   = useRef(0);
@@ -112,14 +115,17 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
     const t0Ref = useRef(Date.now());
     const ms = () => Date.now() - t0Ref.current;
 
-    const insaneMode = movie.safe_start === null;
+    // True when this movie has no scanned safe window (typical for fresh insane-mode TMDb
+    // pulls), so we fall back to the dynamic midpoint ±15s heuristic. Independent of game
+    // mode — an insane-mode game can still hit this branch off a previously-scanned movie.
+    const useDynamicWindow = movie.safe_start === null;
     const safeStart  = movie.safe_start ?? 0;
-    const rawSafeEnd = movie.safe_end ?? (insaneMode ? 99999 : 60);
+    const rawSafeEnd = movie.safe_end ?? (useDynamicWindow ? 99999 : 60);
     // Cut a couple of seconds off the safe window so we stop before YouTube's end-of-video
     // title overlay flashes. Falls back to a 10s minimum so we don't shave a too-short window to nothing.
     const END_TRIM_SEC = 2;
-    const safeEnd      = insaneMode ? rawSafeEnd : Math.max(rawSafeEnd - END_TRIM_SEC, safeStart + 10);
-    const duration     = insaneMode ? 30_000 : Math.max(safeEnd - safeStart, 10) * 1000;
+    const safeEnd      = useDynamicWindow ? rawSafeEnd : Math.max(rawSafeEnd - END_TRIM_SEC, safeStart + 10);
+    const duration     = useDynamicWindow ? 40_000 : Math.max(safeEnd - safeStart, 10) * 1000;
 
     // Injection captured at mount so Date.now() reflects the actual mount time.
     // End-mute uses video-time (seconds), aligned ~0.5s before our active end-trigger
@@ -128,25 +134,28 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
       const now = Date.now();
       return makeYouTubeInject(
         unmuteAfterMs != null ? now + unmuteAfterMs : null,
-        insaneMode ? null : safeEnd - 0.8,
+        useDynamicWindow ? null : safeEnd - 0.8,
       );
     });
 
     useEffect(() => {
-      console.log(`[CS] TrailerPlayer mounted  t=0  movie="${movie.title}"  insaneMode=${insaneMode}  safeStart=${safeStart}s  rawSafeEnd=${rawSafeEnd}s  trimmedSafeEnd=${safeEnd}s  duration=${duration}ms  unmuteAfterMs=${unmuteAfterMs}  TITLE_CARD_BURN=${TITLE_CARD_BURN}`);
+      console.log(`[CS] TrailerPlayer mounted  t=0  movie="${movie.title}"  useDynamicWindow=${useDynamicWindow}  safeStart=${safeStart}s  rawSafeEnd=${rawSafeEnd}s  trimmedSafeEnd=${safeEnd}s  duration=${duration}ms  unmuteAfterMs=${unmuteAfterMs}  TITLE_CARD_BURN=${TITLE_CARD_BURN}`);
     }, []);
 
     // Active end-trigger: poll the video's playhead and stop ourselves before YouTube's
-    // own `ended` event fires. The title overlay can appear in the seconds leading up to
-    // YouTube's natural end, so waiting for `state === 'ended'` is too late.
+    // own `ended` event fires. Scanned movies use safeEnd; dynamic-window movies use the
+    // dynEnd computed in handleYouTubeReady (midpoint + 15s, capped to total length).
     const activeEndFiredRef = useRef(false);
     useEffect(() => {
       const id = setInterval(async () => {
         try {
           const t = await playerRef.current?.getCurrentTime?.();
           if (typeof t !== 'number') return;
-          console.log(`[CS] tick                  t=${ms()}  videoTime=${t.toFixed(2)}s  (window ${safeStart}→${safeEnd}s)`);
-          if (!activeEndFiredRef.current && !insaneMode && t >= safeEnd - 0.3) {
+          // Resolve the end target each tick — dynEnd is set asynchronously after the
+          // player reports duration, so it may not be ready on the first ticks.
+          const targetEnd = useDynamicWindow ? dynEndRef.current : safeEnd;
+          console.log(`[CS] tick                  t=${ms()}  videoTime=${t.toFixed(2)}s  (target end ${targetEnd}s)`);
+          if (!activeEndFiredRef.current && targetEnd > 0 && t >= targetEnd - 0.3) {
             activeEndFiredRef.current = true;
             console.log(`[CS] active end fired      t=${ms()}  videoTime=${t.toFixed(2)}s  → onEnded()`);
             if (timerRef.current)        clearTimeout(timerRef.current);
@@ -159,7 +168,7 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
         } catch (_) {}
       }, 250);
       return () => clearInterval(id);
-    }, [safeEnd, insaneMode]);
+    }, [safeEnd, useDynamicWindow]);
 
     function startEndTimer(ms_: number = duration) {
       if (timerRef.current) clearTimeout(timerRef.current);
@@ -215,7 +224,7 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
         skipEndTimerOnReady.current = false;
         setEndOverlay(false);
         setPlaying(false);
-        const replayStart = insaneMode ? dynStartRef.current : safeStart;
+        const replayStart = useDynamicWindow ? dynStartRef.current : safeStart;
         setTimeout(() => {
           playerRef.current?.seekTo(replayStart, true);
           setPlaying(true);
@@ -228,19 +237,21 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
 
     async function handleYouTubeReady() {
       console.log(`[CS] YouTube player ready  t=${ms()}`);
-      if (insaneMode) {
+      if (useDynamicWindow) {
         skipEndTimerOnReady.current = true;
         if (fallbackRef.current) clearTimeout(fallbackRef.current);
         try {
           const totalSec: number = (await playerRef.current?.getDuration()) ?? 120;
           const mid      = totalSec / 2;
-          const dynStart = Math.max(0, mid - 15);
-          const dynEnd   = dynStart + 30;
+          const dynStart = Math.max(0, mid - 20);
+          const dynEnd   = Math.min(dynStart + 40, totalSec - 0.5); // never overshoot the natural end
           dynStartRef.current = dynStart;
+          dynEndRef.current   = dynEnd;
           playerRef.current?.seekTo(dynStart, true);
           onWindowCalculated?.(dynStart, dynEnd);
         } catch (_) {
           dynStartRef.current = 0;
+          dynEndRef.current   = 40; // fallback: cap at 40s of video time
         }
         console.log(`[CS] burn timer set        t=${ms()}  fires in ${TITLE_CARD_BURN}ms`);
         fallbackRef.current = setTimeout(() => {
