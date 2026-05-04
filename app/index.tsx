@@ -13,13 +13,13 @@ import {
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ScreenOrientation from 'expo-screen-orientation';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { C, R, Fonts, FS, SP } from '@/constants/theme';
 import { useAppStore } from '@/store/useAppStore';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { presentCustomerCenter } from '@/lib/revenuecat';
 import { RulesCarousel } from '@/components/RulesCarousel';
+import { FeedbackSheet } from '@/components/FeedbackSheet';
 
 const lcLogo            = require('@/assets/lc-logo-without-background.png');
 const lcClapperboard    = require('@/assets/lc-clapperboard.png');
@@ -28,11 +28,13 @@ const lcIconSettings    = require('@/assets/lc-icon-settings.png');
 const lcFriendsCinema   = require('@/assets/lc-friends-cinema.png');
 const lcPeopleHomeTV    = require('@/assets/lc-people-home-tv.png');
 const lcFriendsCardsW   = require('@/assets/lc-friends-cards-wide.png');
+const lcFeedback        = require('@/assets/lc-feedback.png');
 
 type MenuView = 'play' | 'rules' | 'settings';
 
 export default function LandingScreen() {
   const [view, setView] = useState<MenuView>('play');
+  const [feedbackVisible, setFeedbackVisible] = useState(false);
   const { setActiveMovies } = useAppStore();
 
   useFocusEffect(
@@ -56,20 +58,21 @@ export default function LandingScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.row}>
-        <SideMenu view={view} setView={setView} />
+        <SideMenu view={view} setView={setView} onFeedback={() => setFeedbackVisible(true)} />
         <View style={styles.right}>
           {view === 'play' && <PlayView />}
           {view === 'rules' && <RulesView />}
           {view === 'settings' && <SettingsView />}
         </View>
       </View>
+      <FeedbackSheet visible={feedbackVisible} onClose={() => setFeedbackVisible(false)} />
     </SafeAreaView>
   );
 }
 
 // ── Side menu ───────────────────────────────────────────────────────────────
 
-function SideMenu({ view, setView }: { view: MenuView; setView: (v: MenuView) => void }) {
+function SideMenu({ view, setView, onFeedback }: { view: MenuView; setView: (v: MenuView) => void; onFeedback: () => void }) {
   return (
     <View style={styles.menu}>
       <View style={styles.brandRow}>
@@ -82,24 +85,28 @@ function SideMenu({ view, setView }: { view: MenuView; setView: (v: MenuView) =>
         <MenuItem image={lcIconHow}      label="HOW TO PLAY " active={view === 'rules'}    onPress={() => setView('rules')} />
         <MenuItem image={lcIconSettings} label="SETTINGS "    active={view === 'settings'} onPress={() => setView('settings')} />
       </View>
+
+      <View style={styles.feedbackWrap}>
+        <MenuItem image={lcFeedback} label="FEEDBACK " active={false} compact onPress={onFeedback} />
+      </View>
     </View>
   );
 }
 
-function MenuItem({ icon, image, label, active, onPress }: { icon?: string; image?: any; label: string; active: boolean; onPress: () => void }) {
+function MenuItem({ icon, image, label, active, compact, onPress }: { icon?: string; image?: any; label: string; active: boolean; compact?: boolean; onPress: () => void }) {
   return (
     <TouchableOpacity
       onPress={onPress}
       activeOpacity={0.85}
       style={[styles.menuItem, active && styles.menuItemActive]}
     >
-      <View style={[styles.menuItemIconWrap, active && styles.menuItemIconWrapActive]}>
+      <View style={[styles.menuItemIconWrap, compact && styles.menuItemIconWrapCompact, active && styles.menuItemIconWrapActive]}>
         {image
-          ? <Image source={image} style={styles.menuItemIconImg} />
-          : <Text style={[styles.menuItemIcon, active && styles.menuItemIconActive]}>{icon}</Text>
+          ? <Image source={image} style={[styles.menuItemIconImg, compact && styles.menuItemIconImgCompact]} />
+          : <Text style={[styles.menuItemIcon, compact && styles.menuItemIconCompact, active && styles.menuItemIconActive]}>{icon}</Text>
         }
       </View>
-      <Text style={[styles.menuItemLabel, active && styles.menuItemLabelActive]}>{label}</Text>
+      <Text style={[styles.menuItemLabel, compact && styles.menuItemLabelCompact, active && styles.menuItemLabelActive]}>{label}</Text>
     </TouchableOpacity>
   );
 }
@@ -169,33 +176,10 @@ function RulesView() {
 
 // ── Right panel: Settings (Account + Preferences) ───────────────────────────
 
-const SETTINGS_STORAGE_KEY = 'app_settings_v1';
-type SettingsState = { soundEffects: boolean; music: boolean; vibration: boolean };
-const SETTINGS_DEFAULTS: SettingsState = { soundEffects: true, music: true, vibration: true };
-
 function SettingsView() {
-  const { authUser, isPremium } = useAppStore();
+  const { authUser, isPremium, settings, setSetting } = useAppStore();
   const { signInWithApple, signInWithGoogle, signOut } = useAuth();
-  const [settings, setSettings] = useState<SettingsState>(SETTINGS_DEFAULTS);
-  const [loaded, setLoaded] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
-
-  useEffect(() => {
-    AsyncStorage.getItem(SETTINGS_STORAGE_KEY).then((raw) => {
-      if (raw) {
-        try { setSettings({ ...SETTINGS_DEFAULTS, ...JSON.parse(raw) }); } catch {}
-      }
-      setLoaded(true);
-    });
-  }, []);
-
-  useEffect(() => {
-    if (loaded) AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
-  }, [settings, loaded]);
-
-  function toggle<K extends keyof SettingsState>(key: K) {
-    setSettings((s) => ({ ...s, [key]: !s[key] }));
-  }
 
   async function handleSignIn() {
     setAuthBusy(true);
@@ -278,9 +262,7 @@ function SettingsView() {
         {/* Preferences section */}
         <Text style={styles.sectionLabel}>PREFERENCES</Text>
         <View style={styles.sectionCard}>
-          <PrefRow label="Sound Effects" value={settings.soundEffects} onChange={() => toggle('soundEffects')} />
-          <PrefRow label="Music"         value={settings.music}        onChange={() => toggle('music')} />
-          <PrefRow label="Vibration"     value={settings.vibration}    onChange={() => toggle('vibration')} />
+          <PrefRow label="Vibration" value={settings.vibration} onChange={() => setSetting('vibration', !settings.vibration)} />
         </View>
       </ScrollView>
     </View>
@@ -325,7 +307,7 @@ const styles = StyleSheet.create({
     paddingLeft: SP.xl,
     paddingRight: SP.md,
     paddingVertical: SP.sm,
-    gap: SP.lg,
+    gap: SP.md,
     borderRightWidth: 2,
     borderRightColor: C.inkFaint,
   },
@@ -348,12 +330,12 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
   },
 
-  menuItems: { gap: 6, paddingLeft: SP.md },
+  menuItems: { gap: 4, paddingLeft: SP.md },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: SP.sm,
-    paddingVertical: 8,
+    paddingVertical: 6,
     paddingHorizontal: SP.sm,
     borderRadius: R.md,
     borderWidth: 2,
@@ -369,11 +351,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  menuItemIconWrapCompact: {},
   menuItemIconWrapActive: {},
   menuItemIcon: {
     fontFamily: Fonts.display,
     fontSize: FS.lg,
     color: C.textSub,
+  },
+  menuItemIconCompact: {
+    fontSize: FS.md,
   },
   menuItemIconActive: {
     color: C.ink,
@@ -383,11 +369,18 @@ const styles = StyleSheet.create({
     height: 40,
     resizeMode: 'contain',
   },
+  menuItemIconImgCompact: {
+    width: 34,
+    height: 34,
+  },
   menuItemLabel: {
     fontFamily: Fonts.display,
     fontSize: FS.lg,
     color: C.textSub,
     letterSpacing: 1,
+  },
+  menuItemLabelCompact: {
+    fontSize: FS.md,
   },
   menuItemLabelActive: {
     color: C.ink,
@@ -398,6 +391,10 @@ const styles = StyleSheet.create({
     flex: 2.4,
     paddingHorizontal: SP.md,
     paddingVertical: SP.sm,
+  },
+  feedbackWrap: {
+    marginTop: -SP.md,
+    paddingLeft: SP.md,
   },
   viewWrap: { flex: 1 },
 

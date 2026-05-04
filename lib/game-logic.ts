@@ -119,6 +119,15 @@ export function computeValidIntervals(year: number, timeline: number[]): number[
   return [computeCorrectInterval(year, timeline)];
 }
 
+// ── Soft-delete filtering ──────────────────────────────────────────────────
+
+// Filters out players who left the game mid-session. A non-null `left_at`
+// means the row is a tombstone — they must not appear in turn rotation,
+// host detection, timeline rendering, or player chips.
+export function activePlayers<T extends { left_at?: string | null }>(players: T[]): T[] {
+  return players.filter(p => !p.left_at);
+}
+
 // ── Sequential challenge state ─────────────────────────────────────────────
 
 interface ChallengeSlim {

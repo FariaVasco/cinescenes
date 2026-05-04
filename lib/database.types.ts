@@ -119,6 +119,7 @@ export interface Database {
           timeline: number[];
           created_at: string;
           last_seen: string | null;
+          left_at: string | null;
         };
         Insert: {
           id?: string;
@@ -129,6 +130,7 @@ export interface Database {
           timeline?: number[];
           created_at?: string;
           last_seen?: string | null;
+          left_at?: string | null;
         };
         Update: Partial<Database['public']['Tables']['players']['Insert']>;
       };
@@ -191,6 +193,29 @@ export interface Database {
         };
         Update: Partial<Database['public']['Tables']['reports']['Insert']>;
       };
+      feedback: {
+        Row: {
+          id: string;
+          category: 'works_well' | 'improvement' | 'bug' | 'idea';
+          note: string;
+          email: string | null;
+          user_id: string | null;
+          app_version: string | null;
+          platform: 'ios' | 'android' | 'web' | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          category: 'works_well' | 'improvement' | 'bug' | 'idea';
+          note: string;
+          email?: string | null;
+          user_id?: string | null;
+          app_version?: string | null;
+          platform?: 'ios' | 'android' | 'web' | null;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['feedback']['Insert']>;
+      };
     };
   };
 }
@@ -203,3 +228,4 @@ export type Challenge = Database['public']['Tables']['challenges']['Row'];
 export type Report = Database['public']['Tables']['reports']['Row'];
 export type Profile = Database['public']['Tables']['profiles']['Row'];
 export type Collection = Database['public']['Tables']['collections']['Row'];
+export type Feedback = Database['public']['Tables']['feedback']['Row'];

@@ -89,6 +89,7 @@ export default function LocalLobbyScreen() {
   // Auto-create or auto-join based on params. If neither is provided we bounce back —
   // this screen no longer renders a Create/Join chooser (see app/local.tsx, app/online.tsx).
   useEffect(() => {
+    console.log('[CS] local-lobby mounted', { startView, joinCodeParam, hasDisplayName: !!displayNameParam, mode: selectedGameMode, visibility: selectedVisibility });
     if (startView === 'create') {
       handleCreateGame();
     } else if (joinCodeParam) {
@@ -171,10 +172,12 @@ export default function LocalLobbyScreen() {
   }
 
   async function handleCreateGame() {
-    if (!displayName.trim()) { router.back(); return; }
+    console.log('[CS] handleCreateGame: enter', { name: displayName });
+    if (!displayName.trim()) { console.log('[CS] handleCreateGame: no displayName, going back'); router.back(); return; }
     setLoading(true);
     try {
       const code = generateCode();
+      console.log('[CS] handleCreateGame: inserting game row', { code, mode: selectedGameMode, visibility: selectedVisibility });
       const { data: newGame, error: gameErr } = await db
         .from('games')
         .insert({
@@ -189,14 +192,16 @@ export default function LocalLobbyScreen() {
         })
         .select()
         .single() as { data: Game | null; error: any };
-      if (gameErr || !newGame) throw gameErr ?? new Error('No game');
+      if (gameErr || !newGame) { console.log('[CS] handleCreateGame: game insert failed', gameErr); throw gameErr ?? new Error('No game'); }
+      console.log('[CS] handleCreateGame: game inserted', { id: newGame.id });
 
       const { data: newPlayer, error: playerErr } = await db
         .from('players')
         .insert({ game_id: newGame.id, display_name: displayName.trim(), last_seen: null })
         .select()
         .single() as { data: Player | null; error: any };
-      if (playerErr || !newPlayer) throw playerErr ?? new Error('No player');
+      if (playerErr || !newPlayer) { console.log('[CS] handleCreateGame: player insert failed', playerErr); throw playerErr ?? new Error('No player'); }
+      console.log('[CS] handleCreateGame: player inserted', { id: newPlayer.id });
 
       setLocalGame(newGame);
       setLocalPlayerId(newPlayer.id);
@@ -212,8 +217,11 @@ export default function LocalLobbyScreen() {
       setCurrentTurn(null);
       setChallenges([]);
 
+      console.log('[CS] handleCreateGame: starting polling');
       startPolling(newGame.id, true);
+      console.log('[CS] handleCreateGame: done');
     } catch (e: any) {
+      console.log('[CS] handleCreateGame: caught error', e);
       Alert.alert('Error', e?.message ?? 'Could not create game', [
         { text: 'OK', onPress: () => router.back() },
       ]);

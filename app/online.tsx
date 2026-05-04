@@ -146,14 +146,17 @@ export default function OnlineScreen() {
   }
 
   function handleCreatePress() {
+    console.log('[CS] online: Create pressed', { nameReady });
     if (!nameReady) return;
     setModePickerVisible(true);
   }
 
   function handleModeSelected(choice: ModeChoice) {
+    console.log('[CS] online: mode selected', choice);
     setSelectedVisibility('public');
     setSelectedGameMode(choice.mode);
     setSelectedCollectionId(choice.mode === 'collection' ? choice.collectionId : null);
+    console.log('[CS] online: navigating to /local-lobby');
     router.push({
       pathname: '/local-lobby',
       params: { startView: 'create', displayName: displayName.trim() },

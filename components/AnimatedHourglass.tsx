@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import Svg, { Path, Rect, Circle, Defs, ClipPath, G, Line } from 'react-native-svg';
 import { Fonts } from '@/constants/theme';
+import * as haptics from '@/lib/haptics';
 
 const VERMILLION = '#E8372A';
 const OCHRE      = '#F5C518';
@@ -189,6 +190,13 @@ export function HourglassTimer({ durationMs, onExpire, size = 80, label, labelBe
 
   const secsLeft = Math.ceil((1 - progress) * durationMs / 1000);
   const urgent = secsLeft <= 5 && secsLeft > 0;
+
+  // Pulse a tick haptic on each urgent second so the player feels the deadline approaching.
+  // The dependency array fires only when the integer secsLeft changes (not on every 50ms tick).
+  // Skips while paused since secsLeft stops updating in that case anyway.
+  useEffect(() => {
+    if (urgent) haptics.tap();
+  }, [secsLeft, urgent]);
 
   // Start/stop shake loop when urgency changes
   useEffect(() => {

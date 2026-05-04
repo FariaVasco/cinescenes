@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, Modal, Image,
+  View, Text, TouchableOpacity, StyleSheet, Image,
   ActivityIndicator, ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -38,16 +38,23 @@ export function ModePickerModal({ visible, onClose, onSelected }: Props) {
   const [loadingCollections, setLoadingCollections] = useState(false);
 
   useEffect(() => {
+    console.log('[CS] ModePickerModal: visible changed', { visible });
     if (visible) loadCollections();
   }, [visible]);
 
   async function loadCollections() {
+    console.log('[CS] ModePickerModal: loadCollections start');
     setLoadingCollections(true);
-    const { data } = await db
-      .from('collections')
-      .select('*')
-      .eq('is_active', true) as { data: Collection[] | null };
-    if (data) setCollections(data);
+    try {
+      const { data, error } = await db
+        .from('collections')
+        .select('*')
+        .eq('is_active', true) as { data: Collection[] | null; error: any };
+      console.log('[CS] ModePickerModal: loadCollections done', { count: data?.length ?? 0, error });
+      if (data) setCollections(data);
+    } catch (e) {
+      console.log('[CS] ModePickerModal: loadCollections threw', e);
+    }
     setLoadingCollections(false);
   }
 
@@ -98,72 +105,88 @@ export function ModePickerModal({ visible, onClose, onSelected }: Props) {
     onClose();
   }
 
+  if (!visible && !paywallVisible && !collectionPickerVisible) return null;
+
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
-        <View style={styles.card} onStartShouldSetResponder={() => true}>
-          <Text style={styles.overline}>SELECT GAME MODE</Text>
-          <Text style={styles.title}>Choose a Mode</Text>
+    <>
+      {visible && (
+        <View style={styles.fill} pointerEvents="box-none">
+          <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
+            <View style={styles.card} onStartShouldSetResponder={() => true}>
+              <Text style={styles.overline}>SELECT GAME MODE</Text>
+              <Text style={styles.title}>Choose a Mode</Text>
 
-          <View style={styles.row}>
-            <TouchableOpacity style={[styles.tile, styles.tileClassic]} onPress={pickClassic} activeOpacity={0.85}>
-              <Text style={styles.tileTitle}>Classic</Text>
-              <View style={styles.freeBadge}><Text style={styles.freeBadgeText}>FREE</Text></View>
-              <Text style={styles.tileSub}>500+ curated movies</Text>
-            </TouchableOpacity>
+              <View style={styles.row}>
+                <TouchableOpacity style={[styles.tile, styles.tileClassic]} onPress={pickClassic} activeOpacity={0.85}>
+                  <Text style={styles.tileTitle}>Classic</Text>
+                  <View style={styles.freeBadge}><Text style={styles.freeBadgeText}>FREE</Text></View>
+                  <Text style={styles.tileSub}>500+ curated movies</Text>
+                </TouchableOpacity>
 
-            <TouchableOpacity style={styles.tile} onPress={pickInsane} activeOpacity={0.85}>
-              <Text style={styles.tileTitle}>Insane</Text>
-              <View style={styles.premiumBadge}>
-                <Image source={lcLightning} style={styles.premiumBadgeIcon} />
-                <Text style={styles.premiumBadgeText}>PREMIUM</Text>
+                <TouchableOpacity style={styles.tile} onPress={pickInsane} activeOpacity={0.85}>
+                  <Text style={styles.tileTitle}>Insane</Text>
+                  <View style={styles.premiumBadge}>
+                    <Image source={lcLightning} style={styles.premiumBadgeIcon} />
+                    <Text style={styles.premiumBadgeText}>PREMIUM</Text>
+                  </View>
+                  <Text style={styles.tileSub}>Every movie ever made</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={[styles.tile, styles.tileDisabled]} onPress={pickCollection} activeOpacity={0.85} disabled>
+                  <Text style={[styles.tileTitle, styles.tileTitleDisabled]}>Collections</Text>
+                  <View style={styles.soonBadge}><Text style={styles.soonBadgeText}>COMING SOON</Text></View>
+                  <Text style={styles.tileSub}>Themed packs</Text>
+                </TouchableOpacity>
               </View>
-              <Text style={styles.tileSub}>Every movie ever made</Text>
-            </TouchableOpacity>
 
-            <TouchableOpacity style={[styles.tile, styles.tileDisabled]} onPress={pickCollection} activeOpacity={0.85} disabled>
-              <Text style={[styles.tileTitle, styles.tileTitleDisabled]}>Collections</Text>
-              <View style={styles.soonBadge}><Text style={styles.soonBadgeText}>COMING SOON</Text></View>
-              <Text style={styles.tileSub}>Themed packs</Text>
-            </TouchableOpacity>
-          </View>
-
-          <CinemaButton variant="ghost" size="sm" onPress={onClose}>Cancel</CinemaButton>
+              <CinemaButton variant="ghost" size="sm" onPress={onClose}>Cancel</CinemaButton>
+            </View>
+          </TouchableOpacity>
         </View>
-      </TouchableOpacity>
+      )}
 
-      <PaywallSheet
-        visible={paywallVisible}
-        onClose={() => setPaywallVisible(false)}
-        onPurchased={onPaywallPurchased}
-      />
+      {paywallVisible && (
+        <PaywallSheet
+          visible={paywallVisible}
+          onClose={() => setPaywallVisible(false)}
+          onPurchased={onPaywallPurchased}
+        />
+      )}
 
-      <Modal visible={collectionPickerVisible} transparent animationType="slide" onRequestClose={() => setCollectionPickerVisible(false)}>
-        <View style={styles.overlay}>
-          <View style={styles.collectionSheet}>
-            <Text style={styles.overline}>SELECT A COLLECTION</Text>
-            <Text style={styles.title}>Tonight's theme</Text>
-            {loadingCollections ? (
-              <ActivityIndicator color={C.ochre} style={{ marginVertical: 24 }} />
-            ) : (
-              <ScrollView style={{ width: '100%' }} contentContainerStyle={{ gap: SP.sm }}>
-                {collections.map((col) => (
-                  <TouchableOpacity key={col.id} style={styles.colItem} onPress={() => onCollectionPicked(col)} activeOpacity={0.85}>
-                    <Text style={styles.colName}>{col.name}</Text>
-                    {col.description && <Text style={styles.colDesc}>{col.description}</Text>}
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            )}
-            <CinemaButton variant="ghost" size="sm" onPress={() => setCollectionPickerVisible(false)}>Cancel</CinemaButton>
+      {collectionPickerVisible && (
+        <View style={styles.fill}>
+          <View style={styles.overlay}>
+            <View style={styles.collectionSheet}>
+              <Text style={styles.overline}>SELECT A COLLECTION</Text>
+              <Text style={styles.title}>Tonight's theme</Text>
+              {loadingCollections ? (
+                <ActivityIndicator color={C.ochre} style={{ marginVertical: 24 }} />
+              ) : (
+                <ScrollView style={{ width: '100%' }} contentContainerStyle={{ gap: SP.sm }}>
+                  {collections.map((col) => (
+                    <TouchableOpacity key={col.id} style={styles.colItem} onPress={() => onCollectionPicked(col)} activeOpacity={0.85}>
+                      <Text style={styles.colName}>{col.name}</Text>
+                      {col.description && <Text style={styles.colDesc}>{col.description}</Text>}
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
+              <CinemaButton variant="ghost" size="sm" onPress={() => setCollectionPickerVisible(false)}>Cancel</CinemaButton>
+            </View>
           </View>
         </View>
-      </Modal>
-    </Modal>
+      )}
+    </>
   );
 }
 
 const styles = StyleSheet.create({
+  fill: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    zIndex: 1000,
+    elevation: 1000,
+  },
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',

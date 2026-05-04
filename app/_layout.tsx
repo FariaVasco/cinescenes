@@ -12,6 +12,7 @@ import { PatrickHand_400Regular } from '@expo-google-fonts/patrick-hand';
 import { cinemaTheme } from '@/lib/theme';
 import { initRevenueCat } from '@/lib/revenuecat';
 import { useAuth } from '@/hooks/useAuth';
+import { useAppStore } from '@/store/useAppStore';
 import { C } from '@/constants/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -39,6 +40,7 @@ export default function RootLayout() {
     }
     initRevenueCat();
     restoreSession();
+    useAppStore.getState().hydrateSettings();
   }, []);
 
   if (!fontsLoaded) return null;

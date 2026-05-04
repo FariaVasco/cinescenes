@@ -1,6 +1,11 @@
 import { create } from 'zustand';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User } from '@supabase/supabase-js';
 import { Movie, Game, Player, Turn, Challenge } from '@/lib/database.types';
+
+export interface AppSettings { vibration: boolean }
+const SETTINGS_DEFAULTS: AppSettings = { vibration: true };
+const SETTINGS_STORAGE_KEY = 'app_settings_v1';
 
 interface AppState {
   // Current movie (trailer screen)
@@ -52,6 +57,11 @@ interface AppState {
   setChallenges: (c: Challenge[]) => void;
   setIsHost: (v: boolean) => void;
   setStartingMovieIds: (ids: string[]) => void;
+
+  // App-wide settings (persisted to AsyncStorage on every change)
+  settings: AppSettings;
+  setSetting: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => void;
+  hydrateSettings: () => Promise<void>;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -96,4 +106,17 @@ export const useAppStore = create<AppState>((set) => ({
   setChallenges: (c) => set({ challenges: c }),
   setIsHost: (v) => set({ isHost: v }),
   setStartingMovieIds: (ids) => set({ startingMovieIds: ids }),
+
+  settings: SETTINGS_DEFAULTS,
+  setSetting: (key, value) => {
+    const next = { ...useAppStore.getState().settings, [key]: value };
+    set({ settings: next });
+    AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(next)).catch(() => {});
+  },
+  hydrateSettings: async () => {
+    try {
+      const raw = await AsyncStorage.getItem(SETTINGS_STORAGE_KEY);
+      if (raw) set({ settings: { ...SETTINGS_DEFAULTS, ...JSON.parse(raw) } });
+    } catch {}
+  },
 }));

@@ -33,12 +33,13 @@ import { supabase } from '@/lib/supabase';
 import { Challenge, Movie, Player, Turn } from '@/lib/database.types';
 import { TrailerPlayer, TrailerPlayerHandle } from '@/components/TrailerPlayer';
 import { Timeline, TimelineHandle } from '@/components/Timeline';
+import * as haptics from '@/lib/haptics';
 import { ChallengeTimer } from '@/components/ChallengeTimer';
 import { HourglassTimer, TrailerCountdown } from '@/components/AnimatedHourglass';
 import { CardBack, CardFront } from '@/components/MovieCard';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { AirPlayButton, useAirPlayAvailable } from 'airplay-picker';
-import { CloseIcon, PlayIcon, CastToTVIcon } from '@/components/CinemaIcons';
+import { CloseIcon, PlayIcon, CastToTVIcon, ArrowLeftIcon } from '@/components/CinemaIcons';
 import { CinescenesMark } from '@/components/CinescenesMark';
 
 const lcTrophy        = require('../assets/lc-trophy.png');
@@ -288,6 +289,27 @@ export default function GameScreen() {
     const tBg = setTimeout(() => setRevealBgDark(true), 2900);
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(tBg); };
   }, [currentTurn?.status]);
+
+  // Per-device reveal haptic: fire success/error only if THIS player participated.
+  // Active player → result based on placement. Challenger → result based on their pick.
+  // Passers / observers feel nothing — haptic is feedback for their own bet.
+  useEffect(() => {
+    if (revealPhase !== 'result') return;
+    const ct = currentTurnRef.current;
+    const m = movie;
+    if (!ct || !m || ct.placed_interval == null) return;
+    const validIntervals = computeValidIntervals(m.year, getActivePlayerTimeline());
+    const activeCorrect = validIntervals.includes(ct.placed_interval);
+    const amActiveLocal = myPlayerId === ct.active_player_id;
+    if (amActiveLocal) {
+      activeCorrect ? haptics.success() : haptics.error();
+      return;
+    }
+    const mine = challenges.find(c => c.challenger_id === myPlayerId);
+    if (!mine || mine.interval_index < 0) return; // passed / withdrew
+    const iWon = !activeCorrect && validIntervals.includes(mine.interval_index);
+    iWon ? haptics.success() : haptics.error();
+  }, [revealPhase]);
 
   // After the result strip appears and the card drifts away from the active player's
   // timeline, transition to the challenger's timeline with a named overlay so everyone
@@ -594,7 +616,7 @@ export default function GameScreen() {
       db.from('turns').select('*').eq('game_id', gId).neq('status', 'complete')
         .order('created_at', { ascending: false }).limit(1).single() as Promise<{ data: Turn | null }>,
       db.from('games').select('status').eq('id', gId).single(),
-      db.from('players').select('*').eq('game_id', gId).order('created_at'),
+      db.from('players').select('*').eq('game_id', gId).is('left_at', null).order('created_at'),
     ]);
 
     // Heartbeat — fire and forget, no await so poll isn't delayed
@@ -612,6 +634,7 @@ export default function GameScreen() {
         setLocalPlayers(fp);
         setPlayers(fp);
         setGameOver(winner);
+        winner.id === myPlayerId ? haptics.success() : haptics.warning();
         stopPolling();
       }
       return;
@@ -812,7 +835,7 @@ export default function GameScreen() {
     setLoading(true);
 
     const [{ data: pData }, { data: tData }] = await Promise.all([
-      db.from('players').select('*').eq('game_id', g.id).order('created_at'),
+      db.from('players').select('*').eq('game_id', g.id).is('left_at', null).order('created_at'),
       db.from('turns').select('*').eq('game_id', g.id)
         .neq('status', 'complete').order('created_at', { ascending: false }).limit(1).single(),
     ]) as [{ data: Player[] | null }, { data: Turn | null }];
@@ -914,6 +937,7 @@ export default function GameScreen() {
 
   async function handleConfirmPlacement() {
     if (!currentTurn || selectedInterval === null) return;
+    haptics.impact();
     const optimistic = { ...currentTurn, placed_interval: selectedInterval, status: 'challenging' as const };
     pendingTurnWrite.current = true;
     setLocalTurn(optimistic);
@@ -939,6 +963,7 @@ export default function GameScreen() {
   async function handleChallenge() {
     if (!currentTurn || myChallenge) return;
     if (challengeDecisionMade.current) return;
+    haptics.impact();
     challengeDecisionMade.current = true;
     setHasPassed(false);
     // Optimistic: close the decision panel immediately
@@ -962,6 +987,7 @@ export default function GameScreen() {
 
   async function handlePass() {
     if (challengeDecisionMade.current) return;
+    haptics.select();
     challengeDecisionMade.current = true;
     setHasPassed(true);
     if (!currentTurn) return;
@@ -977,6 +1003,7 @@ export default function GameScreen() {
 
   async function handleConfirmChallengeInterval() {
     if (!myChallenge || myChallenge.id === 'pending' || challengeInterval === null) return;
+    haptics.impact();
     const savedChallenge = myChallenge;
     setMyChallenge({ ...myChallenge, interval_index: challengeInterval });
     setChallengeConfirmed(true);
@@ -1180,6 +1207,7 @@ export default function GameScreen() {
   }
 
   function openBonus() {
+    haptics.select();
     setBonusPanelOpen(true);
     Animated.spring(bonusPanelAnim, { toValue: 1, useNativeDriver: true, tension: 80, friction: 12 }).start();
   }
@@ -1245,7 +1273,7 @@ export default function GameScreen() {
         movieFromCache
           ? Promise.resolve({ data: movieFromCache })
           : db.from('movies').select('*').eq('id', ct.movie_id).single(),
-        db.from('players').select('*').eq('game_id', g.id).order('created_at') as Promise<{ data: Player[] | null }>,
+        db.from('players').select('*').eq('game_id', g.id).is('left_at', null).order('created_at') as Promise<{ data: Player[] | null }>,
         db.from('turns').select('id').eq('game_id', g.id).neq('status', 'complete').gt('created_at', ct.created_at).limit(1) as Promise<{ data: { id: string }[] | null }>,
         g.game_mode !== 'insane'
           ? (prefetchedPastTurnsRef.current ?? db.from('turns').select('movie_id').eq('game_id', g.id))
@@ -1577,13 +1605,23 @@ export default function GameScreen() {
     const g = game;
     const ct = currentTurnRef.current;
     try {
-      if (g && ct && ct.active_player_id === myPlayerId &&
-          (ct.status === 'drawing' || ct.status === 'placing')) {
+      if (g) {
         const { data: currentPlayers } = await db.from('players').select('*')
-          .eq('game_id', g.id).order('created_at');
+          .eq('game_id', g.id).is('left_at', null).order('created_at');
         const allPlayers = (currentPlayers ?? []) as Player[];
         const remaining = allPlayers.filter(p => p.id !== myPlayerId);
-        if (remaining.length > 0) {
+
+        if (remaining.length === 1) {
+          // Sole survivor wins by default. Mark the live turn complete first
+          // so polls on the winner's device see a consistent finished state.
+          if (ct && ct.status !== 'complete') {
+            await db.from('turns').update({ status: 'complete' }).eq('id', ct.id);
+          }
+          await db.from('games').update({ status: 'finished' }).eq('id', g.id);
+        } else if (remaining.length > 1 && ct && ct.active_player_id === myPlayerId &&
+                   (ct.status === 'drawing' || ct.status === 'placing')) {
+          // I was the active player — advance the turn before leaving so the
+          // game doesn't stall waiting on a tombstoned player.
           const myIdx = allPlayers.findIndex(p => p.id === myPlayerId);
           const nextPlayer = remaining[myIdx % remaining.length] ?? remaining[0];
           const { data: pastTurns } = await db.from('turns').select('movie_id').eq('game_id', g.id);
@@ -1622,10 +1660,13 @@ export default function GameScreen() {
             status: 'placing',
             placing_started_at: new Date().toISOString(),
           });
+        } else if (remaining.length === 0) {
+          // I was the last one in. Cancel the game so it doesn't linger.
+          await db.from('games').update({ status: 'cancelled' }).eq('id', g.id);
         }
       }
       if (myPlayerId) {
-        await db.from('players').delete().eq('id', myPlayerId);
+        await db.from('players').update({ left_at: new Date().toISOString() }).eq('id', myPlayerId);
       }
     } catch (_) {
       // Best-effort — navigate away regardless.
@@ -1686,6 +1727,28 @@ export default function GameScreen() {
     </TouchableOpacity>
   ) : null;
 
+  // Leave-game chip — top-left, mirrors cast FAB. Hidden during trailer playback,
+  // reveal/suspense, and game-over so it can't be tapped at moments where leaving
+  // would interrupt a synchronised animation (or be meaningless). Stays visible
+  // during the pre-trailer timeline preview countdown.
+  const trailerPlaying =
+    currentTurn?.status === 'placing' && trailerRevealed && !trailerEnded;
+  const showLeaveChip = !gameOver && !trailerPlaying && (
+    currentTurn?.status === 'drawing' ||
+    currentTurn?.status === 'placing' ||
+    currentTurn?.status === 'challenging'
+  );
+  const leaveChip = showLeaveChip ? (
+    <TouchableOpacity
+      style={[styles.leaveChip, { top: insets.top + 14 }]}
+      onPress={() => setShowLeaveDialog(true)}
+      activeOpacity={0.8}
+      hitSlop={10}
+    >
+      <ArrowLeftIcon size={16} color="rgba(255,255,255,0.75)" />
+    </TouchableOpacity>
+  ) : null;
+
   // Synchronous transition detection — must happen before phase returns so the overlay is
   // dark on the very first painted frame (no 1-frame parchment flash).
   {
@@ -1703,6 +1766,7 @@ export default function GameScreen() {
   const persistentOverlays = (
     <>
       <PlayerChips players={players} myId={myPlayerId} topInset={insets.top} hasCastFab={!!castFab} />
+      {leaveChip}
       {leaveModal}
       {castFab}
       {castOverlay}
@@ -3303,6 +3367,7 @@ function GameIntroScreen({
       Animated.delay(600),
     ]).start(() => {
       setSpinDone(true);
+      haptics.impact();
 
       // Phase 2: arrow + others vanish, highlight card glides to center then flips
       Animated.sequence([
@@ -4640,6 +4705,14 @@ const styles = StyleSheet.create({
   },
   castFab: {
     position: 'absolute', right: 20,
+    width: 34, height: 34, borderRadius: 17,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center', justifyContent: 'center',
+    zIndex: 10,
+  },
+  leaveChip: {
+    position: 'absolute', left: 20,
     width: 34, height: 34, borderRadius: 17,
     backgroundColor: 'rgba(0,0,0,0.45)',
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
