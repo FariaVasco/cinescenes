@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform,
+  ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import Constants from 'expo-constants';
-import { C, R, T, SP, Fonts, FS } from '@/constants/theme';
+import { C, R, SP, Fonts, FS } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
 import { useAppStore } from '@/store/useAppStore';
 import * as haptics from '@/lib/haptics';
@@ -13,11 +13,11 @@ const db = supabase as unknown as { from: (t: string) => any };
 
 type Category = 'works_well' | 'improvement' | 'bug' | 'idea';
 
-const CATEGORIES: { key: Category; label: string }[] = [
-  { key: 'works_well',  label: 'WORKS WELL' },
-  { key: 'improvement', label: 'IMPROVEMENT' },
-  { key: 'bug',         label: 'BUG' },
-  { key: 'idea',        label: 'IDEA' },
+const CATEGORIES: { key: Category; label: string; icon: string }[] = [
+  { key: 'works_well',  label: 'Works well',  icon: '✓' },
+  { key: 'improvement', label: 'Improvement', icon: '↑' },
+  { key: 'bug',         label: 'Bug',         icon: '!' },
+  { key: 'idea',        label: 'Idea',        icon: '✦' },
 ];
 
 const MAX_NOTE = 1000;
@@ -39,11 +39,11 @@ export function FeedbackSheet({ visible, onClose }: Props) {
     if (visible) {
       setCategory('improvement');
       setNote('');
-      setEmail(authUser?.email ?? '');
+      setEmail('');
       setSubmitting(false);
       setSubmitted(false);
     }
-  }, [visible, authUser?.email]);
+  }, [visible]);
 
   if (!visible) return null;
 
@@ -85,12 +85,11 @@ export function FeedbackSheet({ visible, onClose }: Props) {
         style={styles.center}
       >
         <View style={styles.card} onStartShouldSetResponder={() => true}>
+
+          {/* Header */}
           <View style={styles.header}>
-            <View style={styles.headerIconWrap}>
-              <Text style={styles.headerIconText}>💬</Text>
-            </View>
             <View style={styles.headerText}>
-              <Text style={styles.headerTitle}>DIRECTOR'S NOTES </Text>
+              <Text style={styles.headerTitle}>DIRECTOR'S NOTES</Text>
               <Text style={styles.headerSub}>TELL US WHAT PLAYS — AND WHAT CUTS</Text>
             </View>
             <TouchableOpacity onPress={onClose} hitSlop={10} style={styles.closeBtn}>
@@ -100,83 +99,80 @@ export function FeedbackSheet({ visible, onClose }: Props) {
 
           {submitted ? (
             <View style={styles.thanksWrap}>
-              <Text style={styles.thanksTitle}>THANKS! </Text>
+              <Text style={styles.thanksTitle}>THANKS!</Text>
               <Text style={styles.thanksSub}>Your note is in the can.</Text>
             </View>
           ) : (
-            <ScrollView
-              style={styles.body}
-              contentContainerStyle={styles.bodyContent}
-              keyboardShouldPersistTaps="handled"
-            >
-              <Text style={styles.fieldLabel}>CATEGORY </Text>
-              <View style={styles.chipRow}>
-                {CATEGORIES.map((c) => {
-                  const active = c.key === category;
-                  return (
-                    <TouchableOpacity
-                      key={c.key}
-                      style={[styles.chip, active && styles.chipActive]}
-                      onPress={() => { setCategory(c.key); haptics.select(); }}
-                      activeOpacity={0.85}
-                    >
-                      <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                        {c.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
+            /* Two-column body — no ScrollView needed in landscape */
+            <View style={styles.body}>
+
+              {/* Left column: category */}
+              <View style={styles.leftCol}>
+                <Text style={styles.fieldLabel}>CATEGORY</Text>
+                <View style={styles.chipList}>
+                  {CATEGORIES.map((c) => {
+                    const active = c.key === category;
+                    return (
+                      <TouchableOpacity
+                        key={c.key}
+                        style={[styles.chip, active && styles.chipActive]}
+                        onPress={() => { setCategory(c.key); haptics.select(); }}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={[styles.chipIcon, active && styles.chipIconActive]}>{c.icon}</Text>
+                        <Text style={[styles.chipText, active && styles.chipTextActive]}>{c.label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
               </View>
 
-              <View style={styles.noteHeaderRow}>
-                <Text style={styles.fieldLabel}>YOUR NOTE </Text>
-                <Text style={styles.charCount}>{note.length}/{MAX_NOTE}</Text>
-              </View>
-              <TextInput
-                style={styles.noteInput}
-                value={note}
-                onChangeText={(t) => setNote(t.slice(0, MAX_NOTE))}
-                placeholder="What worked, what didn't, what you'd love to see..."
-                placeholderTextColor={C.textMutedDark}
-                multiline
-                textAlignVertical="top"
-              />
+              {/* Divider */}
+              <View style={styles.divider} />
 
-              <Text style={styles.fieldLabel}>EMAIL · OPTIONAL </Text>
-              <TextInput
-                style={styles.emailInput}
-                value={email}
-                onChangeText={setEmail}
-                placeholder="you@example.com"
-                placeholderTextColor={C.textMutedDark}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                returnKeyType="done"
-              />
+              {/* Right column: note + email + send */}
+              <View style={styles.rightCol}>
+                <View style={styles.noteHeaderRow}>
+                  <Text style={styles.fieldLabel}>YOUR NOTE</Text>
+                  <Text style={styles.charCount}>{note.length}/{MAX_NOTE}</Text>
+                </View>
+                <TextInput
+                  style={styles.noteInput}
+                  value={note}
+                  onChangeText={(t) => setNote(t.slice(0, MAX_NOTE))}
+                  placeholder="What worked, what didn't, what you'd love to see..."
+                  placeholderTextColor={C.textMutedDark}
+                  multiline
+                  textAlignVertical="top"
+                />
 
-              <View style={styles.actions}>
-                <TouchableOpacity
-                  style={[styles.actionBtn, styles.cancelBtn]}
-                  onPress={onClose}
-                  activeOpacity={0.85}
-                  disabled={submitting}
-                >
-                  <Text style={styles.cancelText}>✕  CANCEL </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.actionBtn, styles.sendBtn, !canSend && styles.sendBtnDisabled]}
-                  onPress={handleSend}
-                  activeOpacity={0.85}
-                  disabled={!canSend}
-                >
-                  {submitting ? (
-                    <ActivityIndicator color={C.ink} />
-                  ) : (
-                    <Text style={styles.sendText}>SEND NOTE </Text>
-                  )}
-                </TouchableOpacity>
+                <View style={styles.bottomRow}>
+                  <TextInput
+                    style={styles.emailInput}
+                    value={email}
+                    onChangeText={setEmail}
+                    placeholder="Email (optional)"
+                    placeholderTextColor={C.textMutedDark}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    returnKeyType="done"
+                  />
+                  <TouchableOpacity
+                    style={[styles.sendBtn, !canSend && styles.sendBtnDisabled]}
+                    onPress={handleSend}
+                    activeOpacity={0.85}
+                    disabled={!canSend}
+                  >
+                    {submitting ? (
+                      <ActivityIndicator color={C.ink} />
+                    ) : (
+                      <Text style={styles.sendText}>SEND</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
               </View>
-            </ScrollView>
+
+            </View>
           )}
         </View>
       </KeyboardAvoidingView>
@@ -204,12 +200,12 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: SP.lg,
+    paddingHorizontal: SP.lg,
+    paddingVertical: SP.md,
   },
   card: {
-    width: '100%',
-    maxWidth: 720,
-    maxHeight: '92%',
+    width: '86%',
+    maxWidth: 680,
     backgroundColor: SHEET_BG,
     borderRadius: R.sheet,
     borderWidth: 2,
@@ -217,26 +213,17 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
 
+  // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: HEADER_BG,
     paddingHorizontal: SP.md,
-    paddingVertical: SP.sm,
+    paddingVertical: 6,
     gap: SP.sm,
     borderBottomWidth: 2,
     borderBottomColor: C.ink,
   },
-  headerIconWrap: {
-    width: 38, height: 38,
-    borderRadius: R.sm,
-    borderWidth: 2,
-    borderColor: C.ink,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.5)',
-  },
-  headerIconText: { fontSize: 18 },
   headerText: { flex: 1 },
   headerTitle: {
     fontFamily: Fonts.display,
@@ -258,25 +245,27 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.body,
   },
 
-  body: { flexGrow: 0 },
-  bodyContent: { padding: SP.md, gap: SP.sm },
-
-  fieldLabel: {
-    fontFamily: Fonts.label,
-    fontSize: FS.xs,
-    color: C.textMutedDark,
-    letterSpacing: 1.8,
-    textTransform: 'uppercase',
+  // Two-column body
+  body: {
+    flexDirection: 'row',
+    padding: SP.sm,
+    gap: SP.sm,
   },
 
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: SP.xs,
+  // Left: categories
+  leftCol: {
+    width: 136,
+    gap: 6,
+  },
+  chipList: {
+    gap: 4,
   },
   chip: {
-    paddingHorizontal: SP.md,
-    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: SP.sm,
+    paddingVertical: 6,
     borderRadius: R.sm,
     borderWidth: 2,
     borderColor: STROKE,
@@ -286,19 +275,45 @@ const styles = StyleSheet.create({
     backgroundColor: C.goldFaint,
     borderColor: C.ochre,
   },
+  chipIcon: {
+    fontFamily: Fonts.display,
+    fontSize: FS.base,
+    color: C.textMutedDark,
+    width: 16,
+    textAlign: 'center',
+  },
+  chipIconActive: { color: C.ochre },
   chipText: {
     fontFamily: Fonts.display,
-    fontSize: FS.sm,
+    fontSize: FS.md,
     color: C.textPrimaryDark,
-    letterSpacing: 1,
+    letterSpacing: 0.5,
   },
   chipTextActive: { color: C.ochre },
 
+  // Divider
+  divider: {
+    width: 1,
+    backgroundColor: STROKE,
+    alignSelf: 'stretch',
+  },
+
+  // Right: note + email + send
+  rightCol: {
+    flex: 1,
+    gap: 6,
+  },
   noteHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
-    marginTop: SP.xs,
+  },
+  fieldLabel: {
+    fontFamily: Fonts.label,
+    fontSize: FS.xs,
+    color: C.textMutedDark,
+    letterSpacing: 1.8,
+    textTransform: 'uppercase',
   },
   charCount: {
     fontFamily: Fonts.label,
@@ -307,57 +322,45 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   noteInput: {
-    minHeight: 110,
+    flex: 1,
+    minHeight: 60,
     backgroundColor: SURFACE,
     borderRadius: R.md,
     borderWidth: 2,
     borderColor: STROKE,
-    paddingHorizontal: SP.md,
-    paddingVertical: SP.sm,
+    paddingHorizontal: SP.sm,
+    paddingVertical: 6,
     color: C.textPrimaryDark,
     fontFamily: Fonts.body,
     fontSize: FS.md,
+  },
+  bottomRow: {
+    flexDirection: 'row',
+    gap: SP.sm,
+    alignItems: 'center',
   },
   emailInput: {
+    flex: 1,
     backgroundColor: SURFACE,
     borderRadius: R.md,
     borderWidth: 2,
     borderColor: STROKE,
-    paddingHorizontal: SP.md,
-    paddingVertical: 10,
+    paddingHorizontal: SP.sm,
+    paddingVertical: 6,
     color: C.textPrimaryDark,
     fontFamily: Fonts.body,
     fontSize: FS.md,
   },
-
-  actions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: SP.sm,
-    marginTop: SP.sm,
-  },
-  actionBtn: {
-    minWidth: 130,
+  sendBtn: {
+    minWidth: 80,
     paddingHorizontal: SP.md,
-    paddingVertical: 10,
+    paddingVertical: 8,
     borderRadius: R.btn,
     borderWidth: 2,
+    borderColor: C.ink,
+    backgroundColor: C.ochre,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  cancelBtn: {
-    backgroundColor: 'transparent',
-    borderColor: STROKE,
-  },
-  cancelText: {
-    fontFamily: Fonts.display,
-    fontSize: FS.md,
-    color: C.textPrimaryDark,
-    letterSpacing: 1,
-  },
-  sendBtn: {
-    backgroundColor: C.ochre,
-    borderColor: C.ink,
   },
   sendBtnDisabled: { opacity: 0.5 },
   sendText: {
@@ -367,6 +370,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
 
+  // Thanks state
   thanksWrap: {
     paddingVertical: SP.xl + SP.lg,
     alignItems: 'center',

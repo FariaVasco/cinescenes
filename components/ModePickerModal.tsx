@@ -200,8 +200,8 @@ const styles = StyleSheet.create({
     gap: SP.md,
     alignItems: 'center',
   },
-  overline: { ...T.overline },
-  title: { ...T.display, color: C.textPrimary, textAlign: 'center' },
+  overline: { ...T.overline, alignSelf: 'stretch', textAlign: 'center', color: C.textSub },
+  title: { ...T.display, color: C.textPrimary, textAlign: 'center', alignSelf: 'stretch' },
   row: {
     flexDirection: 'row',
     gap: SP.sm,
