@@ -67,17 +67,14 @@ export default function LocalScreen() {
   }
 
   function handleCreatePress() {
-    console.log('[CS] local: Create pressed', { nameReady });
     if (!nameReady) return;
     setModePickerVisible(true);
   }
 
   function handleModeSelected(choice: ModeChoice) {
-    console.log('[CS] local: mode selected', choice);
     setSelectedVisibility('invite_only');
     setSelectedGameMode(choice.mode);
     setSelectedCollectionId(choice.mode === 'collection' ? choice.collectionId : null);
-    console.log('[CS] local: navigating to /local-lobby');
     router.push({
       pathname: '/local-lobby',
       params: { startView: 'create', displayName: displayName.trim() },

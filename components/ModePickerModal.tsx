@@ -38,23 +38,18 @@ export function ModePickerModal({ visible, onClose, onSelected }: Props) {
   const [loadingCollections, setLoadingCollections] = useState(false);
 
   useEffect(() => {
-    console.log('[CS] ModePickerModal: visible changed', { visible });
     if (visible) loadCollections();
   }, [visible]);
 
   async function loadCollections() {
-    console.log('[CS] ModePickerModal: loadCollections start');
     setLoadingCollections(true);
     try {
-      const { data, error } = await db
+      const { data } = await db
         .from('collections')
         .select('*')
         .eq('is_active', true) as { data: Collection[] | null; error: any };
-      console.log('[CS] ModePickerModal: loadCollections done', { count: data?.length ?? 0, error });
       if (data) setCollections(data);
-    } catch (e) {
-      console.log('[CS] ModePickerModal: loadCollections threw', e);
-    }
+    } catch {}
     setLoadingCollections(false);
   }
 
