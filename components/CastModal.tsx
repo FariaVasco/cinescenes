@@ -11,6 +11,16 @@ import {
 import { C, R, FS, Fonts } from '@/constants/theme';
 import { CloseIcon } from '@/components/CinemaIcons';
 
+// AVRoutePickerView — iOS only. Conditionally required so Android doesn't
+// try to resolve a native module that doesn't exist on that platform.
+const AirPlayButton: React.ComponentType<{ style?: any; tintColor?: string }> | null =
+  Platform.OS === 'ios'
+    ? (() => {
+        try { return require('react-native-airplay-btn').AirPlayButton; }
+        catch { return null; }
+      })()
+    : null;
+
 interface CastModalProps {
   visible: boolean;
   onDismiss: () => void;
@@ -31,6 +41,7 @@ export function CastModal({ visible, onDismiss, onConfirm }: CastModalProps) {
     >
       <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onDismiss}>
         <TouchableOpacity activeOpacity={1} style={styles.sheet}>
+
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.headerLeft}>
@@ -44,31 +55,52 @@ export function CastModal({ visible, onDismiss, onConfirm }: CastModalProps) {
 
           {/* Two-column landscape layout */}
           <View style={styles.columns}>
-            {/* Left: steps */}
+
+            {/* Left: connect section */}
             <ScrollView
               style={styles.leftCol}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.leftColContent}
             >
-              <Text style={styles.stepsLabel}>
-                {isIOS ? 'On iPhone / iPad:' : 'On Android:'}
-              </Text>
-
-              <View style={styles.steps}>
-                {isIOS ? (
-                  <>
-                    <Step n={1} text="Swipe down from top-right to open Control Centre" />
-                    <Step n={2} text='"Screen Mirroring"' />
-                    <Step n={3} text="Select your Apple TV or AirPlay 2 TV" />
-                  </>
-                ) : (
-                  <>
-                    <Step n={1} text="Swipe down twice to open Quick Settings" />
-                    <Step n={2} text='"Cast"' />
-                    <Step n={3} text="Select your TV or Chromecast" />
-                  </>
-                )}
-              </View>
+              {isIOS && AirPlayButton ? (
+                /* ── iOS: native AirPlay picker button ── */
+                <>
+                  <Text style={styles.stepsLabel}>Connect to your TV</Text>
+                  <View style={styles.airplayRow}>
+                    <View style={styles.airplayBtnWrap}>
+                      <AirPlayButton
+                        style={styles.airplayBtn}
+                        tintColor={C.textPrimaryDark}
+                      />
+                    </View>
+                    <Text style={styles.airplayHint}>
+                      Tap the button to select your{'\n'}Apple TV or AirPlay 2 TV
+                    </Text>
+                  </View>
+                </>
+              ) : (
+                /* ── Android / fallback: manual steps ── */
+                <>
+                  <Text style={styles.stepsLabel}>
+                    {isIOS ? 'On iPhone / iPad:' : 'On Android:'}
+                  </Text>
+                  <View style={styles.steps}>
+                    {isIOS ? (
+                      <>
+                        <Step n={1} text="Swipe down from top-right to open Control Centre" />
+                        <Step n={2} text='"Screen Mirroring"' />
+                        <Step n={3} text="Select your Apple TV or AirPlay 2 TV" />
+                      </>
+                    ) : (
+                      <>
+                        <Step n={1} text="Swipe down twice to open Quick Settings" />
+                        <Step n={2} text='"Cast"' />
+                        <Step n={3} text="Select your TV or Chromecast" />
+                      </>
+                    )}
+                  </View>
+                </>
+              )}
 
               <TouchableOpacity
                 style={styles.fireStickToggle}
@@ -83,13 +115,17 @@ export function CastModal({ visible, onDismiss, onConfirm }: CastModalProps) {
               {fireStickExpanded && (
                 <View style={styles.fireStickBody}>
                   <Text style={styles.fireStickStep}>
-                    1. Fire Stick:{' '}
-                    <Text style={styles.bold}>Settings → Display &amp; Sounds → Enable Display Mirroring</Text>
+                    1. Install <Text style={styles.bold}>AirReceiver</Text> on your Fire Stick from the App Store
                   </Text>
                   <Text style={styles.fireStickStep}>
-                    2.{' '}
+                    2. Launch AirReceiver and keep it open on the TV
+                  </Text>
+                  <Text style={styles.fireStickStep}>
+                    3.{' '}
                     <Text style={styles.bold}>
-                      {isIOS
+                      {isIOS && AirPlayButton
+                        ? 'Tap the button above and select your Fire Stick'
+                        : isIOS
                         ? 'Control Centre → Screen Mirroring → select Fire Stick'
                         : 'Quick Settings → Cast → select Fire Stick'}
                     </Text>
@@ -104,12 +140,13 @@ export function CastModal({ visible, onDismiss, onConfirm }: CastModalProps) {
             {/* Right: footnote + CTA */}
             <View style={styles.rightCol}>
               <Text style={styles.footnote}>
-                Once mirrored, everything on your phone appears on the TV.
+                Once connected, everything on your screen appears on the TV — including the trailer.
               </Text>
               <TouchableOpacity style={styles.startBtn} onPress={onConfirm}>
                 <Text style={styles.startBtnText}>Start Playing →</Text>
               </TouchableOpacity>
             </View>
+
           </View>
         </TouchableOpacity>
       </TouchableOpacity>
@@ -166,7 +203,6 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.bodyBold,
   },
   closeBtn: { padding: 4 },
-  closeText: { color: C.textMutedDark, fontSize: FS.md, fontFamily: Fonts.label },
 
   columns: {
     flexDirection: 'row',
@@ -200,6 +236,37 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
     marginBottom: 10,
   },
+
+  // Native AirPlay button row
+  airplayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginBottom: 12,
+  },
+  airplayBtnWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: R.md,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  airplayBtn: {
+    width: 44,
+    height: 44,
+  },
+  airplayHint: {
+    flex: 1,
+    color: C.textSubDark,
+    fontSize: FS.sm,
+    lineHeight: 19,
+    fontFamily: Fonts.body,
+  },
+
+  // Manual steps (Android / fallback)
   steps: {
     gap: 9,
     marginBottom: 12,
@@ -225,7 +292,8 @@ const styles = StyleSheet.create({
     color: C.textOnOchre,
     fontSize: FS.xs,
     fontFamily: Fonts.display,
-    lineHeight: FS.xs, includeFontPadding: false,
+    lineHeight: FS.xs,
+    includeFontPadding: false,
   },
   stepText: {
     flex: 1,
