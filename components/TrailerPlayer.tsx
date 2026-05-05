@@ -18,9 +18,10 @@ interface TrailerPlayerProps {
   // Duration from mount until audio unmutes. Baked into the injection as an
   // absolute timestamp so the WebView fires at the right wall-clock moment.
   unmuteAfterMs?: number;
+  onPlaying?: () => void;
 }
 
-const TITLE_CARD_BURN = 3500; // ms after player ready before the YouTube title overlay is gone
+export const TITLE_CARD_BURN = 4000; // ms after video starts playing before the YouTube title overlay is gone
 
 function makeYouTubeInject(unmuteAtMs: number | null, endMuteAtVideoSec: number | null) {
   const unmuteDelayExpr = unmuteAtMs != null
@@ -84,7 +85,7 @@ true;
 // ── TrailerPlayer ─────────────────────────────────────────────────────────────
 
 export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>(
-  function TrailerPlayer({ movie, onEnded, onRevealed, onWindowCalculated, unmuteAfterMs }, ref) {
+  function TrailerPlayer({ movie, onEnded, onRevealed, onWindowCalculated, unmuteAfterMs, onPlaying }, ref) {
     const { width, height } = useWindowDimensions();
 
     const ratio    = 16 / 9;
@@ -93,8 +94,8 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
     const playerW  = byWidth.h <= height ? byWidth.w : byHeight.w;
     const playerH  = byWidth.h <= height ? byWidth.h : byHeight.h;
 
-    const [playing, setPlaying]         = useState(true);
-    const [endOverlay, setEndOverlay]   = useState(false);
+    const [playing, setPlaying]       = useState(true);
+    const [endOverlay, setEndOverlay] = useState(false);
 
     const timerRef            = useRef<ReturnType<typeof setTimeout> | null>(null);
     const overlayTimerRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -108,7 +109,8 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
     // the trailer duration; the tick uses this to actively stop playback.
     const dynEndRef           = useRef<number>(0);
 
-    const contentReadyRef = useRef(false);
+    const contentReadyRef  = useRef(false);
+    const videoPlayingRef  = useRef(false);
     const seekToTimeRef   = useRef(0);
 
     // T0 = mount time; all [CS] timestamps are ms relative to this.
@@ -127,6 +129,9 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
     const safeEnd      = useDynamicWindow ? rawSafeEnd : Math.max(rawSafeEnd - END_TRIM_SEC, safeStart + 10);
     const duration     = useDynamicWindow ? 40_000 : Math.max(safeEnd - safeStart, 10) * 1000;
 
+    // Injection captured at mount so Date.now() reflects the actual mount time.
+    // End-mute uses video-time (seconds), aligned ~0.5s before our active end-trigger
+    // (videoTime >= safeEnd - 0.3) so audio fades out just before the screen switches.
     // Injection captured at mount so Date.now() reflects the actual mount time.
     // End-mute uses video-time (seconds), aligned ~0.5s before our active end-trigger
     // (videoTime >= safeEnd - 0.3) so audio fades out just before the screen switches.
@@ -218,6 +223,7 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
       },
       replay() {
         contentReadyRef.current = false;
+        videoPlayingRef.current = false;
         if (timerRef.current) clearTimeout(timerRef.current);
         if (overlayTimerRef.current) clearTimeout(overlayTimerRef.current);
         if (fallbackRef.current) clearTimeout(fallbackRef.current);
@@ -237,6 +243,9 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
 
     async function handleYouTubeReady() {
       console.log(`[CS] YouTube player ready  t=${ms()}`);
+      // Guarantee videoStarted even if the 'playing' state fires before the
+      // onChangeState handler connects (race condition on fast second-movie loads).
+      if (!videoPlayingRef.current) onPlaying?.();
       if (useDynamicWindow) {
         skipEndTimerOnReady.current = true;
         if (fallbackRef.current) clearTimeout(fallbackRef.current);
@@ -253,25 +262,38 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
           dynStartRef.current = 0;
           dynEndRef.current   = 40; // fallback: cap at 40s of video time
         }
-        console.log(`[CS] burn timer set        t=${ms()}  fires in ${TITLE_CARD_BURN}ms`);
+        // Long fallback — fires only if 'playing' state never arrives
+        console.log(`[CS] onReady fallback set  t=${ms()}  fires in ${TITLE_CARD_BURN + 6000}ms`);
         fallbackRef.current = setTimeout(() => {
-          console.log(`[CS] burn timer fired      t=${ms()}`);
+          console.log(`[CS] onReady fallback fired t=${ms()}`);
           if (!contentReadyRef.current) doReveal();
-        }, TITLE_CARD_BURN);
+        }, TITLE_CARD_BURN + 6000);
       } else {
         seekToTimeRef.current = Date.now();
         playerRef.current?.seekTo(safeStart, true);
         if (fallbackRef.current) clearTimeout(fallbackRef.current);
-        console.log(`[CS] burn timer set        t=${ms()}  fires in ${TITLE_CARD_BURN}ms`);
+        // Long fallback — fires only if 'playing' state never arrives
+        console.log(`[CS] onReady fallback set  t=${ms()}  fires in ${TITLE_CARD_BURN + 6000}ms`);
         fallbackRef.current = setTimeout(() => {
-          console.log(`[CS] burn timer fired      t=${ms()}`);
+          console.log(`[CS] onReady fallback fired t=${ms()}`);
           if (!contentReadyRef.current) doReveal();
-        }, TITLE_CARD_BURN);
+        }, TITLE_CARD_BURN + 6000);
       }
     }
 
     function handleYouTubeStateChange(state: string) {
       console.log(`[CS] YouTube state change  t=${ms()}  state=${state}`);
+      if (state === 'playing' && !videoPlayingRef.current) {
+        videoPlayingRef.current = true;
+        console.log(`[CS] first playing event   t=${ms()}`);
+        onPlaying?.();
+        // Authoritative burn: start TITLE_CARD_BURN from actual playback, clearing the onReady fallback
+        if (fallbackRef.current) clearTimeout(fallbackRef.current);
+        fallbackRef.current = setTimeout(() => {
+          console.log(`[CS] burn timer fired      t=${ms()}`);
+          if (!contentReadyRef.current) doReveal();
+        }, TITLE_CARD_BURN);
+      }
       if (state === 'ended') {
         console.log(`[CS] → ended branch         t=${ms()}  calling onEnded() now`);
         if (timerRef.current) clearTimeout(timerRef.current);

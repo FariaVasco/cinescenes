@@ -43,6 +43,7 @@ export default function RootLayout() {
     useAppStore.getState().hydrateSettings();
   }, []);
 
+
   if (!fontsLoaded) return null;
 
   return (

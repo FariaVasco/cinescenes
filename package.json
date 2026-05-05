@@ -36,6 +36,7 @@
     "@react-native-google-signin/google-signin": "^16.1.2",
     "@supabase/supabase-js": "^2.97.0",
     "airplay-picker": "file:./modules/airplay-picker",
+    "tv-session": "file:./modules/tv-session",
     "expo": "~54.0.33",
     "expo-apple-authentication": "~8.0.8",
     "expo-audio": "~1.1.1",

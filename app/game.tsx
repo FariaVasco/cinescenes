@@ -31,7 +31,7 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
 import { Challenge, Movie, Player, Turn } from '@/lib/database.types';
-import { TrailerPlayer, TrailerPlayerHandle } from '@/components/TrailerPlayer';
+import { TrailerPlayer, TrailerPlayerHandle, TITLE_CARD_BURN } from '@/components/TrailerPlayer';
 import { Timeline, TimelineHandle } from '@/components/Timeline';
 import * as haptics from '@/lib/haptics';
 import { ChallengeTimer } from '@/components/ChallengeTimer';
@@ -39,6 +39,7 @@ import { HourglassTimer, TrailerCountdown } from '@/components/AnimatedHourglass
 import { CardBack, CardFront } from '@/components/MovieCard';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { AirPlayButton, useAirPlayAvailable } from 'airplay-picker';
+import { TVSession } from 'tv-session';
 import { CloseIcon, PlayIcon, CastToTVIcon, ArrowLeftIcon } from '@/components/CinemaIcons';
 import { CinescenesMark } from '@/components/CinescenesMark';
 
@@ -93,6 +94,7 @@ export default function GameScreen() {
   const [trailerEnded, setTrailerEnded] = useState(false);
   const [trailerRevealed, setTrailerRevealed] = useState(false);
   const [countdownDone, setCountdownDone] = useState(false);
+  const [videoStarted, setVideoStarted] = useState(false);
   const [canSkipTrailer, setCanSkipTrailer] = useState(true);
   const skipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [readyToPlace, setReadyToPlace] = useState(false);
@@ -477,6 +479,7 @@ export default function GameScreen() {
       setTrailerEnded(false);
       setTrailerRevealed(false);
       setUserPaused(false);
+      setVideoStarted(false);
       trailerRevealAnim.setValue(0);
       countdownFadeAnim.setValue(1);
       setTrailerKey(k => k + 1);
@@ -721,6 +724,7 @@ export default function GameScreen() {
           setTrailerEnded(false);
           setTrailerRevealed(false);
           setCountdownDone(false);
+          setVideoStarted(false);
           trailerRevealAnim.setValue(0);
           countdownFadeAnim.setValue(1);
           setReadyToPlace(false);
@@ -832,6 +836,7 @@ export default function GameScreen() {
   async function loadState() {
     const g = game;
     if (!g) return;
+    TVSession.setGameId(g.id);
     setLoading(true);
 
     const [{ data: pData }, { data: tData }] = await Promise.all([
@@ -1223,6 +1228,7 @@ export default function GameScreen() {
     setReadyToPlace(false);
     setTrailerEnded(false);
     setTrailerRevealed(false);
+    setVideoStarted(false);
     setUserPaused(false);
     trailerRevealAnim.setValue(0);
     countdownFadeAnim.setValue(1);
@@ -2049,9 +2055,10 @@ export default function GameScreen() {
             key={`${currentTurn.id}-${trailerKey}`}
             ref={trailerRef}
             movie={movie}
-            unmuteAfterMs={remainingPreview + 200}
+            unmuteAfterMs={remainingPreview + 500}
             onEnded={() => { setTrailerEnded(true); setUserPaused(false); }}
             onRevealed={() => { console.log('[CS] onRevealed → setTrailerRevealed(true)'); setTrailerRevealed(true); }}
+            onPlaying={() => { console.log('[CS] onPlaying → setVideoStarted(true)'); setVideoStarted(true); }}
           />
         )}
 
@@ -2219,9 +2226,20 @@ export default function GameScreen() {
                 </View>
               </View>
             </View>
-            {/* Countdown — absolute at bottom, compact horizontal layout keeps it below centered cards */}
+            {/* Two-phase bottom indicator:
+                Phase 1 — video-playing devices show a loading label while YouTube loads.
+                Phase 2 — once 'playing' fires (or immediately for non-video devices), show
+                           the accurate countdown keyed to TITLE_CARD_BURN. */}
             <View style={{ position: 'absolute', bottom: PULL_TAB_H + 8, left: 0, right: 0, alignItems: 'center' }}>
-              <TrailerCountdown durationMs={remainingPreview} onExpire={() => { console.log('[CS] countdown expired → setCountdownDone(true)'); setCountdownDone(true); }} />
+              {showVideo && !videoStarted ? (
+                <ChoosingMovieLabel />
+              ) : (
+                <TrailerCountdown
+                  key={videoStarted ? 'started' : 'sync'}
+                  durationMs={showVideo ? TITLE_CARD_BURN : remainingPreview}
+                  onExpire={() => { console.log('[CS] countdown expired → setCountdownDone(true)'); setCountdownDone(true); }}
+                />
+              )}
             </View>
             {myTimeline.length > 0 && (
               <MyTimelinePanel timeline={myTimeline} cards={myTimelineCards} bottomInset={insets.bottom} screenHeight={screenHeight} />
@@ -3201,6 +3219,21 @@ function FadePauseOverlay({ visible, onPress, style }: { visible: boolean; onPre
 }
 
 // ── Branded loader: parchment bg + pulsing clapperboard mark ──
+
+function ChoosingMovieLabel() {
+  const [dots, setDots] = useState('');
+  const fadeIn = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(fadeIn, { toValue: 1, duration: 280, useNativeDriver: true }).start();
+    const t = setInterval(() => setDots((d) => (d.length >= 3 ? '' : d + '.')), 400);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <Animated.Text style={{ fontFamily: Fonts.display, fontSize: FS.xl, color: C.textPrimary, letterSpacing: 0.4, opacity: fadeIn }}>
+      Choosing a movie{dots}
+    </Animated.Text>
+  );
+}
 
 function BrandedLoader() {
   const fadeIn = useRef(new Animated.Value(0)).current;

@@ -1,3 +1,4 @@
+import AVFoundation
 import ExpoModulesCore
 import AVKit
 
@@ -11,6 +12,9 @@ public class AirPlayPickerModule: Module {
     Events("onRoutesAvailableChanged")
 
     OnCreate {
+      let session = AVAudioSession.sharedInstance()
+      try? session.setCategory(.playback, mode: .moviePlayback, policy: .longFormVideo, options: [])
+      try? session.setActive(true)
       self.routeDetector.isRouteDetectionEnabled = true
       self.observer = NotificationCenter.default.addObserver(
         forName: NSNotification.Name("AVRouteDetectorMultipleRoutesDetectedDidChange"),
@@ -50,14 +54,32 @@ public class AirPlayPickerModule: Module {
   }
 }
 
-class AirPlayPickerView: ExpoView {
+class AirPlayPickerView: ExpoView, AVRoutePickerViewDelegate {
   let routePickerView = AVRoutePickerView()
 
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
     routePickerView.tintColor = .white
     routePickerView.activeTintColor = UIColor(red: 0.96, green: 0.77, blue: 0.09, alpha: 1)
+    routePickerView.prioritizesVideoDevices = true
+    routePickerView.delegate = self
     addSubview(routePickerView)
+    print("🎬 AirPlayPickerView init — delegate=\(routePickerView.delegate != nil)")
+  }
+
+  func routePickerViewWillBeginPresentingRoutes(_ routePickerView: AVRoutePickerView) {
+    let session = AVAudioSession.sharedInstance()
+    try? session.setCategory(.playback, mode: .moviePlayback, policy: .longFormVideo, options: [])
+    try? session.setActive(true)
+    print("🎬 picker OPENING — category=\(session.category.rawValue) policy=\(session.routeSharingPolicy.rawValue)")
+  }
+
+  func routePickerViewDidEndPresentingRoutes(_ routePickerView: AVRoutePickerView) {
+    let session = AVAudioSession.sharedInstance()
+    let outputs = session.currentRoute.outputs
+      .map { "\($0.portName) [\($0.portType.rawValue)]" }
+      .joined(separator: ", ")
+    print("🎬 picker CLOSED — outputs: \(outputs.isEmpty ? "none" : outputs) — screens=\(UIScreen.screens.count)")
   }
 
   override func layoutSubviews() {

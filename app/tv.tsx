@@ -27,9 +27,20 @@ function intervalToYearText(idx: number, timeline: number[]): string {
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 
+// Route wrapper — used by Expo Router at /tv?id=xxx
 export default function TVScreen() {
-  const { id: gameId } = useLocalSearchParams<{ id: string }>();
+  const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  return <TVScreenCore gameId={id ?? ''} onExit={() => { ScreenOrientation.unlockAsync(); router.back(); }} />;
+}
+
+// Standalone — used by AppRegistry for the external display window
+export function TVScreenStandalone({ id }: { id?: string }) {
+  console.log('🖥️ TVScreenStandalone rendering — id=', id);
+  return <TVScreenCore gameId={id ?? ''} />;
+}
+
+function TVScreenCore({ gameId, onExit }: { gameId: string; onExit?: () => void }) {
 
   const [turn, setTurn] = useState<Turn | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -112,7 +123,7 @@ export default function TVScreen() {
   function handleExit() {
     stopPolling();
     ScreenOrientation.unlockAsync();
-    router.back();
+    onExit?.();
   }
 
   // ── Loading ──
