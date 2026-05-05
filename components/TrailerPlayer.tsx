@@ -111,7 +111,7 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
 
     const contentReadyRef  = useRef(false);
     const videoPlayingRef  = useRef(false);
-    const seekToTimeRef   = useRef(0);
+    const seekToTimeRef    = useRef(0);
 
     // T0 = mount time; all [CS] timestamps are ms relative to this.
     const t0Ref = useRef(Date.now());

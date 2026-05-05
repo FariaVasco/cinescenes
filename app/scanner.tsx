@@ -76,7 +76,7 @@ export default function ScannerScreen() {
       return;
     }
 
-    if (!movie.active || !movie.youtube_id) {
+    if (movie.scan_status !== 'validated' || !movie.youtube_id) {
       setError({
         title: 'Trailer unavailable',
         body: "This movie's trailer isn't ready yet. Try a different card for now — we'll have it ready soon!",

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  AppState,
   View,
   Text,
   Image,
@@ -486,6 +487,29 @@ export default function GameScreen() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTurn?.placed_interval]);
+
+  // When the app returns from background during trailer playback the WebView freezes.
+  // Force-remount the player so it loads fresh — the title burn hides the restart.
+  const wasBackgroundedRef = useRef(false);
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', nextState => {
+      if (nextState === 'background' || nextState === 'inactive') {
+        wasBackgroundedRef.current = true;
+      } else if (nextState === 'active' && wasBackgroundedRef.current) {
+        wasBackgroundedRef.current = false;
+        if (currentTurn?.status === 'placing' && !trailerEnded) {
+          setTrailerEnded(false);
+          setTrailerRevealed(false);
+          setCountdownDone(false);
+          setVideoStarted(false);
+          trailerRevealAnim.setValue(0);
+          countdownFadeAnim.setValue(1);
+          setTrailerKey(k => k + 1);
+        }
+      }
+    });
+    return () => sub.remove();
+  }, [currentTurn?.status, trailerEnded]);
 
   // Skip-trailer gate: for public games, the active player must watch at least half
   // the safe window before "I know it!" becomes tappable.
