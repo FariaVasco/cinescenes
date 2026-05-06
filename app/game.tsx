@@ -43,6 +43,7 @@ import { AirPlayButton, useAirPlayAvailable } from 'airplay-picker';
 import { TVSession } from 'tv-session';
 import { CloseIcon, PlayIcon, CastToTVIcon, ArrowLeftIcon } from '@/components/CinemaIcons';
 import { CinescenesMark } from '@/components/CinescenesMark';
+import FilmCountdown from '@/components/FilmCountdown';
 
 const lcTrophy        = require('../assets/lc-trophy.png');
 const lcDirectorsChair = require('../assets/lc-directors-chair.png');
@@ -104,6 +105,7 @@ export default function GameScreen() {
   const [showReportDialog, setShowReportDialog] = useState(false);
   const [snackMessage, setSnackMessage] = useState('');
   const [loading, setLoading] = useState(true);
+  const [showCountdown, setShowCountdown] = useState(false);
   const [showIntro, setShowIntro] = useState(false);
   const [trailerKey, setTrailerKey] = useState(0);
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
@@ -908,7 +910,7 @@ export default function GameScreen() {
 
     const isGameStart = loadedPlayers.every(p => (p.timeline ?? []).length <= 1);
     if (isGameStart && !introShownRef.current) {
-      setShowIntro(true);
+      setShowCountdown(true);
     }
     setLoading(false);
     startPolling();
@@ -1524,6 +1526,18 @@ export default function GameScreen() {
 
   if (loading || !currentTurn) {
     return <BrandedLoader />;
+  }
+
+  if (showCountdown) {
+    return (
+      <FilmCountdown
+        from={5}
+        onComplete={() => {
+          setShowCountdown(false);
+          setShowIntro(true);
+        }}
+      />
+    );
   }
 
   if (showIntro) {
