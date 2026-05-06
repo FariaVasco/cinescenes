@@ -200,7 +200,6 @@ export default function FilmCountdown({ from = 3, onComplete }: FilmCountdownPro
             </Svg>
 
             <Animated.View
-              key={`num-${displayN}`}
               style={[styles.overlay, { transform: [{ scale: numeralScale }] }]}
             >
               <Text style={[styles.numeral, { fontSize: numeralSize }]}>{displayN}</Text>
