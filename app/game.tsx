@@ -87,6 +87,7 @@ export default function GameScreen() {
     setChallenges,
     startingMovieIds,
     tvMode, setTvMode,
+    gameJustStarted, setGameJustStarted,
   } = useAppStore();
 
   const [players, setLocalPlayers] = useState<Player[]>(storePlayers);
@@ -105,7 +106,9 @@ export default function GameScreen() {
   const [showReportDialog, setShowReportDialog] = useState(false);
   const [snackMessage, setSnackMessage] = useState('');
   const [loading, setLoading] = useState(true);
-  const [showCountdown, setShowCountdown] = useState(false);
+  // Initialised from the store so the very first render already shows the countdown
+  // for new games — no BrandedLoader flash before the countdown appears.
+  const [showCountdown, setShowCountdown] = useState(() => useAppStore.getState().gameJustStarted);
   const [showIntro, setShowIntro] = useState(false);
   const [trailerKey, setTrailerKey] = useState(0);
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
@@ -222,6 +225,8 @@ export default function GameScreen() {
   useEffect(() => {
     if (!game) { router.replace('/'); return; }
     gameIdRef.current = game.id;
+    // Clear the store flag now that the countdown has started
+    if (useAppStore.getState().gameJustStarted) setGameJustStarted(false);
     loadState();
     return () => stopPolling();
   }, []);
@@ -908,10 +913,6 @@ export default function GameScreen() {
       if (missing?.length) setActiveMovies([...activeMovies, ...missing]);
     }
 
-    const isGameStart = loadedPlayers.every(p => (p.timeline ?? []).length <= 1);
-    if (isGameStart && !introShownRef.current) {
-      setShowCountdown(true);
-    }
     setLoading(false);
     startPolling();
   }
@@ -1524,20 +1525,20 @@ export default function GameScreen() {
     return <GameOverScreen winner={gameOver} players={players} myId={myPlayerId} />;
   }
 
-  if (loading || !currentTurn) {
-    return <BrandedLoader />;
-  }
-
   if (showCountdown) {
     return (
       <FilmCountdown
-        from={5}
+        from={3}
         onComplete={() => {
           setShowCountdown(false);
           setShowIntro(true);
         }}
       />
     );
+  }
+
+  if (loading || !currentTurn) {
+    return <BrandedLoader />;
   }
 
   if (showIntro) {

@@ -46,6 +46,7 @@ export default function LocalLobbyScreen() {
     setChallenges,
     setGameId,
     setStartingMovieIds,
+    setGameJustStarted,
     selectedGameMode,
     selectedCollectionId,
     selectedVisibility,
@@ -155,6 +156,7 @@ export default function LocalLobbyScreen() {
         setGame(g);
         setGameId(gId);
         setIsHost(false);
+        setGameJustStarted(true);
         router.replace('/game');
       }
     }, POLL_MS);
@@ -404,6 +406,7 @@ export default function LocalLobbyScreen() {
       navigatedRef.current = true;
       stopPolling();
       setPlayers(localPlayers);
+      setGameJustStarted(true);
       router.replace('/game');
     } catch (e: any) {
       Alert.alert('Error', e?.message ?? 'Could not start game');

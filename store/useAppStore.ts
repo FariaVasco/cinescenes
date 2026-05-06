@@ -58,6 +58,10 @@ interface AppState {
   setIsHost: (v: boolean) => void;
   setStartingMovieIds: (ids: string[]) => void;
 
+  // Signals to game.tsx that a fresh game just launched from the lobby
+  gameJustStarted: boolean;
+  setGameJustStarted: (v: boolean) => void;
+
   // App-wide settings (persisted to AsyncStorage on every change)
   settings: AppSettings;
   setSetting: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => void;
@@ -106,6 +110,9 @@ export const useAppStore = create<AppState>((set) => ({
   setChallenges: (c) => set({ challenges: c }),
   setIsHost: (v) => set({ isHost: v }),
   setStartingMovieIds: (ids) => set({ startingMovieIds: ids }),
+
+  gameJustStarted: false,
+  setGameJustStarted: (v) => set({ gameJustStarted: v }),
 
   settings: SETTINGS_DEFAULTS,
   setSetting: (key, value) => {
