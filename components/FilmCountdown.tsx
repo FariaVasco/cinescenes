@@ -1,17 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
-  Dimensions,
   Easing,
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from 'react-native';
-import Svg, { Circle, G, Line } from 'react-native-svg';
+import Svg, { Circle, Line, G } from 'react-native-svg';
 import { useAudioPlayer } from 'expo-audio';
 import { Fonts } from '@/constants/theme';
 
-// ── Background colour cycle ──────────────────────────────────────────────────
+// ── Colour palette ────────────────────────────────────────────────────────────
 const BG_COLORS = [
   '#2D2418', // parchment-dark
   '#E9B430', // ochre
@@ -20,13 +20,9 @@ const BG_COLORS = [
   '#1A140B', // parchment-darker
 ];
 
-// ── Sweep hand using Animated SVG G ─────────────────────────────────────────
-const AnimatedG = Animated.createAnimatedComponent(G);
+const STRIP_W = 58;
 
-// ── Film strip sprocket holes ────────────────────────────────────────────────
-const STRIP_W    = 58;
-const HOLE_COUNT = 9;
-
+// ── Sprocket strip ─────────────────────────────────────────────────────────────
 function SprocketStrip({ side }: { side: 'left' | 'right' }) {
   return (
     <View
@@ -35,46 +31,37 @@ function SprocketStrip({ side }: { side: 'left' | 'right' }) {
         side === 'left' ? styles.stripLeft : styles.stripRight,
       ]}
     >
-      {Array.from({ length: HOLE_COUNT }).map((_, i) => (
+      {Array.from({ length: 9 }).map((_, i) => (
         <View key={i} style={styles.hole} />
       ))}
     </View>
   );
 }
 
-// ── Component ────────────────────────────────────────────────────────────────
-
+// ── Component ─────────────────────────────────────────────────────────────────
 interface FilmCountdownProps {
   from?: number;
   onComplete?: () => void;
 }
 
 export default function FilmCountdown({ from = 5, onComplete }: FilmCountdownProps) {
-  const [n, setN] = useState(from);
+  const { width: sw, height: sh } = useWindowDimensions();
+  const [n, setN]             = useState(from);
+  const [sweepDeg, setSweepDeg] = useState(0); // SVG sweep hand angle (0–360)
 
-  // Animated values
-  const sweepAnim = useRef(new Animated.Value(0)).current; // 0–360 per tick (JS driver – SVG prop)
-  const popAnim   = useRef(new Animated.Value(0)).current; // 0–1 per tick  (native driver – View scale)
-  const fadeAnim  = useRef(new Animated.Value(0)).current; // 0–1 per tick  (native driver – View opacity)
+  const popAnim  = useRef(new Animated.Value(0)).current; // numeral pop scale
+  const fadeAnim = useRef(new Animated.Value(0)).current; // bg crossfade opacity
 
-  // Tick sound
-  const tickPlayer = useAudioPlayer(
-    require('../assets/sounds/countdown-tick.wav'),
-  );
+  const tickPlayer = useAudioPlayer(require('../assets/sounds/countdown-tick.wav'));
 
-  // ── Disc sizing (landscape) ────────────────────────────────────────────────
-  const { width: sw, height: sh } = Dimensions.get('window');
-  // In landscape sw > sh. Disc must fit inside the center column height.
-  const centerW  = sw - STRIP_W * 2;
-  const discSize = Math.min(sh * 0.88, centerW - 16);
-
+  // Disc sizing: square, filling the center column height
+  const discSize = Math.min(sh * 0.88, sw - STRIP_W * 2 - 16);
   const numeralSize = Math.round(discSize * 0.44);
   const goSize      = Math.round(discSize * 0.38);
 
-  // ── Countdown ──────────────────────────────────────────────────────────────
+  // ── Countdown timer ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (n <= 0) {
-      // "GO!" shown — fire onComplete after a short pause
       const t = setTimeout(() => onComplete?.(), 700);
       return () => clearTimeout(t);
     }
@@ -82,21 +69,24 @@ export default function FilmCountdown({ from = 5, onComplete }: FilmCountdownPro
     return () => clearTimeout(t);
   }, [n, onComplete]);
 
-  // ── Animations triggered on each tick ────────────────────────────────────
+  // ── Sweep hand via requestAnimationFrame (most reliable for SVG) ─────────────
   useEffect(() => {
-    // Play tick sound (including on the "GO!" frame where n just became 0)
-    try { tickPlayer.seekTo(0); tickPlayer.play(); } catch { /* silent if unavailable */ }
+    if (n <= 0) return; // no disc on GO! frame
+    const startTime = Date.now();
+    let rafId: number;
+    const frame = () => {
+      const elapsed = (Date.now() - startTime) % 1000;
+      setSweepDeg((elapsed / 1000) * 360);
+      rafId = requestAnimationFrame(frame);
+    };
+    rafId = requestAnimationFrame(frame);
+    return () => cancelAnimationFrame(rafId);
+  }, [n]);
 
-    // Sweep hand: 0 → 360° over 1 s
-    sweepAnim.setValue(0);
-    Animated.timing(sweepAnim, {
-      toValue: 360,
-      duration: 980,
-      easing: Easing.linear,
-      useNativeDriver: false, // SVG rotation prop — cannot use native driver
-    }).start();
+  // ── Per-tick animations (pop + bg fade + sound) ──────────────────────────────
+  useEffect(() => {
+    try { tickPlayer.seekTo(0); tickPlayer.play(); } catch { /* silent */ }
 
-    // Numeral / GO! pop: 0 → 1 scale
     popAnim.setValue(0);
     Animated.timing(popAnim, {
       toValue: 1,
@@ -105,7 +95,6 @@ export default function FilmCountdown({ from = 5, onComplete }: FilmCountdownPro
       useNativeDriver: true,
     }).start();
 
-    // Background crossfade: overlay (next colour) fades from 0 → 1
     if (n > 0) {
       fadeAnim.setValue(0);
       Animated.timing(fadeAnim, {
@@ -117,54 +106,57 @@ export default function FilmCountdown({ from = 5, onComplete }: FilmCountdownPro
     }
   }, [n]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Colour cycle ──────────────────────────────────────────────────────────
+  // ── Sweep hand endpoint (equivalent to CSS rotate on a 12-o'clock line) ──────
+  const sweepRad = ((sweepDeg - 90) * Math.PI) / 180;
+  const hx = 100 + Math.cos(sweepRad) * 84;
+  const hy = 100 + Math.sin(sweepRad) * 84;
+  const tx = 100 + Math.cos(sweepRad) * 82;
+  const ty = 100 + Math.sin(sweepRad) * 82;
+
+  // ── Background colours ────────────────────────────────────────────────────────
   const bgIdx  = (from - n) % BG_COLORS.length;
   const bgPrev = BG_COLORS[bgIdx];
   const bgNext = BG_COLORS[(bgIdx + 1) % BG_COLORS.length];
 
-  // ── Numeral pop interpolation ──────────────────────────────────────────────
+  // ── Numeral scale interpolation ───────────────────────────────────────────────
   const numeralScale = popAnim.interpolate({
     inputRange:  [0, 0.3, 1],
     outputRange: [0.6, 1.08, 1],
   });
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────────
   return (
     <View style={[styles.root, { backgroundColor: bgPrev }]}>
 
-      {/* Background crossfade overlay (next colour sweeps in) */}
+      {/* Background crossfade overlay */}
       {n > 0 && (
         <Animated.View
-          style={[
-            StyleSheet.absoluteFill,
-            { backgroundColor: bgNext, opacity: fadeAnim, zIndex: 0 },
-          ]}
+          style={[StyleSheet.absoluteFill, { backgroundColor: bgNext, opacity: fadeAnim }]}
         />
       )}
 
-      {/* Left film strip */}
+      {/* Left strip */}
       <SprocketStrip side="left" />
 
-      {/* Centre: disc + numeral OR "GO!" */}
+      {/* Centre: clock disc or GO! */}
       <View style={styles.center}>
         {n > 0 ? (
-          /* ── Clock disc ── */
           <View style={{ width: discSize, height: discSize }}>
 
             <Svg viewBox="0 0 200 200" style={StyleSheet.absoluteFill}>
-              {/* Disc background */}
+              {/* Disc */}
               <Circle cx="100" cy="100" r="92" fill="#1A140B" />
 
-              {/* Sweep hand (rotates once per tick) */}
-              <AnimatedG key={`hand-${n}`} origin="100, 100" rotation={sweepAnim}>
+              {/* Sweep hand */}
+              <G>
                 <Line
-                  x1="100" y1="100" x2="100" y2="8"
+                  x1="100" y1="100" x2={hx} y2={hy}
                   stroke="#E2A839" strokeWidth="3" strokeLinecap="round"
                 />
-                <Circle cx="100" cy="10" r="4" fill="#E2A839" stroke="#000" strokeWidth="1.5" />
-              </AnimatedG>
+                <Circle cx={tx} cy={ty} r="4" fill="#E2A839" stroke="#000" strokeWidth="1.5" />
+              </G>
 
-              {/* Outer ring, inner rings */}
+              {/* Rings */}
               <Circle cx="100" cy="100" r="92" fill="none" stroke="#000" strokeWidth="2.5" />
               <Circle cx="100" cy="100" r="80" fill="none" stroke="#000" strokeWidth="2.5" />
               <Circle cx="100" cy="100" r="40" fill="none" stroke="#000" strokeWidth="2.5" />
@@ -176,14 +168,11 @@ export default function FilmCountdown({ from = 5, onComplete }: FilmCountdownPro
               {/* 12 tick marks */}
               {Array.from({ length: 12 }).map((_, i) => {
                 const a  = (i * Math.PI) / 6 - Math.PI / 2;
-                const x1 = 100 + Math.cos(a) * 80;
-                const y1 = 100 + Math.sin(a) * 80;
-                const x2 = 100 + Math.cos(a) * 92;
-                const y2 = 100 + Math.sin(a) * 92;
                 return (
                   <Line
                     key={i}
-                    x1={x1} y1={y1} x2={x2} y2={y2}
+                    x1={100 + Math.cos(a) * 80} y1={100 + Math.sin(a) * 80}
+                    x2={100 + Math.cos(a) * 92} y2={100 + Math.sin(a) * 92}
                     stroke="#000" strokeWidth="2.5" strokeLinecap="round"
                   />
                 );
@@ -193,43 +182,31 @@ export default function FilmCountdown({ from = 5, onComplete }: FilmCountdownPro
               <Circle cx="100" cy="100" r="4" fill="#000" />
             </Svg>
 
-            {/* Numeral overlay */}
+            {/* Numeral */}
             <Animated.View
               key={`num-${n}`}
-              style={[styles.numeralWrap, { transform: [{ scale: numeralScale }] }]}
+              style={[styles.overlay, { transform: [{ scale: numeralScale }] }]}
             >
-              <Text
-                style={[
-                  styles.numeral,
-                  { fontSize: numeralSize, lineHeight: Math.round(numeralSize * 1.15) },
-                ]}
-              >
-                {n}
-              </Text>
+              <Text style={[styles.numeral, { fontSize: numeralSize }]}>{n}</Text>
             </Animated.View>
 
           </View>
         ) : (
-          /* ── GO! ── */
+          /* GO! */
           <Animated.View style={{ transform: [{ scale: numeralScale }] }}>
-            <Text
-              style={[styles.goText, { fontSize: goSize }]}
-            >
-              GO!
-            </Text>
+            <Text style={[styles.goText, { fontSize: goSize }]}>GO!</Text>
           </Animated.View>
         )}
       </View>
 
-      {/* Right film strip */}
+      {/* Right strip */}
       <SprocketStrip side="right" />
 
     </View>
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
-
+// ── Styles ─────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   root: {
     flex: 1,
@@ -237,23 +214,16 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
 
-  // Film strips
   strip: {
-    width: STRIP_W,
-    flex: 1,
+    width: STRIP_W,       // fixed width — NOT flex, so it won't compete with the disc
     backgroundColor: '#0a0a0a',
     justifyContent: 'space-around',
     paddingVertical: 10,
-    zIndex: 2,
+    alignSelf: 'stretch', // fill parent height
   },
-  stripLeft: {
-    borderRightWidth: 2,
-    borderRightColor: '#000',
-  },
-  stripRight: {
-    borderLeftWidth: 2,
-    borderLeftColor: '#000',
-  },
+  stripLeft:  { borderRightWidth: 2, borderRightColor: '#000' },
+  stripRight: { borderLeftWidth:  2, borderLeftColor:  '#000' },
+
   hole: {
     width: 26,
     height: 19,
@@ -264,29 +234,27 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
 
-  // Centre column
   center: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 1,
   },
 
-  // Numeral
-  numeralWrap: {
+  overlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
   },
+
   numeral: {
     fontFamily: Fonts.display,
     color: '#E2A839',
     textShadowColor: '#000',
     textShadowOffset: { width: 4, height: 4 },
     textShadowRadius: 1,
+    lineHeight: undefined, // let React Native derive it from fontSize
   },
 
-  // GO!
   goText: {
     fontFamily: Fonts.display,
     color: '#E2A839',
