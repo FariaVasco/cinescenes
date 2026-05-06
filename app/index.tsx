@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -73,12 +73,27 @@ export default function LandingScreen() {
 // ── Side menu ───────────────────────────────────────────────────────────────
 
 function SideMenu({ view, setView, onFeedback }: { view: MenuView; setView: (v: MenuView) => void; onFeedback: () => void }) {
+  const router    = useRouter();
+  const tapCount  = useRef(0);
+  const tapTimer  = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  function handleLogoTap() {
+    tapCount.current += 1;
+    clearTimeout(tapTimer.current);
+    if (tapCount.current >= 5) {
+      tapCount.current = 0;
+      router.push('/admin-review');
+      return;
+    }
+    tapTimer.current = setTimeout(() => { tapCount.current = 0; }, 1500);
+  }
+
   return (
     <View style={styles.menu}>
-      <View style={styles.brandRow}>
+      <TouchableOpacity onPress={handleLogoTap} activeOpacity={1} style={styles.brandRow}>
         <Image source={lcLogo} style={styles.brandIcon} />
         <Text style={styles.brandTitle} numberOfLines={1} adjustsFontSizeToFit>CINESCENES </Text>
-      </View>
+      </TouchableOpacity>
 
       <View style={styles.menuItems}>
         <MenuItem image={lcClapperboard} label="PLAY "        active={view === 'play'}     onPress={() => setView('play')} />
