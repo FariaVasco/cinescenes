@@ -7,7 +7,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import Svg, { Circle, Line, G } from 'react-native-svg';
+import Svg, { Circle, Line, G, Path } from 'react-native-svg';
 import { useAudioPlayer } from 'expo-audio';
 import { Fonts } from '@/constants/theme';
 
@@ -33,6 +33,20 @@ function SprocketStrip({ side }: { side: 'left' | 'right' }) {
   );
 }
 
+// ── Sector path helper ─────────────────────────────────────────────────────────
+// Produces an SVG path for a pie sector from 12 o'clock clockwise by `deg` degrees,
+// large enough to cover the entire screen (uses screen diagonal as radius).
+function sectorPath(deg: number, cx: number, cy: number, r: number): string {
+  if (deg <= 0) return '';
+  if (deg >= 360) return `M 0 0 H ${cx * 2} V ${cy * 2} H 0 Z`; // full rect
+  const rad       = ((deg - 90) * Math.PI) / 180;
+  const ex        = cx + r * Math.cos(rad);
+  const ey        = cy + r * Math.sin(rad);
+  const largeArc  = deg > 180 ? 1 : 0;
+  // Start at 12 o'clock (cx, cy-r), arc clockwise to (ex, ey)
+  return `M ${cx} ${cy} L ${cx} ${cy - r} A ${r} ${r} 0 ${largeArc} 1 ${ex} ${ey} Z`;
+}
+
 // ── Component ──────────────────────────────────────────────────────────────────
 interface FilmCountdownProps {
   from?: number;
@@ -42,52 +56,42 @@ interface FilmCountdownProps {
 export default function FilmCountdown({ from = 3, onComplete }: FilmCountdownProps) {
   const { width: sw, height: sh } = useWindowDimensions();
 
-  const [displayN, setDisplayN] = useState(from);  // current number shown
-  const [sweepDeg, setSweepDeg] = useState(0);      // hand angle 0–360
+  const [displayN, setDisplayN] = useState(from);
+  const [sweepDeg, setSweepDeg] = useState(0);
 
-  const popAnim  = useRef(new Animated.Value(0)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-
-  // stable refs — safe to read from inside the RAF closure
-  const popAnimRef  = useRef(popAnim);
-  const fadeAnimRef = useRef(fadeAnim);
-  const tickPlayer  = useAudioPlayer(require('../assets/sounds/countdown-tick.wav'));
-  const tickRef     = useRef(tickPlayer);
-  const doneRef     = useRef(false);
-  const prevNRef    = useRef(from);
+  const popAnim    = useRef(new Animated.Value(0)).current;
+  const popAnimRef = useRef(popAnim);
+  const tickPlayer = useAudioPlayer(require('../assets/sounds/countdown-tick.wav'));
+  const tickRef    = useRef(tickPlayer);
+  const doneRef    = useRef(false);
+  const prevNRef   = useRef(from);
 
   // Disc sizing
   const discSize    = Math.min(sh * 0.88, sw - STRIP_W * 2 - 16);
   const numeralSize = Math.round(discSize * 0.44);
   const goSize      = Math.round(discSize * 0.38);
 
-  // ── One-off animations fired whenever the displayed number changes ─────────
-  // Called from the RAF callback — only touches stable animated refs.
+  // Sector geometry — radius covers full screen diagonal
+  const cx = sw / 2;
+  const cy = sh / 2;
+  const r  = Math.sqrt(sw * sw + sh * sh) / 2;
+
+  // ── Per-tick animations (called from RAF — only touches stable refs) ────────
   function fireTickAnims(n: number) {
     try { tickRef.current.seekTo(0); tickRef.current.play(); } catch { /* silent */ }
-
     popAnimRef.current.setValue(0);
     Animated.timing(popAnimRef.current, {
       toValue: 1, duration: 460,
       easing: Easing.out(Easing.back(1.5)),
       useNativeDriver: true,
     }).start();
-
-    if (n > 0) {
-      fadeAnimRef.current.setValue(0);
-      Animated.timing(fadeAnimRef.current, {
-        toValue: 1, duration: 980,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      }).start();
-    }
   }
 
-  // ── Single RAF loop — both sweep angle and number derived from same clock ──
+  // ── Single RAF loop — number and sweep derived from one clock ───────────────
   useEffect(() => {
-    doneRef.current = false;
+    doneRef.current  = false;
     prevNRef.current = from;
-    fireTickAnims(from); // animate first number immediately
+    fireTickAnims(from);
 
     const start = Date.now();
     let rafId: number;
@@ -96,7 +100,6 @@ export default function FilmCountdown({ from = 3, onComplete }: FilmCountdownPro
     const frame = () => {
       const elapsed = Date.now() - start;
 
-      // ── Countdown complete → GO! ──
       if (elapsed >= from * 1000) {
         if (!doneRef.current) {
           doneRef.current = true;
@@ -105,12 +108,9 @@ export default function FilmCountdown({ from = 3, onComplete }: FilmCountdownPro
           fireTickAnims(0);
           goTimer = setTimeout(() => onComplete?.(), 700);
         }
-        return; // stop scheduling new frames
+        return;
       }
 
-      // ── Normal tick ──
-      // Number changes at exactly the same elapsed-time boundary as the sweep
-      // resetting to 0°, so hand and numeral are always in lock-step.
       const tickIdx = Math.floor(elapsed / 1000);
       const newN    = from - tickIdx;
       const deg     = ((elapsed % 1000) / 1000) * 360;
@@ -144,22 +144,23 @@ export default function FilmCountdown({ from = 3, onComplete }: FilmCountdownPro
     outputRange: [0.6, 1.08, 1],
   });
 
-  // ── Sweep hand endpoint (12-o'clock + rotation) ───────────────────────────
-  const rad = ((sweepDeg - 90) * Math.PI) / 180;
-  const hx  = 100 + Math.cos(rad) * 84;
-  const hy  = 100 + Math.sin(rad) * 84;
-  const tx  = 100 + Math.cos(rad) * 82;
-  const ty  = 100 + Math.sin(rad) * 82;
+  // ── Sweep hand endpoint ───────────────────────────────────────────────────
+  const handRad = ((sweepDeg - 90) * Math.PI) / 180;
+  const hx = 100 + Math.cos(handRad) * 84;
+  const hy = 100 + Math.sin(handRad) * 84;
+  const tx = 100 + Math.cos(handRad) * 82;
+  const ty = 100 + Math.sin(handRad) * 82;
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <View style={[styles.root, { backgroundColor: bgPrev }]}>
 
-      {/* Background crossfade overlay */}
-      {displayN > 0 && (
-        <Animated.View
-          style={[StyleSheet.absoluteFill, { backgroundColor: bgNext, opacity: fadeAnim }]}
-        />
+      {/* Paint-sweep overlay: next colour revealed as a growing pie sector
+          that tracks the sweep hand — matches the CSS clip-path in the web version */}
+      {displayN > 0 && sweepDeg > 0 && (
+        <Svg style={StyleSheet.absoluteFill} viewBox={`0 0 ${sw} ${sh}`}>
+          <Path d={sectorPath(sweepDeg, cx, cy, r)} fill={bgNext} />
+        </Svg>
       )}
 
       <SprocketStrip side="left" />
@@ -171,7 +172,6 @@ export default function FilmCountdown({ from = 3, onComplete }: FilmCountdownPro
             <Svg viewBox="0 0 200 200" style={StyleSheet.absoluteFill}>
               <Circle cx="100" cy="100" r="92" fill="#1A140B" />
 
-              {/* Sweep hand */}
               <G>
                 <Line x1="100" y1="100" x2={hx} y2={hy}
                   stroke="#E2A839" strokeWidth="3" strokeLinecap="round" />
@@ -208,7 +208,7 @@ export default function FilmCountdown({ from = 3, onComplete }: FilmCountdownPro
           </View>
         ) : (
           <Animated.View style={{ transform: [{ scale: numeralScale }] }}>
-            <Text style={[styles.goText, { fontSize: goSize }]}>GO!</Text>
+            <Text style={[styles.goText, { fontSize: goSize }]}>LET'S GO!</Text>
           </Animated.View>
         )}
       </View>
