@@ -208,7 +208,7 @@ export default function FilmCountdown({ from = 3, onComplete }: FilmCountdownPro
           </View>
         ) : (
           <Animated.View style={{ transform: [{ scale: numeralScale }] }}>
-            <Text style={[styles.goText, { fontSize: goSize }]}>LET'S GO!</Text>
+            <Text style={[styles.goText, { fontSize: goSize }]}>LET'S GO! </Text>
           </Animated.View>
         )}
       </View>

@@ -3478,7 +3478,7 @@ function GameIntroScreen({
       >
         <SafeAreaView style={introStyles.contextInner} edges={['top', 'bottom']}>
           <View style={introStyles.contextBody}>
-            <Text style={introStyles.contextTitle}>Time to spin</Text>
+            <Text style={introStyles.contextTitle}>Time to spin </Text>
             <Text style={introStyles.contextDesc}>
               {playerName}, we'll randomly draw a movie to kick off your timeline.
             </Text>
