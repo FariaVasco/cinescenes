@@ -197,6 +197,8 @@ export default function GameScreen() {
   const insaneMoviesCacheRef = useRef<Map<string, Movie>>(new Map());
   // Prefetched next-turn movie promise for insane mode — started during challenging phase
   const prefetchedInsaneMovieRef = useRef<Promise<Movie> | null>(null);
+  // Platform the prefetch was run for — used to discard stale prefetch if next player changes
+  const prefetchedInsanePlatformRef = useRef<'ios' | 'android'>('ios');
   // Prefetched past-turn movie_ids for standard/collection modes — started during challenging
   // so the dedup set is ready at next-turn time (saves a ~200-400ms round-trip).
   const prefetchedPastTurnsRef = useRef<Promise<{ data: { movie_id: string }[] | null }> | null>(null);
@@ -569,7 +571,11 @@ export default function GameScreen() {
     if (currentTurn?.status !== 'challenging' || !game) return;
     if (game.game_mode === 'insane') {
       if (prefetchedInsaneMovieRef.current) return;
-      prefetchedInsaneMovieRef.current = fetchRandomInsaneMovie(db);
+      const currentIdx = players.findIndex(p => p.id === currentTurn.active_player_id);
+      const nextIdx = currentIdx === -1 ? 0 : (currentIdx + 1) % players.length;
+      const nextPlatform = (players[nextIdx]?.platform ?? 'ios') as 'ios' | 'android';
+      prefetchedInsanePlatformRef.current = nextPlatform;
+      prefetchedInsaneMovieRef.current = fetchRandomInsaneMovie(db, nextPlatform);
     } else {
       if (prefetchedPastTurnsRef.current) return;
       prefetchedPastTurnsRef.current = db.from('turns').select('movie_id').eq('game_id', game.id) as unknown as Promise<{ data: { movie_id: string }[] | null }>;
@@ -1441,9 +1447,13 @@ export default function GameScreen() {
       const startingCardYears = new Set<number>(
         latestPlayers.flatMap(p => p.timeline ?? []).filter(year => !pastTurnYears.has(year))
       );
+      const nextPlatform = (nextPlayer.platform ?? 'ios') as 'ios' | 'android';
       let nextMovieId: string;
       if (g.game_mode === 'insane') {
-        const m = await (prefetchedInsaneMovieRef.current ?? fetchRandomInsaneMovie(db));
+        const compatiblePrefetch = prefetchedInsaneMovieRef.current &&
+          prefetchedInsanePlatformRef.current === nextPlatform
+          ? prefetchedInsaneMovieRef.current : null;
+        const m = await (compatiblePrefetch ?? fetchRandomInsaneMovie(db, nextPlatform));
         prefetchedInsaneMovieRef.current = null;
         insaneMoviesCacheRef.current.set(m.id, m);
         setActiveMovies([...activeMovies, m]);
@@ -1454,10 +1464,13 @@ export default function GameScreen() {
           ...startingMovieIds,
           ...activeMovies.filter(m => startingCardYears.has(m.year)).map(m => m.id),
         ]);
-        const pool = activeMovies.filter((m) => !usedMovieIds.has(m.id));
+        const platformPool = activeMovies.filter(m =>
+          nextPlatform === 'ios' ? m.available_ios !== false : m.available_android !== false
+        );
+        const pool = platformPool.filter((m) => !usedMovieIds.has(m.id));
         const nextMovie = pool.length > 0
           ? pool[Math.floor(Math.random() * pool.length)]
-          : activeMovies[Math.floor(Math.random() * activeMovies.length)];
+          : platformPool[Math.floor(Math.random() * platformPool.length)];
         nextMovieId = nextMovie.id;
       }
 
@@ -1669,10 +1682,11 @@ export default function GameScreen() {
           // game doesn't stall waiting on a tombstoned player.
           const myIdx = allPlayers.findIndex(p => p.id === myPlayerId);
           const nextPlayer = remaining[myIdx % remaining.length] ?? remaining[0];
+          const leavePlatform = (nextPlayer.platform ?? 'ios') as 'ios' | 'android';
           const { data: pastTurns } = await db.from('turns').select('movie_id').eq('game_id', g.id);
           let leaveNextMovieId: string;
           if (g.game_mode === 'insane') {
-            const m = await fetchRandomInsaneMovie(db);
+            const m = await fetchRandomInsaneMovie(db, leavePlatform);
             leaveNextMovieId = m.id;
           } else {
             const leavePastIds = new Set<string>(pastTurns?.map((t: { movie_id: string }) => t.movie_id) ?? []);
@@ -1689,10 +1703,13 @@ export default function GameScreen() {
               ...startingMovieIds,
               ...activeMovies.filter(m => leaveStartYears.has(m.year)).map(m => m.id),
             ]);
-            const pool = activeMovies.filter(m => !usedIds.has(m.id));
+            const leavePlatformPool = activeMovies.filter(m =>
+              leavePlatform === 'ios' ? m.available_ios !== false : m.available_android !== false
+            );
+            const pool = leavePlatformPool.filter(m => !usedIds.has(m.id));
             const nextMovie = pool.length > 0
               ? pool[Math.floor(Math.random() * pool.length)]
-              : activeMovies[Math.floor(Math.random() * activeMovies.length)];
+              : leavePlatformPool[Math.floor(Math.random() * leavePlatformPool.length)];
             leaveNextMovieId = nextMovie.id;
           }
           // Mark the abandoned turn as 'complete' first so the turns_one_live_per_game

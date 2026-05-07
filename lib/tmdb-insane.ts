@@ -68,7 +68,7 @@ function shuffled<T>(arr: T[]): T[] {
   return a;
 }
 
-export async function fetchRandomInsaneMovie(db: Db): Promise<Movie> {
+export async function fetchRandomInsaneMovie(db: Db, platform: 'ios' | 'android' = 'ios'): Promise<Movie> {
   // Pick a random page from TMDb discover — movies with some votes are far
   // more likely to have YouTube trailers than purely random IDs.
   const page = Math.floor(Math.random() * 400) + 1;
@@ -89,7 +89,9 @@ export async function fetchRandomInsaneMovie(db: Db): Promise<Movie> {
       .maybeSingle();
 
     if (existing) {
-      if (existing.scan_status === 'unusable') continue;
+      if (existing.scan_status === 'unusable' || existing.scan_status === 'flagged') continue;
+      if (platform === 'android' && !existing.available_android) continue;
+      if (platform === 'ios' && !existing.available_ios) continue;
       if (!existing.youtube_id) continue;
       return existing as Movie;
     }

@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -80,6 +80,14 @@ export default function ScannerScreen() {
       setError({
         title: 'Trailer unavailable',
         body: "This movie's trailer isn't ready yet. Try a different card for now — we'll have it ready soon!",
+      });
+      return;
+    }
+
+    if (Platform.OS === 'android' && movie.available_android === false) {
+      setError({
+        title: 'Trailer unavailable on Android',
+        body: "This trailer can't be played on Android. Try it on an iOS device.",
       });
       return;
     }

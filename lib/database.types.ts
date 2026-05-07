@@ -21,7 +21,9 @@ export interface Database {
           flagged: boolean;
           classic_pool: boolean;
           tags: string[];
-          scan_status: 'validated' | 'unvalidated' | 'unusable';
+          scan_status: 'validated' | 'unvalidated' | 'unusable' | 'flagged';
+          available_ios: boolean;
+          available_android: boolean;
           tmdb_id: number | null;
           created_at: string;
         };
@@ -36,7 +38,9 @@ export interface Database {
           flagged?: boolean;
           classic_pool?: boolean;
           tags?: string[];
-          scan_status?: 'validated' | 'unvalidated' | 'unusable';
+          scan_status?: 'validated' | 'unvalidated' | 'unusable' | 'flagged';
+          available_ios?: boolean;
+          available_android?: boolean;
           tmdb_id?: number | null;
           created_at?: string;
         };
@@ -120,6 +124,7 @@ export interface Database {
           created_at: string;
           last_seen: string | null;
           left_at: string | null;
+          platform: 'ios' | 'android' | null;
         };
         Insert: {
           id?: string;
@@ -131,6 +136,7 @@ export interface Database {
           created_at?: string;
           last_seen?: string | null;
           left_at?: string | null;
+          platform?: 'ios' | 'android' | null;
         };
         Update: Partial<Database['public']['Tables']['players']['Insert']>;
       };

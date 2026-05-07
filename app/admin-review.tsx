@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  Share,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import YoutubePlayer from 'react-native-youtube-iframe';
@@ -25,7 +26,7 @@ interface Movie {
 }
 
 interface Review {
-  status: 'ok' | 'flagged';
+  status: 'ok' | 'ad_issue' | 'unavailable';
   reviewedAt: string;
   youtubeId: string;  // stored to detect when the trailer URL is replaced
   title: string;
@@ -127,7 +128,27 @@ export default function AdminReviewScreen() {
 
   if (phase === 'done') {
     const totalReviewed = Object.keys(store).length;
-    const flagged = Object.entries(store).filter(([, v]) => v.status === 'flagged');
+    const adIssues    = Object.entries(store).filter(([, v]) => v.status === 'ad_issue');
+    const unavailable = Object.entries(store).filter(([, v]) => v.status === 'unavailable');
+
+    async function handleExport() {
+      const lines: string[] = [];
+      if (adIssues.length > 0) {
+        lines.push(`AD ISSUE (${adIssues.length}) — Android only, iOS fine:`);
+        adIssues.forEach(([, r]) => lines.push(`  ${r.title} (${r.year}) — youtu.be/${r.youtubeId}`));
+        lines.push('');
+      }
+      if (unavailable.length > 0) {
+        lines.push(`UNAVAILABLE (${unavailable.length}) — needs replacement:`);
+        unavailable.forEach(([, r]) => lines.push(`  ${r.title} (${r.year}) — youtu.be/${r.youtubeId}`));
+      }
+      const message = [
+        `Cinescenes trailer review (${totalReviewed} reviewed)`,
+        '',
+        ...lines,
+      ].join('\n');
+      await Share.share({ message, title: 'Trailer review results' });
+    }
 
     return (
       <SafeAreaView style={styles.root} edges={['top', 'bottom', 'left', 'right']}>
@@ -136,15 +157,27 @@ export default function AdminReviewScreen() {
           <Text style={styles.doneTitle}>All caught up!</Text>
           <Text style={styles.doneSub}>
             {totalReviewed} trailer{totalReviewed !== 1 ? 's' : ''} reviewed
-            {flagged.length > 0
-              ? ` · ${flagged.length} flagged for replacement`
-              : ' · none flagged'}
+            {adIssues.length > 0 ? ` · ${adIssues.length} ad issue${adIssues.length !== 1 ? 's' : ''}` : ''}
+            {unavailable.length > 0 ? ` · ${unavailable.length} unavailable` : ''}
+            {adIssues.length === 0 && unavailable.length === 0 ? ' · all clear' : ''}
           </Text>
 
-          {flagged.length > 0 && (
+          {adIssues.length > 0 && (
             <View style={styles.flaggedBox}>
-              <Text style={styles.flaggedBoxLabel}>FLAGGED FOR REPLACEMENT</Text>
-              {flagged.map(([id, r]) => (
+              <Text style={styles.flaggedBoxLabel}>AD ISSUE — ANDROID ONLY</Text>
+              {adIssues.map(([id, r]) => (
+                <View key={id} style={styles.flaggedRow}>
+                  <Text style={styles.flaggedTitle}>{r.title} ({r.year})</Text>
+                  <Text style={styles.flaggedYt}>youtu.be/{r.youtubeId}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {unavailable.length > 0 && (
+            <View style={[styles.flaggedBox, styles.unavailableBox]}>
+              <Text style={[styles.flaggedBoxLabel, styles.unavailableBoxLabel]}>UNAVAILABLE — NEEDS REPLACEMENT</Text>
+              {unavailable.map(([id, r]) => (
                 <View key={id} style={styles.flaggedRow}>
                   <Text style={styles.flaggedTitle}>{r.title} ({r.year})</Text>
                   <Text style={styles.flaggedYt}>youtu.be/{r.youtubeId}</Text>
@@ -157,6 +190,11 @@ export default function AdminReviewScreen() {
             <TouchableOpacity style={styles.resetBtn} onPress={handleReset} activeOpacity={0.8}>
               <Text style={styles.resetBtnText}>Review All Again</Text>
             </TouchableOpacity>
+            {(adIssues.length > 0 || unavailable.length > 0) && (
+              <TouchableOpacity style={styles.exportBtn} onPress={handleExport} activeOpacity={0.8}>
+                <Text style={styles.exportBtnText}>Export Results</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity style={styles.exitBtn} onPress={() => router.back()} activeOpacity={0.85}>
               <Text style={styles.exitBtnText}>← Back</Text>
             </TouchableOpacity>
@@ -237,10 +275,18 @@ export default function AdminReviewScreen() {
 
             <TouchableOpacity
               style={[styles.btn, styles.btnFlag]}
-              onPress={() => saveAndAdvance(movie, 'flagged')}
+              onPress={() => saveAndAdvance(movie, 'ad_issue')}
               activeOpacity={0.8}
             >
-              <Text style={styles.btnFlagText}>⚑  Flag</Text>
+              <Text style={styles.btnFlagText}>⚑  Ad Issue</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.btn, styles.btnUnavailable]}
+              onPress={() => saveAndAdvance(movie, 'unavailable')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.btnUnavailableText}>✕  Unavailable</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -342,11 +388,21 @@ const styles = StyleSheet.create({
     fontSize: FS.sm,
   },
   btnFlag: {
+    backgroundColor: '#3a2a1e',
+    borderWidth: 2,
+    borderColor: '#5c3a1e',
+  },
+  btnFlagText: {
+    color: '#cc8c3a',
+    fontFamily: Fonts.bodyBold,
+    fontSize: FS.sm,
+  },
+  btnUnavailable: {
     backgroundColor: '#3a1e1e',
     borderWidth: 2,
     borderColor: '#5c2a2a',
   },
-  btnFlagText: {
+  btnUnavailableText: {
     color: '#cc5a5a',
     fontFamily: Fonts.bodyBold,
     fontSize: FS.sm,
@@ -405,6 +461,12 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
     marginBottom: 4,
   },
+  unavailableBox: {
+    borderColor: '#2a1a3a',
+  },
+  unavailableBoxLabel: {
+    color: '#a05acc',
+  },
   flaggedRow: { gap: 2 },
   flaggedTitle: {
     fontFamily: Fonts.bodyBold,
@@ -432,6 +494,19 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.label,
     fontSize: FS.sm,
     color: '#888',
+  },
+  exportBtn: {
+    borderRadius: R.btn,
+    backgroundColor: '#1e2e3a',
+    borderWidth: 2,
+    borderColor: '#2a4a5c',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+  },
+  exportBtnText: {
+    fontFamily: Fonts.label,
+    fontSize: FS.sm,
+    color: '#5aacc8',
   },
   exitBtn: {
     borderRadius: R.btn,

@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   Animated,
   Easing,
+  Platform,
 } from 'react-native';
 
 const lcCrown    = require('../assets/lc-crown.png');
@@ -193,7 +194,7 @@ export default function LocalLobbyScreen() {
 
       const { data: newPlayer, error: playerErr } = await db
         .from('players')
-        .insert({ game_id: newGame.id, display_name: displayName.trim(), last_seen: null })
+        .insert({ game_id: newGame.id, display_name: displayName.trim(), last_seen: null, platform: Platform.OS as 'ios' | 'android' })
         .select()
         .single() as { data: Player | null; error: any };
       if (playerErr || !newPlayer) throw playerErr ?? new Error('No player');
@@ -244,7 +245,7 @@ export default function LocalLobbyScreen() {
 
       const { data: newPlayer, error: playerErr } = await db
         .from('players')
-        .insert({ game_id: foundGame.id, display_name: name, last_seen: null })
+        .insert({ game_id: foundGame.id, display_name: name, last_seen: null, platform: Platform.OS as 'ios' | 'android' })
         .select()
         .single() as { data: Player | null; error: any };
       if (playerErr || !newPlayer) throw playerErr ?? new Error('Could not join game');
@@ -336,13 +337,13 @@ export default function LocalLobbyScreen() {
         for (const _ of localPlayers) {
           let m: Movie;
           let attempts = 0;
-          do { m = await fetchRandomInsaneMovie(db); attempts++; }
+          do { m = await fetchRandomInsaneMovie(db, Platform.OS as 'ios' | 'android'); attempts++; }
           while (usedYears.has(m.year) && attempts < 30);
           usedYears.add(m.year);
           startingMovieIdsList.push(m.id);
           startingMovies.push(m);
         }
-        firstTurnMovie = await fetchRandomInsaneMovie(db);
+        firstTurnMovie = await fetchRandomInsaneMovie(db, Platform.OS as 'ios' | 'android');
         setActiveMovies([...activeMovies, ...startingMovies, firstTurnMovie]);
       } else {
         let pool: typeof activeMovies;
