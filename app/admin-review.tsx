@@ -64,6 +64,7 @@ export default function AdminReviewScreen() {
     const { data } = await supabase
       .from('movies')
       .select('id, title, year, director, youtube_id')
+      .eq('scan_status', 'flagged')
       .not('youtube_id', 'is', null)
       .order('year', { ascending: true });
 
@@ -87,7 +88,20 @@ export default function AdminReviewScreen() {
 
   // ── actions ───────────────────────────────────────────────────────────────
 
-  async function saveAndAdvance(movie: Movie, status: 'ok' | 'flagged') {
+  async function saveAndAdvance(movie: Movie, status: 'ok' | 'ad_issue' | 'unavailable') {
+    // Write platform availability to DB immediately
+    if (status === 'ad_issue') {
+      await supabase
+        .from('movies')
+        .update({ available_android: false, available_ios: true })
+        .eq('id', movie.id);
+    } else if (status === 'unavailable') {
+      await supabase
+        .from('movies')
+        .update({ available_android: false, available_ios: false })
+        .eq('id', movie.id);
+    }
+
     const updated: ReviewStore = {
       ...store,
       [movie.id]: {
@@ -240,27 +254,19 @@ export default function AdminReviewScreen() {
         {/* Sidebar — right side */}
         <View style={styles.sidebar}>
 
-          <View>
-            {/* Counter */}
-            <Text style={styles.counter}>
-              <Text style={styles.counterCurrent}>{idx + 1}</Text>
-              <Text style={styles.counterTotal}> / {queue.length}</Text>
-            </Text>
+          {/* Counter */}
+          <Text style={styles.counter}>
+            <Text style={styles.counterCurrent}>{idx + 1}</Text>
+            <Text style={styles.counterTotal}> / {queue.length}</Text>
+          </Text>
 
-            {/* Movie info */}
-            <View style={styles.movieInfo}>
-              <Text style={styles.movieTitle}>{movie.title}</Text>
-              <Text style={styles.movieYear}>{movie.year}</Text>
-              {movie.director
-                ? <Text style={styles.movieDir}>{movie.director}</Text>
-                : null}
-            </View>
-
-            {/* Hint */}
-            <Text style={styles.hint}>
-              Watch the first 10–15 seconds.{'\n'}Flag if there are pre-roll ads,
-              a wrong movie, or the title is shown.
-            </Text>
+          {/* Movie info */}
+          <View style={styles.movieInfo}>
+            <Text style={styles.movieTitle}>{movie.title}</Text>
+            <Text style={styles.movieYear}>{movie.year}</Text>
+            {movie.director
+              ? <Text style={styles.movieDir}>{movie.director}</Text>
+              : null}
           </View>
 
           {/* Action buttons */}
@@ -289,21 +295,14 @@ export default function AdminReviewScreen() {
               <Text style={styles.btnUnavailableText}>✕  Unavailable</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.skipBtn}
-              onPress={advance}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.skipText}>Skip for now →</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.exitLink}
-              onPress={() => router.back()}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.exitLinkText}>← Exit review</Text>
-            </TouchableOpacity>
+            <View style={styles.secondaryRow}>
+              <TouchableOpacity onPress={advance} activeOpacity={0.7} style={styles.secondaryBtn}>
+                <Text style={styles.skipText}>Skip →</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7} style={styles.secondaryBtn}>
+                <Text style={styles.exitLinkText}>← Exit</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
         </View>
@@ -328,11 +327,11 @@ const styles = StyleSheet.create({
     backgroundColor: C.inkSurface,
     borderLeftWidth: 1,
     borderLeftColor: 'rgba(255,255,255,0.08)',
-    padding: 16,
+    padding: 14,
     justifyContent: 'space-between',
   },
 
-  counter: { marginBottom: 10 },
+  counter: { marginBottom: 8 },
   counterCurrent: {
     fontFamily: Fonts.display,
     fontSize: FS.xl,
@@ -344,7 +343,7 @@ const styles = StyleSheet.create({
     color: '#555',
   },
 
-  movieInfo: { gap: 2, marginBottom: 12 },
+  movieInfo: { gap: 2, marginBottom: 0 },
   movieTitle: {
     fontFamily: Fonts.bodyBold,
     fontSize: FS.sm,
@@ -362,18 +361,11 @@ const styles = StyleSheet.create({
     color: C.textMutedDark,
   },
 
-  hint: {
-    fontFamily: Fonts.body,
-    fontSize: FS.xs,
-    color: '#555',
-    lineHeight: 15,
-  },
-
-  actions: { gap: 8 },
+  actions: { gap: 7 },
 
   btn: {
     borderRadius: R.btn,
-    paddingVertical: 11,
+    paddingVertical: 9,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -407,13 +399,17 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.bodyBold,
     fontSize: FS.sm,
   },
-  skipBtn: { alignItems: 'center', paddingVertical: 5 },
+  secondaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 2,
+  },
+  secondaryBtn: { paddingVertical: 4, paddingHorizontal: 2 },
   skipText: {
     color: '#555',
     fontFamily: Fonts.label,
     fontSize: FS.xs,
   },
-  exitLink: { alignItems: 'center', paddingVertical: 4 },
   exitLinkText: {
     color: '#3a3a3a',
     fontFamily: Fonts.label,
