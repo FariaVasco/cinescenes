@@ -393,8 +393,17 @@ export default function LocalLobbyScreen() {
         status: 'complete',
         winner_id: localPlayers[i].id,
       }));
+      // Compute the trailer platform for this game (fixed for its lifetime).
+      // Local: only the host's device plays the trailer — use their platform.
+      // Online: everyone watches the trailer to challenge — use the most
+      //         restrictive platform (android if any player is on android).
+      const trailerPlatform: 'ios' | 'android' =
+        localGame.multiplayer_type === 'local'
+          ? ((localPlayers[0]?.platform ?? 'ios') as 'ios' | 'android')
+          : localPlayers.some(p => p.platform === 'android') ? 'android' : 'ios';
+
       const [, , phantomResult] = await Promise.all([
-        db.from('games').update({ status: 'active' }).eq('id', localGame.id),
+        db.from('games').update({ status: 'active', trailer_platform: trailerPlatform }).eq('id', localGame.id),
         Promise.all(localPlayers.map((p, i) =>
           db.from('players').update({ timeline: [startingMovies[i].year], coins: 5 }).eq('id', p.id)
         )),

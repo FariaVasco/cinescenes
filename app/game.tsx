@@ -73,14 +73,6 @@ const PREVIEW_DURATION = 6000; // ms — timeline study countdown before trailer
 
 // Returns the platform to use when filtering the movie pool for the next turn.
 // Local: only the host's device plays the trailer → use host's platform (players[0]).
-// Online: every player watches the trailer (anyone can challenge) → use the most
-// restrictive platform: 'android' if any player is on Android, 'ios' otherwise.
-function getTrailerPlatform(players: Player[], multiplayerType: string): 'ios' | 'android' {
-  if (multiplayerType === 'local') {
-    return (players[0]?.platform ?? 'ios') as 'ios' | 'android';
-  }
-  return players.some(p => p.platform === 'android') ? 'android' : 'ios';
-}
 
 export default function GameScreen() {
   const router = useRouter();
@@ -207,8 +199,6 @@ export default function GameScreen() {
   const insaneMoviesCacheRef = useRef<Map<string, Movie>>(new Map());
   // Prefetched next-turn movie promise for insane mode — started during challenging phase
   const prefetchedInsaneMovieRef = useRef<Promise<Movie> | null>(null);
-  // Platform the prefetch was run for — used to discard stale prefetch if next player changes
-  const prefetchedInsanePlatformRef = useRef<'ios' | 'android'>('ios');
   // Prefetched past-turn movie_ids for standard/collection modes — started during challenging
   // so the dedup set is ready at next-turn time (saves a ~200-400ms round-trip).
   const prefetchedPastTurnsRef = useRef<Promise<{ data: { movie_id: string }[] | null }> | null>(null);
@@ -581,9 +571,7 @@ export default function GameScreen() {
     if (currentTurn?.status !== 'challenging' || !game) return;
     if (game.game_mode === 'insane') {
       if (prefetchedInsaneMovieRef.current) return;
-      const nextPlatform = getTrailerPlatform(players, game.multiplayer_type);
-      prefetchedInsanePlatformRef.current = nextPlatform;
-      prefetchedInsaneMovieRef.current = fetchRandomInsaneMovie(db, nextPlatform);
+      prefetchedInsaneMovieRef.current = fetchRandomInsaneMovie(db, game.trailer_platform ?? 'ios');
     } else {
       if (prefetchedPastTurnsRef.current) return;
       prefetchedPastTurnsRef.current = db.from('turns').select('movie_id').eq('game_id', game.id) as unknown as Promise<{ data: { movie_id: string }[] | null }>;
@@ -1455,13 +1443,10 @@ export default function GameScreen() {
       const startingCardYears = new Set<number>(
         latestPlayers.flatMap(p => p.timeline ?? []).filter(year => !pastTurnYears.has(year))
       );
-      const nextPlatform = getTrailerPlatform(updatedPlayers, g.multiplayer_type);
+      const nextPlatform = (g.trailer_platform ?? 'ios') as 'ios' | 'android';
       let nextMovieId: string;
       if (g.game_mode === 'insane') {
-        const compatiblePrefetch = prefetchedInsaneMovieRef.current &&
-          prefetchedInsanePlatformRef.current === nextPlatform
-          ? prefetchedInsaneMovieRef.current : null;
-        const m = await (compatiblePrefetch ?? fetchRandomInsaneMovie(db, nextPlatform));
+        const m = await (prefetchedInsaneMovieRef.current ?? fetchRandomInsaneMovie(db, nextPlatform));
         prefetchedInsaneMovieRef.current = null;
         insaneMoviesCacheRef.current.set(m.id, m);
         setActiveMovies([...activeMovies, m]);
@@ -1690,7 +1675,7 @@ export default function GameScreen() {
           // game doesn't stall waiting on a tombstoned player.
           const myIdx = allPlayers.findIndex(p => p.id === myPlayerId);
           const nextPlayer = remaining[myIdx % remaining.length] ?? remaining[0];
-          const leavePlatform = getTrailerPlatform(remaining, g.multiplayer_type);
+          const leavePlatform = (g.trailer_platform ?? 'ios') as 'ios' | 'android';
           const { data: pastTurns } = await db.from('turns').select('movie_id').eq('game_id', g.id);
           let leaveNextMovieId: string;
           if (g.game_mode === 'insane') {
