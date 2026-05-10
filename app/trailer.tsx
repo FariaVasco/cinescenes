@@ -7,6 +7,7 @@ import {
   Modal,
   useWindowDimensions,
   Pressable,
+  Platform,
 } from 'react-native';
 import { Snackbar } from 'react-native-paper';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -94,10 +95,18 @@ export default function TrailerScreen() {
       return;
     }
 
-    let pool = activeMovies.filter((m) => m.id !== currentMovie!.id);
+    const platformCol = Platform.OS === 'ios' ? 'available_ios' : 'available_android';
+    const platformFilter = (m: typeof activeMovies[0]) =>
+      Platform.OS === 'ios' ? m.available_ios !== false : m.available_android !== false;
+
+    let pool = activeMovies.filter((m) => m.id !== currentMovie!.id && platformFilter(m));
 
     if (pool.length === 0) {
-      const { data } = await supabase.from('movies').select('*').eq('scan_status', 'validated');
+      const { data } = await supabase
+        .from('movies')
+        .select('*')
+        .eq('scan_status', 'validated')
+        .eq(platformCol, true);
       if (data) {
         setActiveMovies(data);
         pool = data.filter((m) => m.id !== currentMovie!.id);
