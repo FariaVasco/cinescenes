@@ -71,6 +71,16 @@ const POLL_MS = 2000;
 const WIN_CARDS = 10;
 const PREVIEW_DURATION = 6000; // ms — timeline study countdown before trailer reveals
 
+// Returns the platform to use when filtering the movie pool for the next turn.
+// Local: only the host's device plays the trailer → use host's platform (players[0]).
+// Online: every player watches the trailer (anyone can challenge) → use the most
+// restrictive platform: 'android' if any player is on Android, 'ios' otherwise.
+function getTrailerPlatform(players: Player[], multiplayerType: string): 'ios' | 'android' {
+  if (multiplayerType === 'local') {
+    return (players[0]?.platform ?? 'ios') as 'ios' | 'android';
+  }
+  return players.some(p => p.platform === 'android') ? 'android' : 'ios';
+}
 
 export default function GameScreen() {
   const router = useRouter();
@@ -571,9 +581,7 @@ export default function GameScreen() {
     if (currentTurn?.status !== 'challenging' || !game) return;
     if (game.game_mode === 'insane') {
       if (prefetchedInsaneMovieRef.current) return;
-      const currentIdx = players.findIndex(p => p.id === currentTurn.active_player_id);
-      const nextIdx = currentIdx === -1 ? 0 : (currentIdx + 1) % players.length;
-      const nextPlatform = (players[nextIdx]?.platform ?? 'ios') as 'ios' | 'android';
+      const nextPlatform = getTrailerPlatform(players, game.multiplayer_type);
       prefetchedInsanePlatformRef.current = nextPlatform;
       prefetchedInsaneMovieRef.current = fetchRandomInsaneMovie(db, nextPlatform);
     } else {
@@ -1447,7 +1455,7 @@ export default function GameScreen() {
       const startingCardYears = new Set<number>(
         latestPlayers.flatMap(p => p.timeline ?? []).filter(year => !pastTurnYears.has(year))
       );
-      const nextPlatform = (nextPlayer.platform ?? 'ios') as 'ios' | 'android';
+      const nextPlatform = getTrailerPlatform(updatedPlayers, g.multiplayer_type);
       let nextMovieId: string;
       if (g.game_mode === 'insane') {
         const compatiblePrefetch = prefetchedInsaneMovieRef.current &&
@@ -1682,7 +1690,7 @@ export default function GameScreen() {
           // game doesn't stall waiting on a tombstoned player.
           const myIdx = allPlayers.findIndex(p => p.id === myPlayerId);
           const nextPlayer = remaining[myIdx % remaining.length] ?? remaining[0];
-          const leavePlatform = (nextPlayer.platform ?? 'ios') as 'ios' | 'android';
+          const leavePlatform = getTrailerPlatform(remaining, g.multiplayer_type);
           const { data: pastTurns } = await db.from('turns').select('movie_id').eq('game_id', g.id);
           let leaveNextMovieId: string;
           if (g.game_mode === 'insane') {
