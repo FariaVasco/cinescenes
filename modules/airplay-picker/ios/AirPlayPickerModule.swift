@@ -6,6 +6,21 @@ public class AirPlayPickerModule: Module {
   private let routeDetector = AVRouteDetector()
   private var observer: NSObjectProtocol?
 
+  // True only when a video-mirroring-capable route (AirPlay TV, Apple TV) is
+  // detected. On iOS 16+ we can inspect detectedRoutes directly; older versions
+  // fall back to the coarser multipleRoutesDetected flag.
+  private var hasVideoMirroringRoute: Bool {
+    if #available(iOS 16.0, *) {
+      let routes = routeDetector.detectedRoutes
+      print("🎬 detectedRoutes (\(routes.count)):")
+      for r in routes {
+        print("  · \(r.routeName) — supportsVideoMirroring=\(r.supportsVideoMirroring)")
+      }
+      return routes.contains { $0.supportsVideoMirroring }
+    }
+    return routeDetector.multipleRoutesDetected
+  }
+
   public func definition() -> ModuleDefinition {
     Name("AirPlayPicker")
 
@@ -23,7 +38,7 @@ public class AirPlayPickerModule: Module {
       ) { [weak self] _ in
         guard let self = self else { return }
         self.sendEvent("onRoutesAvailableChanged", [
-          "available": self.routeDetector.multipleRoutesDetected
+          "available": self.hasVideoMirroringRoute
         ])
       }
     }
@@ -36,7 +51,7 @@ public class AirPlayPickerModule: Module {
     }
 
     Function("isMultipleRoutesAvailable") { () -> Bool in
-      return self.routeDetector.multipleRoutesDetected
+      return self.hasVideoMirroringRoute
     }
 
     View(AirPlayPickerView.self) {

@@ -29,6 +29,8 @@ import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
 import { Game, Movie, Player } from '@/lib/database.types';
 import { fetchRandomInsaneMovie } from '@/lib/tmdb-insane';
+import { CloseIcon } from '@/components/CinemaIcons';
+import { useAirPlayAvailable, AirPlayButton } from 'airplay-picker';
 
 const db = supabase as unknown as { from: (t: string) => any };
 const POLL_MS = 1000;
@@ -52,6 +54,8 @@ export default function LocalLobbyScreen() {
     selectedCollectionId,
     selectedVisibility,
     authUser,
+    tvMode,
+    setTvMode,
   } = useAppStore();
 
   function getDefaultName(): string {
@@ -68,6 +72,9 @@ export default function LocalLobbyScreen() {
   const [localIsHost, setLocalIsHost] = useState(false);
   const [maxPlayers, setMaxPlayers] = useState(8);
   const [codeCopied, setCodeCopied] = useState(false);
+  const [castVisible, setCastVisible] = useState(false);
+  const [tvBannerDismissed, setTvBannerDismissed] = useState(false);
+  const airPlayAvailable = useAirPlayAvailable();
 
   // Lobby is "ready" once we've created or joined a game.
   const lobbyReady = !!localGame;
@@ -530,6 +537,45 @@ export default function LocalLobbyScreen() {
       </View>
 
       {loading && <HandoffSplash />}
+
+      {airPlayAvailable && localIsHost && !tvMode && !tvBannerDismissed && !castVisible && (
+        <TouchableOpacity
+          style={styles.tvDetectedBanner}
+          onPress={() => setCastVisible(true)}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.tvDetectedBannerText}>📺 TV detected nearby — tap to connect</Text>
+          <TouchableOpacity onPress={() => setTvBannerDismissed(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={styles.tvDetectedBannerClose}>✕</Text>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      )}
+
+      {castVisible && (
+        <TouchableOpacity style={[StyleSheet.absoluteFill, styles.castBackdrop]} activeOpacity={1} onPress={() => setCastVisible(false)}>
+          <View style={styles.castSheet} onStartShouldSetResponder={() => true}>
+            <View style={styles.castSheetHeader}>
+              <Text style={styles.castSheetTitle}>📺  Cast to TV</Text>
+              <TouchableOpacity onPress={() => setCastVisible(false)} style={styles.castCloseBtn}>
+                <CloseIcon size={18} color={C.textSub} />
+              </TouchableOpacity>
+            </View>
+            {Platform.OS === 'ios' ? (
+              <View style={styles.castAirPlayRow}>
+                <Text style={styles.castAirPlayLabel}>Mirror to TV via AirPlay</Text>
+                <AirPlayButton style={styles.castAirPlayBtn} />
+              </View>
+            ) : (
+              <Text style={styles.castSheetBody}>
+                Swipe down twice → Quick Settings → Tap Cast
+              </Text>
+            )}
+            <TouchableOpacity style={styles.castDoneBtn} onPress={() => { setTvMode(true); setCastVisible(false); }}>
+              <Text style={styles.castDoneBtnText}>Done →</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      )}
     </SafeAreaView>
   );
 }
@@ -770,5 +816,62 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.body,
     color: C.textSub,
     fontSize: FS.sm,
+  },
+
+  tvDetectedBanner: {
+    position: 'absolute', bottom: 16, left: 16, right: 16,
+    backgroundColor: 'rgba(20,20,30,0.92)',
+    borderRadius: 10,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
+    paddingVertical: 10, paddingHorizontal: 14,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    zIndex: 20,
+  },
+  tvDetectedBannerText: {
+    color: '#fff', fontFamily: Fonts.label, fontSize: 13, flex: 1,
+  },
+  tvDetectedBannerClose: {
+    color: 'rgba(255,255,255,0.5)', fontFamily: Fonts.label, fontSize: 14, marginLeft: 12,
+  },
+  castBackdrop: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.72)',
+    justifyContent: 'center', alignItems: 'center',
+    paddingVertical: 20, paddingHorizontal: 52,
+  },
+  castSheet: {
+    backgroundColor: C.surface,
+    borderRadius: R.card,
+    padding: 24,
+    width: '100%',
+    maxWidth: 420,
+    gap: 16,
+  },
+  castSheetHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+  },
+  castSheetTitle: {
+    color: C.textPrimary, fontFamily: Fonts.display, fontSize: FS.lg,
+  },
+  castCloseBtn: { padding: 4 },
+  castSheetBody: {
+    color: C.textSub, fontFamily: Fonts.body, fontSize: FS.sm, lineHeight: 22,
+  },
+  castAirPlayRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: C.surfaceHigh,
+    borderRadius: R.md, borderWidth: 2, borderColor: C.inkFaint,
+    paddingHorizontal: 16, paddingVertical: 10,
+  },
+  castAirPlayLabel: {
+    color: C.textSub, fontFamily: Fonts.label, fontSize: FS.sm,
+  },
+  castAirPlayBtn: { width: 44, height: 44 },
+  castDoneBtn: {
+    backgroundColor: C.ochre,
+    borderRadius: R.btn, borderWidth: 2, borderColor: C.ink,
+    paddingVertical: 14, alignItems: 'center', marginTop: 4,
+  },
+  castDoneBtnText: {
+    color: C.textOnOchre, fontFamily: Fonts.display, fontSize: FS.base,
   },
 });

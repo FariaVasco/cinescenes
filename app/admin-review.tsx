@@ -65,6 +65,7 @@ export default function AdminReviewScreen() {
       .from('movies')
       .select('id, title, year, director, youtube_id')
       .eq('scan_status', 'flagged')
+      .eq('available_ios', false)
       .not('youtube_id', 'is', null)
       .order('year', { ascending: true });
 

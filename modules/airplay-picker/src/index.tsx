@@ -27,7 +27,10 @@ export function useAirPlayAvailable(): boolean {
   const [available, setAvailable] = useState(false);
 
   useEffect(() => {
-    if (!emitter) return;
+    if (!nativeModule || !emitter) return;
+    // Read the current state immediately — the change event only fires on transitions,
+    // so devices already present at mount time would otherwise be missed.
+    setAvailable(nativeModule.isMultipleRoutesAvailable());
     const sub = emitter.addListener('onRoutesAvailableChanged', (event: { available: boolean }) => {
       setAvailable(event.available);
     });
