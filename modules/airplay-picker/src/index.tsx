@@ -28,13 +28,14 @@ export function useAirPlayAvailable(): boolean {
 
   useEffect(() => {
     if (!nativeModule || !emitter) return;
-    // Read the current state immediately — the change event only fires on transitions,
-    // so devices already present at mount time would otherwise be missed.
     setAvailable(nativeModule.isMultipleRoutesAvailable());
+    // AVRouteDetector needs ~1s to finish scanning after being enabled —
+    // re-check so devices already present at mount time aren't missed.
+    const timer = setTimeout(() => setAvailable(nativeModule.isMultipleRoutesAvailable()), 1500);
     const sub = emitter.addListener('onRoutesAvailableChanged', (event: { available: boolean }) => {
       setAvailable(event.available);
     });
-    return () => sub.remove();
+    return () => { sub.remove(); clearTimeout(timer); };
   }, []);
 
   return available;

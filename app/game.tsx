@@ -18,6 +18,7 @@ import {
   Platform,
   Keyboard,
   PanResponder,
+  Settings,
 } from 'react-native';
 import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
 import { transcribeAudio } from '@/lib/whisper';
@@ -227,6 +228,7 @@ export default function GameScreen() {
   useEffect(() => {
     if (!game) { router.replace('/'); return; }
     gameIdRef.current = game.id;
+    if (Platform.OS === 'ios') Settings.set({ 'com.cinescenes.tvGameId': game.id });
     // Clear the store flag now that the countdown has started
     if (useAppStore.getState().gameJustStarted) setGameJustStarted(false);
     loadState();
