@@ -194,6 +194,7 @@ export default function LocalLobbyScreen() {
           collection_id: selectedCollectionId,
           max_players: maxPlayers,
           visibility: selectedVisibility,
+          trailer_platform: Platform.OS as 'ios' | 'android',
         })
         .select()
         .single() as { data: Game | null; error: any };
@@ -201,7 +202,7 @@ export default function LocalLobbyScreen() {
 
       const { data: newPlayer, error: playerErr } = await db
         .from('players')
-        .insert({ game_id: newGame.id, display_name: displayName.trim(), last_seen: null, platform: Platform.OS as 'ios' | 'android' })
+        .insert({ game_id: newGame.id, display_name: displayName.trim(), last_seen: null })
         .select()
         .single() as { data: Player | null; error: any };
       if (playerErr || !newPlayer) throw playerErr ?? new Error('No player');
@@ -252,10 +253,16 @@ export default function LocalLobbyScreen() {
 
       const { data: newPlayer, error: playerErr } = await db
         .from('players')
-        .insert({ game_id: foundGame.id, display_name: name, last_seen: null, platform: Platform.OS as 'ios' | 'android' })
+        .insert({ game_id: foundGame.id, display_name: name, last_seen: null })
         .select()
         .single() as { data: Player | null; error: any };
       if (playerErr || !newPlayer) throw playerErr ?? new Error('Could not join game');
+
+      // Online mode: if this player is on Android, escalate the game's trailer_platform.
+      // Android is always more restrictive — once set it never goes back to ios.
+      if (foundGame.multiplayer_type === 'online' && Platform.OS === 'android') {
+        await db.from('games').update({ trailer_platform: 'android' }).eq('id', foundGame.id);
+      }
 
       setLocalGame(foundGame);
       setLocalPlayerId(newPlayer.id);
@@ -393,17 +400,8 @@ export default function LocalLobbyScreen() {
         status: 'complete',
         winner_id: localPlayers[i].id,
       }));
-      // Compute the trailer platform for this game (fixed for its lifetime).
-      // Local: only the host's device plays the trailer — use their platform.
-      // Online: everyone watches the trailer to challenge — use the most
-      //         restrictive platform (android if any player is on android).
-      const trailerPlatform: 'ios' | 'android' =
-        localGame.multiplayer_type === 'local'
-          ? ((localPlayers[0]?.platform ?? 'ios') as 'ios' | 'android')
-          : localPlayers.some(p => p.platform === 'android') ? 'android' : 'ios';
-
       const [, , phantomResult] = await Promise.all([
-        db.from('games').update({ status: 'active', trailer_platform: trailerPlatform }).eq('id', localGame.id),
+        db.from('games').update({ status: 'active' }).eq('id', localGame.id),
         Promise.all(localPlayers.map((p, i) =>
           db.from('players').update({ timeline: [startingMovies[i].year], coins: 5 }).eq('id', p.id)
         )),
