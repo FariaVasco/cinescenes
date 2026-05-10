@@ -108,7 +108,11 @@ export async function fetchRandomInsaneMovie(db: Db, platform: 'ios' | 'android'
       .filter((v: any) => v.site === 'YouTube' && v.type === 'Trailer');
     if (allTrailers.length === 0) continue;
 
-    const sorted = [...allTrailers].sort((a: any, b: any) => (a.official ? -1 : 1));
+    // Prefer trailers whose title doesn't reveal the release year.
+    // Fall back to all trailers if every option includes it.
+    const withoutYear = allTrailers.filter((v: any) => !String(v.name).includes(String(year)));
+    const candidates = withoutYear.length > 0 ? withoutYear : allTrailers;
+    const sorted = [...candidates].sort((a: any, b: any) => (a.official ? -1 : 1));
 
     // Find the first trailer that passes the HD quality check
     let trailer: any = null;
