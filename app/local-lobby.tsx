@@ -484,7 +484,7 @@ export default function LocalLobbyScreen() {
             style={styles.codeCard}
             activeOpacity={0.8}
           >
-            <Text style={styles.gameCode}>{localGame.game_code}</Text>
+            <Text style={styles.gameCode}>{localGame.game_code} </Text>
             <Text style={styles.copyHint}>{codeCopied ? 'Copied!' : 'tap to copy'}</Text>
           </TouchableOpacity>
 
@@ -790,7 +790,7 @@ const styles = StyleSheet.create({
     borderColor: C.ink,
     paddingHorizontal: SP.sm,
     paddingVertical: 6,
-    gap: 2,
+    gap: 0,
   },
   trailerModeRow: {
     flexDirection: 'row',
