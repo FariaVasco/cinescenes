@@ -751,7 +751,7 @@ const styles = StyleSheet.create({
     paddingVertical: SP.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 4,
   },
   gameCode: {
     fontFamily: Fonts.display,
