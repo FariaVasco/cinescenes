@@ -751,7 +751,7 @@ const styles = StyleSheet.create({
     paddingVertical: SP.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 2,
+    gap: 8,
   },
   gameCode: {
     fontFamily: Fonts.display,
@@ -772,8 +772,8 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: C.ink,
     paddingHorizontal: SP.sm,
-    paddingVertical: 4,
-    gap: 2,
+    paddingVertical: 2,
+    gap: 0,
   },
   settingLabel: {
     fontFamily: Fonts.label,
@@ -841,7 +841,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: C.ink,
     paddingHorizontal: SP.sm,
-    paddingVertical: 6,
+    paddingVertical: 4,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
