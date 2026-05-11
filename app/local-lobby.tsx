@@ -13,6 +13,7 @@ import {
   Animated,
   Easing,
   Platform,
+  Switch,
 } from 'react-native';
 
 const lcCrown    = require('../assets/lc-crown.png');
@@ -71,6 +72,7 @@ export default function LocalLobbyScreen() {
   const [localPlayerId, setLocalPlayerId] = useState<string | null>(null);
   const [localIsHost, setLocalIsHost] = useState(false);
   const [maxPlayers, setMaxPlayers] = useState(8);
+  const [trailerAllDevices, setTrailerAllDevices] = useState(false);
   const [codeCopied, setCodeCopied] = useState(false);
   const [castVisible, setCastVisible] = useState(false);
   const [tvBannerDismissed, setTvBannerDismissed] = useState(false);
@@ -295,6 +297,13 @@ export default function LocalLobbyScreen() {
     }
   }
 
+  async function handleTrailerModeChange(allDevices: boolean) {
+    setTrailerAllDevices(allDevices);
+    if (localGame) {
+      await db.from('games').update({ visibility: allDevices ? 'public' : 'invite_only' }).eq('id', localGame.id);
+    }
+  }
+
   async function handleLeaveWaitingRoom() {
     if (localIsHost && localGame) {
       const { error } = await db.from('games').update({ status: 'cancelled' }).eq('id', localGame.id);
@@ -498,6 +507,27 @@ export default function LocalLobbyScreen() {
                 >
                   <Text style={[styles.stepperBtnText, maxPlayers >= 10 && styles.stepperBtnDisabled]}>+</Text>
                 </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {localIsHost && (
+            <View style={styles.trailerModeWrap}>
+              <Text style={styles.colLabel}>TRAILERS</Text>
+              <View style={styles.trailerModeRow}>
+                <Text style={[styles.trailerModeLabel, !trailerAllDevices && styles.trailerModeLabelActive]}>
+                  Host only
+                </Text>
+                <Switch
+                  value={trailerAllDevices}
+                  onValueChange={handleTrailerModeChange}
+                  trackColor={{ false: C.inkFaint, true: C.ochre }}
+                  thumbColor={C.surface}
+                  ios_backgroundColor={C.inkFaint}
+                />
+                <Text style={[styles.trailerModeLabel, trailerAllDevices && styles.trailerModeLabelActive]}>
+                  All devices
+                </Text>
               </View>
             </View>
           )}
@@ -739,6 +769,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: SP.sm,
     paddingVertical: 4,
     gap: 2,
+  },
+  trailerModeWrap: {
+    alignItems: 'center',
+    backgroundColor: C.surfaceWarm,
+    borderRadius: R.card,
+    borderWidth: 2,
+    borderColor: C.ink,
+    paddingHorizontal: SP.sm,
+    paddingVertical: 6,
+    gap: 4,
+  },
+  trailerModeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  trailerModeLabel: {
+    fontFamily: Fonts.label,
+    fontSize: FS.xs,
+    color: C.inkFaint,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  trailerModeLabelActive: {
+    color: C.ink,
   },
   maxPlayersStepper: { flexDirection: 'row', alignItems: 'center' },
   stepperBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
