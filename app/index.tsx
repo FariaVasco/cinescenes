@@ -87,7 +87,6 @@ function SideMenu({ view, setView, onFeedback }: { view: MenuView; setView: (v: 
     if (tapCount.current >= 5) {
       tapCount.current = 0;
       if (ADMIN_EMAILS.includes(authUser?.email ?? '')) {
-        Sentry.captureException(new Error('Sentry test from admin tap'));
         router.push('/admin-review');
       }
       return;
