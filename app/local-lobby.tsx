@@ -490,7 +490,7 @@ export default function LocalLobbyScreen() {
 
           {localIsHost && (
             <View style={styles.maxStepperWrap}>
-              <Text style={styles.colLabel}>MAX PLAYERS</Text>
+              <Text style={styles.settingLabel}>MAX PLAYERS</Text>
               <View style={styles.maxPlayersStepper}>
                 <TouchableOpacity
                   onPress={() => handleMaxPlayersChange(-1)}
@@ -515,10 +515,10 @@ export default function LocalLobbyScreen() {
 
           {localIsHost && (
             <View style={styles.trailerModeWrap}>
-              <Text style={styles.colLabel}>TRAILERS</Text>
+              <Text style={styles.settingLabel}>TRAILERS ON</Text>
               <View style={styles.trailerModeRow}>
                 <Text style={[styles.trailerModeLabel, !trailerAllDevices && styles.trailerModeLabelActive]}>
-                  Host only
+                  Host's phone
                 </Text>
                 <Switch
                   value={trailerAllDevices}
@@ -528,7 +528,7 @@ export default function LocalLobbyScreen() {
                   ios_backgroundColor={C.inkFaint}
                 />
                 <Text style={[styles.trailerModeLabel, trailerAllDevices && styles.trailerModeLabelActive]}>
-                  All devices
+                  All phones
                 </Text>
               </View>
             </View>
@@ -739,8 +739,10 @@ const styles = StyleSheet.create({
   leftCol: {
     flex: 1,
     gap: SP.sm,
+    justifyContent: 'space-between',
   },
   codeCard: {
+    flex: 1,
     backgroundColor: C.surfaceWarm,
     borderRadius: R.card,
     borderWidth: 2,
@@ -748,6 +750,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SP.md,
     paddingVertical: SP.sm,
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 2,
   },
   gameCode: {
@@ -771,6 +774,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: SP.sm,
     paddingVertical: 4,
     gap: 2,
+  },
+  settingLabel: {
+    fontFamily: Fonts.label,
+    fontSize: FS.sm,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    color: C.textPrimary,
   },
   trailerModeWrap: {
     alignItems: 'center',
