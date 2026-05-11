@@ -260,9 +260,11 @@ export default function LocalLobbyScreen() {
         .single() as { data: Player | null; error: any };
       if (playerErr || !newPlayer) throw playerErr ?? new Error('Could not join game');
 
-      // Online mode: if this player is on Android, escalate the game's trailer_platform.
-      // Android is always more restrictive — once set it never goes back to ios.
-      if (foundGame.multiplayer_type === 'online' && Platform.OS === 'android') {
+      // If this player is on Android, escalate the game's trailer_platform so
+      // Android-incompatible trailers (ads) are filtered out for everyone.
+      // Applies to online games and local games in "All devices" mode (visibility: public).
+      const allDevicesLocal = foundGame.multiplayer_type === 'local' && foundGame.visibility === 'public';
+      if ((foundGame.multiplayer_type === 'online' || allDevicesLocal) && Platform.OS === 'android') {
         await db.from('games').update({ trailer_platform: 'android' }).eq('id', foundGame.id);
       }
 
