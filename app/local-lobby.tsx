@@ -740,6 +740,7 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: SP.sm,
     justifyContent: 'space-between',
+    alignSelf: 'stretch',
   },
   codeCard: {
     flex: 1,
@@ -826,6 +827,7 @@ const styles = StyleSheet.create({
   // Right column — player list + start
   rightCol: {
     flex: 1.3,
+    alignSelf: 'stretch',
     backgroundColor: C.surfaceWarm,
     borderRadius: R.card,
     borderWidth: 2,
