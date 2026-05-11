@@ -751,7 +751,7 @@ const styles = StyleSheet.create({
     paddingVertical: SP.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
+    gap: 0,
   },
   gameCode: {
     fontFamily: Fonts.display,
@@ -790,7 +790,7 @@ const styles = StyleSheet.create({
     borderColor: C.ink,
     paddingHorizontal: SP.sm,
     paddingVertical: 6,
-    gap: 4,
+    gap: 2,
   },
   trailerModeRow: {
     flexDirection: 'row',
