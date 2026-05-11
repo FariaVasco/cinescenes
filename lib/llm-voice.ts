@@ -1,9 +1,11 @@
-// LLM fallback for voice-input parsing via Groq.
+// LLM fallback for voice-input parsing via Groq (server-side Edge Function).
 // Only responsible for extracting verbatim text segments from the transcript.
 // Phonetic correction against known values is handled separately in JS.
 
-const GROQ_KEY = process.env.EXPO_PUBLIC_GROQ_API_KEY;
-const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
+import * as Sentry from '@sentry/react-native';
+import { supabase } from '@/lib/supabase';
+
+const FUNCTION_URL = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/llm-parse`;
 
 // Stop words that carry no identifying information.
 const STOP_WORDS = new Set([
@@ -28,48 +30,29 @@ export async function llmExtractGuess(
   transcript: string,
 ): Promise<{ title: string | null; director: string | null }> {
   const empty = { title: null, director: null };
-  if (!GROQ_KEY) return empty;
   if (!hasContentWords(transcript)) return empty;
 
-  const systemPrompt =
-    `You are a sentence parser. Identify which words in the input are being used as a movie title and which as a person's name (the director). ` +
-    `Copy those words VERBATIM from the input — do not correct, normalise, or replace them with any names from your own knowledge. ` +
-    `Reply with exactly two lines: TITLE: <verbatim words or NONE> and DIRECTOR: <verbatim words or NONE>.`;
+  const { data: { session } } = await supabase.auth.getSession();
 
-  const userPrompt = `Sentence: "${transcript}"`;
-
-  console.log(`[llm-voice] calling Groq — transcript: "${transcript}"`);
   try {
-    const res = await fetch(GROQ_URL, {
+    const res = await fetch(FUNCTION_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${GROQ_KEY}`,
+        ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}),
       },
-      body: JSON.stringify({
-        model: 'llama-3.1-8b-instant',
-        max_tokens: 30,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-      }),
+      body: JSON.stringify({ transcript }),
     });
+
+    if (!res.ok) return empty;
+
     const data = await res.json();
-    const content: string = data.choices?.[0]?.message?.content ?? '';
-    console.log(`[llm-voice] response: "${content.trim()}"`);
-
-    const lines = content.split('\n');
-    const titleLine = lines.find(l => l.toUpperCase().startsWith('TITLE:'));
-    const directorLine = lines.find(l => l.toUpperCase().startsWith('DIRECTOR:'));
-    const title = titleLine?.replace(/^title:\s*/i, '').trim() ?? '';
-    const director = directorLine?.replace(/^director:\s*/i, '').trim() ?? '';
-
     return {
-      title: title && title.toUpperCase() !== 'NONE' ? title : null,
-      director: director && director.toUpperCase() !== 'NONE' ? director : null,
+      title: data.title ?? null,
+      director: data.director ?? null,
     };
-  } catch {
+  } catch (e) {
+    Sentry.captureException(e);
     return empty;
   }
 }

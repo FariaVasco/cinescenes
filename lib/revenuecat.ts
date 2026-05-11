@@ -1,5 +1,6 @@
 import Purchases, { LOG_LEVEL } from 'react-native-purchases';
 import RevenueCatUI, { PAYWALL_RESULT } from 'react-native-purchases-ui';
+import * as Sentry from '@sentry/react-native';
 
 const RC_KEY = process.env.EXPO_PUBLIC_REVENUECAT_KEY ?? '';
 
@@ -9,9 +10,7 @@ export const ENTITLEMENT_ID = 'Cinescenes Pro';
 export function initRevenueCat() {
   Purchases.setLogLevel(LOG_LEVEL.ERROR);
   Purchases.configure({ apiKey: RC_KEY });
-  Purchases.getCustomerInfo().then(info =>
-    console.log('[RC] customer ID:', info.originalAppUserId)
-  ).catch(() => {});
+  Purchases.getCustomerInfo().catch((e) => Sentry.captureException(e));
 }
 
 export async function identifyUser(supabaseUserId: string) {
@@ -21,9 +20,9 @@ export async function identifyUser(supabaseUserId: string) {
 export async function checkPremium(): Promise<boolean> {
   try {
     const info = await Purchases.getCustomerInfo();
-    console.log('[RC] customer ID:', info.originalAppUserId);
     return info.entitlements.active[ENTITLEMENT_ID] !== undefined;
-  } catch {
+  } catch (e) {
+    Sentry.captureException(e);
     return false;
   }
 }
@@ -36,7 +35,8 @@ export async function presentPaywall(): Promise<boolean> {
   try {
     const result = await RevenueCatUI.presentPaywall();
     return result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED;
-  } catch {
+  } catch (e) {
+    Sentry.captureException(e);
     return false;
   }
 }

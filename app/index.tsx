@@ -18,6 +18,7 @@ import { useAppStore } from '@/store/useAppStore';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { presentCustomerCenter } from '@/lib/revenuecat';
+import * as Sentry from '@sentry/react-native';
 import { RulesCarousel } from '@/components/RulesCarousel';
 import { FeedbackSheet } from '@/components/FeedbackSheet';
 
@@ -72,8 +73,11 @@ export default function LandingScreen() {
 
 // ── Side menu ───────────────────────────────────────────────────────────────
 
+const ADMIN_EMAILS = ['fariavasco96@gmail.com'];
+
 function SideMenu({ view, setView, onFeedback }: { view: MenuView; setView: (v: MenuView) => void; onFeedback: () => void }) {
   const router    = useRouter();
+  const { authUser } = useAppStore();
   const tapCount  = useRef(0);
   const tapTimer  = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -82,7 +86,10 @@ function SideMenu({ view, setView, onFeedback }: { view: MenuView; setView: (v: 
     clearTimeout(tapTimer.current);
     if (tapCount.current >= 5) {
       tapCount.current = 0;
-      router.push('/admin-review');
+      if (ADMIN_EMAILS.includes(authUser?.email ?? '')) {
+        Sentry.captureException(new Error('Sentry test from admin tap'));
+        router.push('/admin-review');
+      }
       return;
     }
     tapTimer.current = setTimeout(() => { tapCount.current = 0; }, 1500);

@@ -36,7 +36,6 @@ export default function TVScreen() {
 
 // Standalone — used by AppRegistry for the external display window
 export function TVScreenStandalone({ id }: { id?: string }) {
-  console.log('🖥️ TVScreenStandalone rendering — id=', id);
   return <TVScreenCore gameId={id ?? ''} />;
 }
 

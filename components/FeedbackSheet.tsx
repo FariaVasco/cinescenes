@@ -69,7 +69,7 @@ export function FeedbackSheet({ visible, onClose }: Props) {
     setSubmitting(false);
     if (error) {
       haptics.error();
-      console.warn('[feedback] insert failed', error);
+      if (__DEV__) console.warn('[feedback] insert failed', error);
       return;
     }
     haptics.success();

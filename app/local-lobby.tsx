@@ -407,7 +407,7 @@ export default function LocalLobbyScreen() {
         )),
         db.from('turns').insert(phantomRows),
       ]);
-      if (phantomResult.error) console.warn('[LOBBY] phantom turn insert failed:', phantomResult.error.message);
+      if (phantomResult.error && __DEV__) console.warn('[LOBBY] phantom turn insert failed:', phantomResult.error.message);
 
       // Insert the first real turn AFTER phantom rows exist so the poll() query
       // (newest non-complete turn) can't ever return before the phantom backfill.

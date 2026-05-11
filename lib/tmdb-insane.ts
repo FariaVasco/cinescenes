@@ -142,7 +142,7 @@ export async function fetchRandomInsaneMovie(db: Db, platform: 'ios' | 'android'
       .select();
 
     // A real DB error (constraint violation, network, etc.) — skip this candidate
-    if (error) { console.warn('[insane] insert error:', error.message); continue; }
+    if (error) { if (__DEV__) console.warn('[insane] insert error:', error.message); continue; }
 
     // INSERT succeeded. RETURNING may be empty if RLS blocks it on unvalidated rows.
     const inserted = rows?.[0] ?? null;
