@@ -199,7 +199,7 @@ function RulesView() {
 
 function SettingsView() {
   const { authUser, isPremium, settings, setSetting } = useAppStore();
-  const { signInWithApple, signInWithGoogle, signOut } = useAuth();
+  const { signInWithApple, signInWithGoogle, signOut, deleteAccount } = useAuth();
   const [authBusy, setAuthBusy] = useState(false);
 
   async function handleSignIn() {
@@ -221,6 +221,27 @@ function SettingsView() {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Sign out', style: 'destructive', onPress: () => signOut() },
     ]);
+  }
+
+  function handleDeleteAccount() {
+    Alert.alert(
+      'Delete account?',
+      'This permanently deletes your account and all associated data. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete account',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteAccount();
+            } catch (e: any) {
+              Alert.alert('Error', e?.message ?? 'Could not delete account. Please try again.');
+            }
+          },
+        },
+      ]
+    );
   }
 
   const meta = authUser?.user_metadata ?? {};
@@ -264,6 +285,13 @@ function SettingsView() {
                 activeOpacity={0.85}
               >
                 <Text style={styles.accountBtnSecondaryText}>Sign Out </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.accountBtn, styles.accountBtnDestructive]}
+                onPress={handleDeleteAccount}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.accountBtnDestructiveText}>Delete Account</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -585,6 +613,13 @@ const styles = StyleSheet.create({
     fontSize: FS.sm,
     color: C.textSub,
     letterSpacing: 0.5,
+  },
+  accountBtnDestructive: { backgroundColor: 'transparent', borderColor: 'transparent' },
+  accountBtnDestructiveText: {
+    fontFamily: Fonts.body,
+    fontSize: FS.xs,
+    color: C.textMuted,
+    letterSpacing: 0.3,
   },
 
   prefRow: {
