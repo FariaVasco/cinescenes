@@ -4,7 +4,7 @@
     "slug": "cinescenes",
     "version": "1.0.0",
     "orientation": "default",
-    "icon": "./assets/lc-logo.png",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "scheme": "cinescenes",
