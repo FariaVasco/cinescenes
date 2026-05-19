@@ -33,6 +33,13 @@ function makeYouTubeInject(unmuteAtMs: number | null, endMuteAtVideoSec: number 
   return `
 if (!window.ReactNativeWebView) { window.ReactNativeWebView = { postMessage: function() {} }; }
 (function() {
+  var _oe = window.onerror;
+  window.onerror = function(msg, src, line, col, err) {
+    if (typeof msg === 'string' && (msg.indexOf('getCurrentTime') !== -1 || msg.indexOf('postMessage') !== -1)) return true;
+    return _oe ? _oe(msg, src, line, col, err) : false;
+  };
+})();
+(function() {
   var muted = false;
   var unmuted = false;
   var endMuted = false;
@@ -147,7 +154,6 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
     });
 
     useEffect(() => {
-      log(`[CS] TrailerPlayer mounted  t=0  movie="${movie.title}"  useDynamicWindow=${useDynamicWindow}  safeStart=${safeStart}s  rawSafeEnd=${rawSafeEnd}s  trimmedSafeEnd=${safeEnd}s  duration=${duration}ms  unmuteAfterMs=${unmuteAfterMs}  TITLE_CARD_BURN=${TITLE_CARD_BURN}`);
     }, []);
 
     // Active end-trigger: poll the video's playhead and stop ourselves before YouTube's
@@ -162,7 +168,6 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
           // Resolve the end target each tick — dynEnd is set asynchronously after the
           // player reports duration, so it may not be ready on the first ticks.
           const targetEnd = useDynamicWindow ? dynEndRef.current : safeEnd;
-          log(`[CS] tick                  t=${ms()}  videoTime=${t.toFixed(2)}s  (target end ${targetEnd}s)`);
           if (!activeEndFiredRef.current && targetEnd > 0 && t >= targetEnd - 0.3) {
             activeEndFiredRef.current = true;
             log(`[CS] active end fired      t=${ms()}  videoTime=${t.toFixed(2)}s  → onEnded()`);
@@ -186,9 +191,7 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
       // Switch screens 1s before the safe end so the YouTube title never flashes.
       // Black overlay fires at the same instant as a safety net in case onEnded is debounced upstream.
       const switchAt = Math.max(ms_ - 1000, 0);
-      log(`[CS] startEndTimer          t=${ms()}  ms_=${ms_}  switchAt=${switchAt}  (overlay+onEnded fire in ${switchAt}ms)`);
       overlayTimerRef.current = setTimeout(() => {
-        log(`[CS] endOverlay shown       t=${ms()}`);
         setEndOverlay(true);
       }, switchAt);
       timerRef.current = setTimeout(() => {
@@ -199,7 +202,6 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
     }
 
     function doReveal() {
-      log(`[CS] doReveal              t=${ms()}`);
       if (fallbackRef.current) clearTimeout(fallbackRef.current);
       onRevealed?.();
       if (!skipEndTimerOnReady.current) {
@@ -245,7 +247,6 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
     }));
 
     async function handleYouTubeReady() {
-      log(`[CS] YouTube player ready  t=${ms()}`);
       // Guarantee videoStarted even if the 'playing' state fires before the
       // onChangeState handler connects (race condition on fast second-movie loads).
       if (!videoPlayingRef.current) onPlaying?.();
@@ -266,39 +267,30 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
           dynEndRef.current   = 40; // fallback: cap at 40s of video time
         }
         // Long fallback — fires only if 'playing' state never arrives
-        log(`[CS] onReady fallback set  t=${ms()}  fires in ${TITLE_CARD_BURN + 6000}ms`);
         fallbackRef.current = setTimeout(() => {
-          log(`[CS] onReady fallback fired t=${ms()}`);
           if (!contentReadyRef.current) doReveal();
         }, TITLE_CARD_BURN + 6000);
       } else {
         seekToTimeRef.current = Date.now();
         playerRef.current?.seekTo(safeStart, true);
         if (fallbackRef.current) clearTimeout(fallbackRef.current);
-        // Long fallback — fires only if 'playing' state never arrives
-        log(`[CS] onReady fallback set  t=${ms()}  fires in ${TITLE_CARD_BURN + 6000}ms`);
         fallbackRef.current = setTimeout(() => {
-          log(`[CS] onReady fallback fired t=${ms()}`);
           if (!contentReadyRef.current) doReveal();
         }, TITLE_CARD_BURN + 6000);
       }
     }
 
     function handleYouTubeStateChange(state: string) {
-      log(`[CS] YouTube state change  t=${ms()}  state=${state}`);
       if (state === 'playing' && !videoPlayingRef.current) {
         videoPlayingRef.current = true;
-        log(`[CS] first playing event   t=${ms()}`);
         onPlaying?.();
         // Authoritative burn: start TITLE_CARD_BURN from actual playback, clearing the onReady fallback
         if (fallbackRef.current) clearTimeout(fallbackRef.current);
         fallbackRef.current = setTimeout(() => {
-          log(`[CS] burn timer fired      t=${ms()}`);
           if (!contentReadyRef.current) doReveal();
         }, TITLE_CARD_BURN);
       }
       if (state === 'ended') {
-        log(`[CS] → ended branch         t=${ms()}  calling onEnded() now`);
         if (timerRef.current) clearTimeout(timerRef.current);
         if (fallbackRef.current) clearTimeout(fallbackRef.current);
         onEnded?.();

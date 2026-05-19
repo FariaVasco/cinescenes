@@ -266,9 +266,7 @@ export default function GameScreen() {
 
   // Cross-fade: snap to trailer the moment both gates open.
   useEffect(() => {
-    log(`[CS] gates update  countdownDone=${countdownDone} trailerRevealed=${trailerRevealed}`);
     if (!countdownDone || !trailerRevealed) return;
-    log('[CS] BOTH GATES OPEN — starting cross-fade');
     Animated.parallel([
       Animated.timing(countdownFadeAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
       Animated.timing(trailerRevealAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
@@ -1194,7 +1192,6 @@ export default function GameScreen() {
       if (!uri) throw new Error('No recording URI');
 
       const transcript = await transcribeAudio(uri);
-      log(`[whisper] transcript: "${transcript}"`);
 
       if (!transcript) {
         voiceStateRef.current = 'error';
@@ -1860,6 +1857,7 @@ export default function GameScreen() {
 
       return (
         <>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'height' : undefined}>
         <SafeAreaView style={[styles.container, { backgroundColor: C.bg }]} edges={['top', 'bottom']}>
           <View style={styles.gameArea}>
             <Animated.View style={[styles.timelineAreaFull, { paddingBottom: timelinePaddingBottom }]}>
@@ -1917,6 +1915,7 @@ export default function GameScreen() {
             <Animated.View
               style={[styles.bonusOverlay, {
                 bottom: insets.bottom + 62,
+                maxHeight: screenHeight - insets.top - insets.bottom - 62 - 12,
                 opacity: bonusPanelAnim,
                 transform: [{ scale: bonusScale }],
               }]}
@@ -2010,6 +2009,7 @@ export default function GameScreen() {
             <MyTimelinePanel timeline={myTimeline} cards={myTimelineCards} bottomInset={insets.bottom} screenHeight={screenHeight} />
           )}
         </SafeAreaView>
+        </KeyboardAvoidingView>
         {persistentOverlays}
         </>
       );
@@ -2114,8 +2114,8 @@ export default function GameScreen() {
             movie={movie}
             unmuteAfterMs={remainingPreview + 500}
             onEnded={() => { setTrailerEnded(true); setUserPaused(false); }}
-            onRevealed={() => { log('[CS] onRevealed → setTrailerRevealed(true)'); setTrailerRevealed(true); }}
-            onPlaying={() => { log('[CS] onPlaying → setVideoStarted(true)'); setVideoStarted(true); }}
+            onRevealed={() => setTrailerRevealed(true)}
+            onPlaying={() => setVideoStarted(true)}
           />
         )}
 
@@ -2294,7 +2294,7 @@ export default function GameScreen() {
                 <TrailerCountdown
                   key={videoStarted ? 'started' : 'sync'}
                   durationMs={showVideo ? TITLE_CARD_BURN : remainingPreview}
-                  onExpire={() => { log('[CS] countdown expired → setCountdownDone(true)'); setCountdownDone(true); }}
+                  onExpire={() => setCountdownDone(true)}
                 />
               )}
             </View>
