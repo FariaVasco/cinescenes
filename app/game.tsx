@@ -2352,7 +2352,7 @@ export default function GameScreen() {
     const hasCoins = (myPlayerObj?.coins ?? 0) > 0;
 
     // Picking: only when it's my turn in the sequential phase and I haven't confirmed yet
-    const isPickingInterval = !amActive && isMyTurnToPick && !challengeConfirmed;
+    const isPickingInterval = !amActive && isMyTurnToPick && !challengeConfirmed && allDecided;
 
     // Blocked intervals: already-picked slots + active player's placement
     const pickedIntervals = seqChallengers
@@ -2644,6 +2644,7 @@ export default function GameScreen() {
               onNext={handleNextTurnWithFade}
               showNext={amActive}
               nextPending={nextTurnPending}
+              waitingForName={!amActive ? activePlayer?.display_name : undefined}
             />
           )}
         </View>
@@ -2986,6 +2987,7 @@ function RevealResult({
   onNext,
   showNext,
   nextPending,
+  waitingForName,
 }: {
   icon: string;
   resultName: string;
@@ -2994,6 +2996,7 @@ function RevealResult({
   onNext: () => void;
   showNext: boolean;
   nextPending: boolean;
+  waitingForName?: string;
 }) {
   const slideAnim = useRef(new Animated.Value(120)).current;
 
@@ -3036,7 +3039,9 @@ function RevealResult({
               : <Text style={styles.resultBannerBtnText}>Next round →</Text>}
           </TouchableOpacity>
         ) : (
-          <View style={styles.resultBannerCountdown} />
+          <Text style={styles.resultBannerWaiting}>
+            {waitingForName ? `Waiting for ${waitingForName}…` : ''}
+          </Text>
         )}
       </View>
     </Animated.View>
@@ -3486,6 +3491,7 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   resultBannerCountdownText: { color: 'rgba(255,255,255,0.55)', fontFamily: Fonts.bodyBold, fontSize: FS.sm },
+  resultBannerWaiting: { color: 'rgba(255,255,255,0.55)', fontFamily: Fonts.body, fontSize: FS.xs, textAlign: 'center' },
   challengerTransitionOverlay: {
     position: 'absolute',
     top: 0,

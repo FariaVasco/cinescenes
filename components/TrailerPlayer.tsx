@@ -31,6 +31,7 @@ function makeYouTubeInject(unmuteAtMs: number | null, endMuteAtVideoSec: number 
     : '300';
 
   return `
+if (!window.ReactNativeWebView) { window.ReactNativeWebView = { postMessage: function() {} }; }
 (function() {
   var muted = false;
   var unmuted = false;
@@ -337,6 +338,7 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
               allowsInlineMediaPlayback: true,
               mediaPlaybackRequiresUserAction: false,
               injectedJavaScript: youtubeInject,
+              allowsProtectedMedia: false,
             }}
           />
         {endOverlay && (

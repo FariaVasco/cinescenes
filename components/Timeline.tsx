@@ -384,7 +384,7 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
         contentContainerStyle={styles.content}
         showsHorizontalScrollIndicator={false}
         onLayout={e => { scrollViewWidthRef.current = e.nativeEvent.layout.width; scrollToCenter(); }}
-        onContentSizeChange={w => { contentWidthRef.current = w; scrollToCenter(); }}
+        onContentSizeChange={w => { contentWidthRef.current = w; if (selectedInterval === null) scrollToCenter(); }}
       >
         {items}
       </ScrollView>

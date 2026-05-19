@@ -28,7 +28,7 @@ const lcIconHow         = require('@/assets/lc-icon-how.png');
 const lcIconSettings    = require('@/assets/lc-icon-settings.png');
 const lcFriendsCinema   = require('@/assets/lc-friends-cinema.png');
 const lcPeopleHomeTV    = require('@/assets/lc-people-home-tv.png');
-const lcFriendsCardsW   = require('@/assets/lc-friends-cards-wide.png');
+const lcFriendsCardsW   = require('@/assets/lc-friends-cards-wide.jpg');
 const lcFeedback        = require('@/assets/lc-feedback.png');
 
 type MenuView = 'play' | 'rules' | 'settings';
@@ -137,9 +137,16 @@ function MenuItem({ icon, image, label, active, compact, onPress }: { icon?: str
 function PlayView() {
   const router = useRouter();
   const [gridH, setGridH] = useState(0);
+  const [imageKey, setImageKey] = useState(0);
   const gap = SP.sm;
   const square = gridH ? (gridH - gap) / 2 : 0;
   const wideW = square * 2 + gap;
+
+  // Remount Image components on focus so each gets a fresh native layer,
+  // clearing any DRM-privacy taint left by the YouTube WKWebView in the game screen.
+  useFocusEffect(useCallback(() => {
+    setImageKey(k => k + 1);
+  }, []));
 
   return (
     <View style={styles.viewWrap}>
@@ -149,12 +156,14 @@ function PlayView() {
       >
         <View style={styles.playRow}>
           <ModeCard
+            key={`local-${imageKey}`}
             label="LOCAL"
             image={lcFriendsCinema}
             onPress={() => router.push('/local')}
             style={{ width: square, height: square }}
           />
           <ModeCard
+            key={`online-${imageKey}`}
             label="ONLINE"
             image={lcPeopleHomeTV}
             onPress={() => router.push('/online')}
@@ -163,6 +172,7 @@ function PlayView() {
         </View>
         <View style={styles.playRowCenter}>
           <ModeCard
+            key={`deck-${imageKey}`}
             label="USE DECK"
             image={lcFriendsCardsW}
             onPress={() => router.push('/scanner')}
