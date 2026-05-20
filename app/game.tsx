@@ -217,7 +217,8 @@ export default function GameScreen() {
   const voiceStateRef = useRef<'idle' | 'recording' | 'processing' | 'result' | 'error'>('idle');
   const recorder = useAudioRecorder({ ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true });
   const revealSound = useAudioPlayer(require('../assets/sounds/reveal.mp3'));
-  const winSound    = useAudioPlayer(require('../assets/sounds/win.mp3'));
+  const winSound       = useAudioPlayer(require('../assets/sounds/win.mp3'));
+  const challengeSound = useAudioPlayer(require('../assets/sounds/challenge.mp3'));
   const meteringIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const waveformBars = useRef(Array.from({ length: 30 }, () => new Animated.Value(0.07))).current;
   const waveformHistory = useRef<number[]>(Array(30).fill(0.07));
@@ -1006,6 +1007,7 @@ export default function GameScreen() {
     if (!currentTurn || myChallenge) return;
     if (challengeDecisionMade.current) return;
     haptics.impact();
+    try { challengeSound.seekTo(0); challengeSound.play(); } catch {}
     challengeDecisionMade.current = true;
     setHasPassed(false);
     // Optimistic: close the decision panel immediately
