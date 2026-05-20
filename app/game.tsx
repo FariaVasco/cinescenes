@@ -217,6 +217,7 @@ export default function GameScreen() {
   const voiceStateRef = useRef<'idle' | 'recording' | 'processing' | 'result' | 'error'>('idle');
   const recorder = useAudioRecorder({ ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true });
   const revealSound = useAudioPlayer(require('../assets/sounds/reveal.mp3'));
+  const winSound    = useAudioPlayer(require('../assets/sounds/win.mp3'));
   const meteringIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const waveformBars = useRef(Array.from({ length: 30 }, () => new Animated.Value(0.07))).current;
   const waveformHistory = useRef<number[]>(Array(30).fill(0.07));
@@ -677,7 +678,7 @@ export default function GameScreen() {
         setLocalPlayers(fp);
         setPlayers(fp);
         setGameOver(winner);
-        winner.id === myPlayerId ? haptics.success() : haptics.warning();
+        if (winner.id === myPlayerId) { haptics.success(); try { winSound.seekTo(0); winSound.play(); } catch {} } else { haptics.warning(); }
         stopPolling();
       }
       return;
