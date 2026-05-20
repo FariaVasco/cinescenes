@@ -304,7 +304,14 @@ export default function GameScreen() {
           setLocalChallenges(cData);
           setChallenges(cData);
           const hasChallengers = cData.some(c => c.interval_index !== -2);
-          if (hasChallengers) { try { challengeSound.seekTo(0); challengeSound.play(); } catch {} }
+          if (hasChallengers) {
+            try {
+              challengeSound.seekTo(0);
+              challengeSound.play();
+              const dur = (challengeSound.duration ?? 3) * 1000;
+              setTimeout(() => { try { challengeSound.seekTo(0); challengeSound.play(); } catch {} }, dur);
+            } catch {}
+          }
         }
       })();
     }
