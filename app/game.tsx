@@ -20,7 +20,7 @@ import {
   PanResponder,
   Settings,
 } from 'react-native';
-import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
+import { useAudioRecorder, useAudioPlayer, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
 import { transcribeAudio } from '@/lib/whisper';
 import { C, R, FS, Fonts } from '@/constants/theme';
 import { scanTranscript, phoneticMatch, fuzzyMatch, computeCorrectInterval, computeValidIntervals } from '@/lib/game-logic';
@@ -216,6 +216,7 @@ export default function GameScreen() {
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const voiceStateRef = useRef<'idle' | 'recording' | 'processing' | 'result' | 'error'>('idle');
   const recorder = useAudioRecorder({ ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true });
+  const revealSound = useAudioPlayer(require('../assets/sounds/reveal.mp3'));
   const meteringIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const waveformBars = useRef(Array.from({ length: 30 }, () => new Animated.Value(0.07))).current;
   const waveformHistory = useRef<number[]>(Array(30).fill(0.07));
@@ -300,7 +301,7 @@ export default function GameScreen() {
         if (cData) { setLocalChallenges(cData); setChallenges(cData); }
       })();
     }
-    const t1 = setTimeout(() => setRevealPhase('flip'), 3400);
+    const t1 = setTimeout(() => { setRevealPhase('flip'); try { revealSound.seekTo(0); revealSound.play(); } catch {} }, 3400);
     const t2 = setTimeout(() => setRevealPhase('result'), 4800);
     // Switch to dark bg when overlay starts fading out — invisible under the overlay,
     // so when it completes the dark timeline is already visible underneath.
