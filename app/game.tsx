@@ -81,6 +81,8 @@ const PREVIEW_DURATION = 6000; // ms — timeline study countdown before trailer
 // Returns the platform to use when filtering the movie pool for the next turn.
 // Local: only the host's device plays the trailer → use host's platform (players[0]).
 
+const EXTRA_SUSPENSE_MS = 1500;
+
 export default function GameScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -311,12 +313,11 @@ export default function GameScreen() {
         }
       })();
     }
-    const extraSuspense = 1500;
-    const t1 = setTimeout(() => setRevealPhase('flip'), 3400 + extraSuspense);
-    const t2 = setTimeout(() => { setRevealPhase('result'); try { revealSound.seekTo(0); revealSound.play(); } catch {} }, 4800 + extraSuspense);
+    const t1 = setTimeout(() => setRevealPhase('flip'), 3400 + EXTRA_SUSPENSE_MS);
+    const t2 = setTimeout(() => { setRevealPhase('result'); try { revealSound.seekTo(0); revealSound.play(); } catch {} }, 4800 + EXTRA_SUSPENSE_MS);
     // Switch to dark bg when overlay starts fading out — invisible under the overlay,
     // so when it completes the dark timeline is already visible underneath.
-    const tBg = setTimeout(() => setRevealBgDark(true), 2900 + extraSuspense);
+    const tBg = setTimeout(() => setRevealBgDark(true), 2900 + EXTRA_SUSPENSE_MS);
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(tBg); };
   }, [currentTurn?.status]);
 
@@ -2669,6 +2670,7 @@ export default function GameScreen() {
             activePlacedInterval={currentTurn.placed_interval}
             activePlayerName={activePlayer?.display_name ?? ''}
             placedMovies={revealPlacedMovies}
+            extraDelay={EXTRA_SUSPENSE_MS}
           />
         )}
         <ConfettiBurst trigger={winnerId === myPlayerId && revealPhase === 'result'} />
@@ -2913,12 +2915,14 @@ function SuspenseOverlay({
   activePlacedInterval,
   activePlayerName,
   placedMovies,
+  extraDelay = 0,
 }: {
   challengers: { id: string; challenger_id: string; interval_index: number }[];
   getPlayer: (id: string | null) => { display_name: string } | null;
   activePlacedInterval: number | null;
   activePlayerName: string;
   placedMovies: { year: number }[];
+  extraDelay?: number;
 }) {
   const bgOpacity = useRef(new Animated.Value(0)).current;
   const countAnim = useRef(new Animated.Value(0)).current;
@@ -2945,13 +2949,13 @@ function SuspenseOverlay({
         Animated.timing(nameAnims[i], { toValue: 1, duration: 300, useNativeDriver: true }),
       ]).start();
     });
-    // Fade out before phase switches at 3400ms
+    // Fade out 350ms before the flip phase (3400ms + extraDelay)
     const t = setTimeout(() => {
       Animated.parallel([
         Animated.timing(bgOpacity, { toValue: 0, duration: 350, useNativeDriver: true }),
         Animated.timing(countAnim, { toValue: 0, duration: 350, useNativeDriver: true }),
       ]).start();
-    }, 2900);
+    }, 2900 + extraDelay);
     return () => clearTimeout(t);
   }, []);
 
