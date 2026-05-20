@@ -6,6 +6,7 @@ import * as Sentry from '@sentry/react-native';
 import { supabase } from '@/lib/supabase';
 
 const FUNCTION_URL = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/llm-parse`;
+const ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
 
 // Stop words that carry no identifying information.
 const STOP_WORDS = new Set([
@@ -39,7 +40,7 @@ export async function llmExtractGuess(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        Authorization: `Bearer ${session?.access_token ?? ANON_KEY}`,
       },
       body: JSON.stringify({ transcript }),
     });
