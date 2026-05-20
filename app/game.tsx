@@ -312,8 +312,8 @@ export default function GameScreen() {
       })();
     }
     const extraSuspense = 1500;
-    const t1 = setTimeout(() => { setRevealPhase('flip'); try { revealSound.seekTo(0); revealSound.play(); } catch {} }, 3400 + extraSuspense);
-    const t2 = setTimeout(() => setRevealPhase('result'), 4800 + extraSuspense);
+    const t1 = setTimeout(() => setRevealPhase('flip'), 3400 + extraSuspense);
+    const t2 = setTimeout(() => { setRevealPhase('result'); try { revealSound.seekTo(0); revealSound.play(); } catch {} }, 4800 + extraSuspense);
     // Switch to dark bg when overlay starts fading out — invisible under the overlay,
     // so when it completes the dark timeline is already visible underneath.
     const tBg = setTimeout(() => setRevealBgDark(true), 2900 + extraSuspense);
@@ -2662,7 +2662,7 @@ export default function GameScreen() {
           <MyTimelinePanel timeline={revealMyTimeline} cards={myTimelineCards} bottomInset={insets.bottom} screenHeight={screenHeight} />
         )}
         {/* Suspense overlay — full-screen, covers chips + panel */}
-        {revealPhase === 'suspense' && (
+        {revealPhase !== 'result' && (
           <SuspenseOverlay
             challengers={challengersForOverlay}
             getPlayer={getPlayer}
