@@ -300,7 +300,12 @@ export default function GameScreen() {
     if (turn) {
       (async () => {
         const { data: cData } = await db.from('challenges').select('*').eq('turn_id', turn.id);
-        if (cData) { setLocalChallenges(cData); setChallenges(cData); }
+        if (cData) {
+          setLocalChallenges(cData);
+          setChallenges(cData);
+          const hasChallengers = cData.some(c => c.interval_index !== -2);
+          if (hasChallengers) { try { challengeSound.seekTo(0); challengeSound.play(); } catch {} }
+        }
       })();
     }
     const t1 = setTimeout(() => { setRevealPhase('flip'); try { revealSound.seekTo(0); revealSound.play(); } catch {} }, 3400);
@@ -1007,7 +1012,6 @@ export default function GameScreen() {
     if (!currentTurn || myChallenge) return;
     if (challengeDecisionMade.current) return;
     haptics.impact();
-    try { challengeSound.seekTo(0); challengeSound.play(); } catch {}
     challengeDecisionMade.current = true;
     setHasPassed(false);
     // Optimistic: close the decision panel immediately
