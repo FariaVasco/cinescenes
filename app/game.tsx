@@ -296,22 +296,30 @@ export default function GameScreen() {
     timelineFade.setValue(1);
     challengerTransitionOpacity.setValue(0);
     const turn = currentTurnRef.current;
-    // Fetch fresh challenges immediately for the suspense overlay
+    // Play challenge sting immediately using already-loaded challenges state
+    const hasChallengers = challenges.some(c => c.interval_index !== -2);
+    let challengeSoundTimer: ReturnType<typeof setInterval> | null = null;
+    if (hasChallengers) {
+      try {
+        challengeSound.seekTo(0);
+        challengeSound.play();
+        // Poll for completion then replay once
+        challengeSoundTimer = setInterval(() => {
+          if (!challengeSound.playing) {
+            if (challengeSoundTimer) clearInterval(challengeSoundTimer);
+            challengeSoundTimer = null;
+            try { challengeSound.seekTo(0); challengeSound.play(); } catch {}
+          }
+        }, 100);
+      } catch {}
+    }
+    // Fetch fresh challenges for the suspense overlay UI
     if (turn) {
       (async () => {
         const { data: cData } = await db.from('challenges').select('*').eq('turn_id', turn.id);
         if (cData) {
           setLocalChallenges(cData);
           setChallenges(cData);
-          const hasChallengers = cData.some(c => c.interval_index !== -2);
-          if (hasChallengers) {
-            try {
-              challengeSound.seekTo(0);
-              challengeSound.play();
-              const dur = (challengeSound.duration ?? 3) * 1000;
-              setTimeout(() => { try { challengeSound.seekTo(0); challengeSound.play(); } catch {} }, dur);
-            } catch {}
-          }
         }
       })();
     }
@@ -320,7 +328,10 @@ export default function GameScreen() {
     // Switch to dark bg when overlay starts fading out — invisible under the overlay,
     // so when it completes the dark timeline is already visible underneath.
     const tBg = setTimeout(() => setRevealBgDark(true), 2900);
-    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(tBg); };
+    return () => {
+      clearTimeout(t1); clearTimeout(t2); clearTimeout(tBg);
+      if (challengeSoundTimer) clearInterval(challengeSoundTimer);
+    };
   }, [currentTurn?.status]);
 
   // Per-device reveal haptic: fire success/error only if THIS player participated.
