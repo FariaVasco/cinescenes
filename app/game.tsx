@@ -1229,15 +1229,9 @@ export default function GameScreen() {
         }
       }
 
-      if (!titleValue && !directorValue) {
-        voiceStateRef.current = 'error';
-        setVoiceError("Couldn't recognise the movie or director — try again or type below.");
-        setVoiceState('error');
-      } else {
-        setVoiceResult({ movie: titleValue ?? '', director: directorValue ?? '' });
-        voiceStateRef.current = 'result';
-        setVoiceState('result');
-      }
+      setVoiceResult({ movie: titleValue ?? transcript, director: directorValue ?? '' });
+      voiceStateRef.current = 'result';
+      setVoiceState('result');
     } catch (e: any) {
       console.error('[voice] stopVoice error:', e?.message ?? e);
       voiceStateRef.current = 'error';
