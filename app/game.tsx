@@ -1238,9 +1238,10 @@ export default function GameScreen() {
         voiceStateRef.current = 'result';
         setVoiceState('result');
       }
-    } catch {
+    } catch (e: any) {
+      console.error('[voice] stopVoice error:', e?.message ?? e);
       voiceStateRef.current = 'error';
-      setVoiceError('Transcription failed. Please type instead.');
+      setVoiceError(e?.message ?? 'Transcription failed. Please type instead.');
       setVoiceState('error');
     }
   }
@@ -1996,9 +1997,12 @@ export default function GameScreen() {
                     </TouchableOpacity>
                   </View>
                   {voiceState === 'error' && (
-                    <TouchableOpacity onPress={() => { voiceStateRef.current = 'idle'; setVoiceState('idle'); setVoiceError(''); }} activeOpacity={0.7}>
-                      <Text style={styles.bonusVoiceRetryText}>⚠ Retry</Text>
-                    </TouchableOpacity>
+                    <View style={{ gap: 4 }}>
+                      {!!voiceError && <Text style={styles.voiceErrorText}>{voiceError}</Text>}
+                      <TouchableOpacity onPress={() => { voiceStateRef.current = 'idle'; setVoiceState('idle'); setVoiceError(''); }} activeOpacity={0.7}>
+                        <Text style={styles.bonusVoiceRetryText}>⚠ Retry</Text>
+                      </TouchableOpacity>
+                    </View>
                   )}
                 </View>
               )}
