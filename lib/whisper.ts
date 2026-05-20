@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 
 const FUNCTION_URL = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/transcribe`;
+const ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
 
 export async function transcribeAudio(uri: string): Promise<string> {
   const { data: { session } } = await supabase.auth.getSession();
@@ -10,7 +11,7 @@ export async function transcribeAudio(uri: string): Promise<string> {
 
   const response = await fetch(FUNCTION_URL, {
     method: 'POST',
-    headers: session ? { Authorization: `Bearer ${session.access_token}` } : {},
+    headers: { Authorization: `Bearer ${session?.access_token ?? ANON_KEY}` },
     body: formData,
   });
 
