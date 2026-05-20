@@ -298,22 +298,8 @@ export default function GameScreen() {
     const turn = currentTurnRef.current;
     // Play challenge sting immediately using already-loaded challenges state
     const hasChallengers = challenges.some(c => c.interval_index !== -2);
-    let challengeSoundTimer: ReturnType<typeof setInterval> | null = null;
     if (hasChallengers) {
-      try {
-        challengeSound.seekTo(0);
-        challengeSound.play();
-        // Wait for playing to become true, then watch for it to end
-        let started = false;
-        challengeSoundTimer = setInterval(() => {
-          if (challengeSound.playing) { started = true; return; }
-          if (started) {
-            if (challengeSoundTimer) clearInterval(challengeSoundTimer);
-            challengeSoundTimer = null;
-            try { challengeSound.seekTo(0); challengeSound.play(); } catch {}
-          }
-        }, 50);
-      } catch {}
+      try { challengeSound.seekTo(0); challengeSound.play(); } catch {}
     }
     // Fetch fresh challenges for the suspense overlay UI
     if (turn) {
@@ -330,10 +316,7 @@ export default function GameScreen() {
     // Switch to dark bg when overlay starts fading out — invisible under the overlay,
     // so when it completes the dark timeline is already visible underneath.
     const tBg = setTimeout(() => setRevealBgDark(true), 2900);
-    return () => {
-      clearTimeout(t1); clearTimeout(t2); clearTimeout(tBg);
-      if (challengeSoundTimer) clearInterval(challengeSoundTimer);
-    };
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(tBg); };
   }, [currentTurn?.status]);
 
   // Per-device reveal haptic: fire success/error only if THIS player participated.
