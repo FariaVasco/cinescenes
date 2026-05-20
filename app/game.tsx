@@ -303,14 +303,16 @@ export default function GameScreen() {
       try {
         challengeSound.seekTo(0);
         challengeSound.play();
-        // Poll for completion then replay once
+        // Wait for playing to become true, then watch for it to end
+        let started = false;
         challengeSoundTimer = setInterval(() => {
-          if (!challengeSound.playing) {
+          if (challengeSound.playing) { started = true; return; }
+          if (started) {
             if (challengeSoundTimer) clearInterval(challengeSoundTimer);
             challengeSoundTimer = null;
             try { challengeSound.seekTo(0); challengeSound.play(); } catch {}
           }
-        }, 100);
+        }, 50);
       } catch {}
     }
     // Fetch fresh challenges for the suspense overlay UI
