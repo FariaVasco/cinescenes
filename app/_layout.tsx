@@ -18,22 +18,9 @@ import { C } from '@/constants/theme';
 import * as Sentry from '@sentry/react-native';
 
 Sentry.init({
-  dsn: 'https://2575688a7bbb73d56fe13de7a78445b2@o4511372477726720.ingest.de.sentry.io/4511372480544848',
-
-  // Adds more context data to events (IP address, cookies, user, etc.)
-  // For more information, visit: https://docs.sentry.io/platforms/react-native/data-management/data-collected/
+  dsn: 'https://dce21d07d2fab9db531fe50fbc0c3974@o4511372477726720.ingest.de.sentry.io/4511372516130896',
   sendDefaultPii: true,
-
-  // Enable Logs
   enableLogs: true,
-
-  // Configure Session Replay
-  replaysSessionSampleRate: 0.1,
-  replaysOnErrorSampleRate: 1,
-  integrations: [Sentry.mobileReplayIntegration(), Sentry.feedbackIntegration()],
-
-  // uncomment the line below to enable Spotlight (https://spotlightjs.com)
-  // spotlight: __DEV__,
 });
 
 SplashScreen.preventAutoHideAsync();

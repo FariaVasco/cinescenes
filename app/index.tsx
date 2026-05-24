@@ -109,7 +109,7 @@ function SideMenu({ view, setView, onFeedback }: { view: MenuView; setView: (v: 
 
       <View style={styles.feedbackWrap}>
         <MenuItem image={lcFeedback} label="FEEDBACK " active={false} compact onPress={onFeedback} />
-      </View>
+</View>
     </View>
   );
 }

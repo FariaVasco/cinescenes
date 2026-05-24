@@ -126,6 +126,7 @@ export interface Database {
           created_at: string;
           last_seen: string | null;
           left_at: string | null;
+          platform: 'ios' | 'android' | null;
         };
         Insert: {
           id?: string;
@@ -137,6 +138,7 @@ export interface Database {
           created_at?: string;
           last_seen?: string | null;
           left_at?: string | null;
+          platform?: 'ios' | 'android' | null;
         };
         Update: Partial<Database['public']['Tables']['players']['Insert']>;
       };

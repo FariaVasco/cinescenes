@@ -1,6 +1,7 @@
 {
   "cli": {
-    "version": ">= 18.0.0"
+    "version": ">= 18.0.0",
+    "appVersionSource": "remote"
   },
   "build": {
     "development": {
@@ -12,6 +13,10 @@
     },
     "production": {
       "distribution": "store",
+      "env": {
+        "SENTRY_ORG": "cinescenes",
+        "SENTRY_PROJECT": "react-native"
+      },
       "ios": {
         "autoIncrement": true
       },

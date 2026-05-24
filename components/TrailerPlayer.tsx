@@ -23,7 +23,7 @@ interface TrailerPlayerProps {
   onPlaying?: () => void;
 }
 
-export const TITLE_CARD_BURN = 4000; // ms after video starts playing before the YouTube title overlay is gone
+export const TITLE_CARD_BURN = 4000; // ms after video starts playing before revealing the content
 
 function makeYouTubeInject(unmuteAtMs: number | null, endMuteAtVideoSec: number | null) {
   const unmuteDelayExpr = unmuteAtMs != null
@@ -133,18 +133,15 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
     const useDynamicWindow = movie.safe_start === null;
     const safeStart  = movie.safe_start ?? 0;
     const rawSafeEnd = movie.safe_end ?? (useDynamicWindow ? 99999 : 60);
-    // Cut a couple of seconds off the safe window so we stop before YouTube's end-of-video
-    // title overlay flashes. Falls back to a 10s minimum so we don't shave a too-short window to nothing.
+    // Cut a couple of seconds off the safe window to stop cleanly before the video ends.
+    // Falls back to a 10s minimum so we don't shave a too-short window to nothing.
     const END_TRIM_SEC = 2;
     const safeEnd      = useDynamicWindow ? rawSafeEnd : Math.max(rawSafeEnd - END_TRIM_SEC, safeStart + 10);
     const duration     = useDynamicWindow ? 40_000 : Math.max(safeEnd - safeStart, 10) * 1000;
 
     // Injection captured at mount so Date.now() reflects the actual mount time.
     // End-mute uses video-time (seconds), aligned ~0.5s before our active end-trigger
-    // (videoTime >= safeEnd - 0.3) so audio fades out just before the screen switches.
-    // Injection captured at mount so Date.now() reflects the actual mount time.
-    // End-mute uses video-time (seconds), aligned ~0.5s before our active end-trigger
-    // (videoTime >= safeEnd - 0.3) so audio fades out just before the screen switches.
+    // so audio fades out just before the screen switches.
     const [youtubeInject] = useState(() => {
       const now = Date.now();
       return makeYouTubeInject(
@@ -188,7 +185,7 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
       if (overlayTimerRef.current) clearTimeout(overlayTimerRef.current);
       timerStartRef.current = Date.now();
       remainingRef.current  = ms_;
-      // Switch screens 1s before the safe end so the YouTube title never flashes.
+      // Switch screens slightly before the safe end for a clean transition.
       // Black overlay fires at the same instant as a safety net in case onEnded is debounced upstream.
       const switchAt = Math.max(ms_ - 1000, 0);
       overlayTimerRef.current = setTimeout(() => {

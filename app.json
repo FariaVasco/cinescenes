@@ -6,7 +6,7 @@
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "scheme": "cinescenes",
     "platforms": [
       "ios",
@@ -70,7 +70,8 @@
         {
           "url": "https://sentry.io/",
           "project": "react-native",
-          "organization": "cinescenes"
+          "organization": "cinescenes",
+          "dsn": "https://dce21d07d2fab9db531fe50fbc0c3974@o4511372477726720.ingest.de.sentry.io/4511372516130896"
         }
       ]
     ],

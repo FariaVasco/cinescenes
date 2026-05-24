@@ -133,6 +133,22 @@ export default function LocalLobbyScreen() {
       if (players) setLocalPlayers(players);
       if (!g) return;
 
+      // Recalculate trailer_platform from current player platforms
+      if (isHostRef.current && players) {
+        const allDevices = g.visibility === 'public';
+        const newPlatform: 'ios' | 'android' = allDevices
+          ? (players.some(p => p.platform === 'android') ? 'android' : Platform.OS as 'ios' | 'android')
+          : Platform.OS as 'ios' | 'android';
+        if (newPlatform !== g.trailer_platform) {
+          await db.from('games').update({ trailer_platform: newPlatform }).eq('id', gId);
+          setLocalGame({ ...g, trailer_platform: newPlatform });
+        } else {
+          setLocalGame(g);
+        }
+      } else {
+        setLocalGame(g);
+      }
+
       if (g.status === 'cancelled') {
         navigatedRef.current = true;
         stopPolling();
@@ -204,7 +220,7 @@ export default function LocalLobbyScreen() {
 
       const { data: newPlayer, error: playerErr } = await db
         .from('players')
-        .insert({ game_id: newGame.id, display_name: displayName.trim(), last_seen: null })
+        .insert({ game_id: newGame.id, display_name: displayName.trim(), last_seen: null, platform: Platform.OS as 'ios' | 'android' })
         .select()
         .single() as { data: Player | null; error: any };
       if (playerErr || !newPlayer) throw playerErr ?? new Error('No player');
@@ -255,18 +271,10 @@ export default function LocalLobbyScreen() {
 
       const { data: newPlayer, error: playerErr } = await db
         .from('players')
-        .insert({ game_id: foundGame.id, display_name: name, last_seen: null })
+        .insert({ game_id: foundGame.id, display_name: name, last_seen: null, platform: Platform.OS as 'ios' | 'android' })
         .select()
         .single() as { data: Player | null; error: any };
       if (playerErr || !newPlayer) throw playerErr ?? new Error('Could not join game');
-
-      // If this player is on Android, escalate the game's trailer_platform so
-      // Android-incompatible trailers (ads) are filtered out for everyone.
-      // Applies to online games and local games in "All devices" mode (visibility: public).
-      const allDevicesLocal = foundGame.multiplayer_type === 'local' && foundGame.visibility === 'public';
-      if ((foundGame.multiplayer_type === 'online' || allDevicesLocal) && Platform.OS === 'android') {
-        await db.from('games').update({ trailer_platform: 'android' }).eq('id', foundGame.id);
-      }
 
       setLocalGame(foundGame);
       setLocalPlayerId(newPlayer.id);
@@ -301,9 +309,13 @@ export default function LocalLobbyScreen() {
 
   async function handleTrailerModeChange(allDevices: boolean) {
     setTrailerAllDevices(allDevices);
-    if (localGame) {
-      await db.from('games').update({ visibility: allDevices ? 'public' : 'invite_only' }).eq('id', localGame.id);
-    }
+    if (!localGame) return;
+    const newPlatform: 'ios' | 'android' = allDevices
+      ? (localPlayers.some(p => p.platform === 'android') ? 'android' : Platform.OS as 'ios' | 'android')
+      : Platform.OS as 'ios' | 'android';
+    const newVisibility = allDevices ? 'public' : 'invite_only';
+    await db.from('games').update({ visibility: newVisibility, trailer_platform: newPlatform }).eq('id', localGame.id);
+    setLocalGame({ ...localGame, visibility: newVisibility, trailer_platform: newPlatform });
   }
 
   async function handleLeaveWaitingRoom() {
@@ -357,18 +369,22 @@ export default function LocalLobbyScreen() {
       // One starting movie per player, by index
       const startingMovies: Movie[] = [];
 
+      const gamePlatform = (localGame.trailer_platform ?? Platform.OS) as 'ios' | 'android';
+      const platformOk = (m: Movie) =>
+        gamePlatform === 'android' ? m.available_android !== false : m.available_ios !== false;
+
       if (localGame.game_mode === 'insane') {
         const usedYears = new Set<number>();
         for (const _ of localPlayers) {
           let m: Movie;
           let attempts = 0;
-          do { m = await fetchRandomInsaneMovie(db, Platform.OS as 'ios' | 'android'); attempts++; }
+          do { m = await fetchRandomInsaneMovie(db, gamePlatform); attempts++; }
           while (usedYears.has(m.year) && attempts < 30);
           usedYears.add(m.year);
           startingMovieIdsList.push(m.id);
           startingMovies.push(m);
         }
-        firstTurnMovie = await fetchRandomInsaneMovie(db, Platform.OS as 'ios' | 'android');
+        firstTurnMovie = await fetchRandomInsaneMovie(db, gamePlatform);
         setActiveMovies([...activeMovies, ...startingMovies, firstTurnMovie]);
       } else {
         let pool: typeof activeMovies;
@@ -376,10 +392,10 @@ export default function LocalLobbyScreen() {
           const { data: col } = await db
             .from('collections').select('tag').eq('id', localGame.collection_id).single() as { data: { tag: string } | null };
           pool = col
-            ? activeMovies.filter((m) => (m.tags ?? []).includes(col.tag))
-            : activeMovies.filter((m) => m.classic_pool === true);
+            ? activeMovies.filter((m) => (m.tags ?? []).includes(col.tag) && platformOk(m))
+            : activeMovies.filter((m) => m.classic_pool === true && platformOk(m));
         } else {
-          pool = activeMovies.filter((m) => m.classic_pool === true);
+          pool = activeMovies.filter((m) => m.classic_pool === true && platformOk(m));
         }
         if (pool.length < localPlayers.length + 1) throw new Error('Not enough movies available');
 
