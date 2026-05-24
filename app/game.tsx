@@ -313,8 +313,8 @@ export default function GameScreen() {
         }
       })();
     }
-    const t1 = setTimeout(() => setRevealPhase('flip'), 3400 + EXTRA_SUSPENSE_MS);
-    const t2 = setTimeout(() => { setRevealPhase('result'); try { revealSound.seekTo(0); revealSound.play(); } catch {} }, 4800 + EXTRA_SUSPENSE_MS);
+    const t1 = setTimeout(() => { setRevealPhase('flip'); try { revealSound.seekTo(0); revealSound.play(); } catch {} }, 3400 + EXTRA_SUSPENSE_MS);
+    const t2 = setTimeout(() => setRevealPhase('result'), 4800 + EXTRA_SUSPENSE_MS);
     // Switch to dark bg when overlay starts fading out — invisible under the overlay,
     // so when it completes the dark timeline is already visible underneath.
     const tBg = setTimeout(() => setRevealBgDark(true), 2900 + EXTRA_SUSPENSE_MS);

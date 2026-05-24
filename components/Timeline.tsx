@@ -376,7 +376,7 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
   }
 
   return (
-    <View ref={wrapperRef}>
+    <View ref={wrapperRef} collapsable={false}>
       <ScrollView
         ref={scrollRef}
         horizontal
