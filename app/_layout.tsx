@@ -14,7 +14,8 @@ import { cinemaTheme } from '@/lib/theme';
 import { initRevenueCat } from '@/lib/revenuecat';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppStore } from '@/store/useAppStore';
-import { C } from '@/constants/theme';
+import { useForceUpdate } from '@/hooks/useForceUpdate';
+import { C, Fonts, FS } from '@/constants/theme';
 import * as Sentry from '@sentry/react-native';
 
 Sentry.init({
@@ -49,6 +50,7 @@ const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? '';
 
 export default Sentry.wrap(function RootLayout() {
   const { restoreSession } = useAuth();
+  const { updateRequired, openStore } = useForceUpdate();
 
   const [fontsLoaded] = useFonts({
     Bangers_400Regular,
@@ -71,8 +73,20 @@ export default Sentry.wrap(function RootLayout() {
     useAppStore.getState().hydrateSettings();
   }, []);
 
-
   if (!fontsLoaded) return null;
+
+  if (updateRequired) {
+    return (
+      <View style={fu.container}>
+        <Text style={fu.emoji}>🎬</Text>
+        <Text style={fu.title}>Update Required</Text>
+        <Text style={fu.body}>A new version of Cinescenes is available. Please update to continue playing.</Text>
+        <TouchableOpacity style={fu.button} onPress={openStore} activeOpacity={0.8}>
+          <Text style={fu.buttonText}>UPDATE NOW</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <SafeAreaProvider>
@@ -88,4 +102,13 @@ export default Sentry.wrap(function RootLayout() {
       </PaperProvider>
     </SafeAreaProvider>
   );
+});
+
+const fu = StyleSheet.create({
+  container: { flex: 1, backgroundColor: C.bg, alignItems: 'center', justifyContent: 'center', padding: 40 },
+  emoji:     { fontSize: 56, marginBottom: 24 },
+  title:     { color: C.textPrimary, fontSize: FS.xl, fontFamily: Fonts.display, marginBottom: 12, textAlign: 'center' },
+  body:      { color: C.textSub, fontSize: FS.sm, textAlign: 'center', lineHeight: 22, marginBottom: 40 },
+  button:    { backgroundColor: C.ochre, paddingHorizontal: 40, paddingVertical: 14, borderRadius: 12 },
+  buttonText:{ color: C.bg, fontFamily: Fonts.display, fontSize: FS.md, letterSpacing: 1 },
 });

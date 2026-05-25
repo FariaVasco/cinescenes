@@ -220,6 +220,19 @@ export interface Database {
         };
         Update: Partial<Database['public']['Tables']['feedback']['Insert']>;
       };
+      app_config: {
+        Row: {
+          id: number;
+          min_version_ios: string;
+          min_version_android: string;
+        };
+        Insert: {
+          id?: number;
+          min_version_ios?: string;
+          min_version_android?: string;
+        };
+        Update: Partial<Database['public']['Tables']['app_config']['Insert']>;
+      };
     };
   };
 }
