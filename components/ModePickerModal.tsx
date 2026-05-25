@@ -58,11 +58,9 @@ export function ModePickerModal({ visible, onClose, onSelected }: Props) {
     onClose();
   }
 
-  // TEMPORARY: Insane Mode is open to everyone (no auth, no paywall) while we test it.
-  // To restore the premium gate, uncomment the original auth + isPremium checks below.
   function pickInsane() {
-    // if (!authUser) { onClose(); router.push('/sign-in?returnTo=local'); return; }
-    // if (!isPremium) { setPaywallPendingMode('insane'); setPaywallVisible(true); return; }
+    if (!authUser) { onClose(); router.push('/sign-in?returnTo=local'); return; }
+    if (!isPremium) { setPaywallPendingMode('insane'); setPaywallVisible(true); return; }
     onSelected({ mode: 'insane' });
     onClose();
   }
