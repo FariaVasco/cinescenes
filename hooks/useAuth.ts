@@ -2,19 +2,11 @@ import { supabase } from '@/lib/supabase';
 import { identifyUser, checkPremium } from '@/lib/revenuecat';
 import { useAppStore } from '@/store/useAppStore';
 
-const db = supabase as unknown as { from: (t: string) => any };
-
 async function syncProfile(userId: string) {
   const { setIsPremium } = useAppStore.getState();
-  const { data: profile } = await db
-    .from('profiles')
-    .select('is_premium')
-    .eq('id', userId)
-    .single();
-  const dbPremium = profile?.is_premium ?? false;
-  const rcPremium = await checkPremium();
-  setIsPremium(dbPremium || rcPremium);
   await identifyUser(userId);
+  const rcPremium = await checkPremium();
+  setIsPremium(rcPremium);
 }
 
 export function useAuth() {
