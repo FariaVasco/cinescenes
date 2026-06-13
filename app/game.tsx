@@ -385,7 +385,7 @@ export default function GameScreen() {
     challengerSwitchTimerRef.current = setTimeout(() => {
       challengerSwitchTimerRef.current = null;
       // Fade out active player's timeline
-      Animated.timing(timelineFade, { toValue: 0, duration: 450, useNativeDriver: true }).start();
+      Animated.timing(timelineFade, { toValue: 0, duration: 300, useNativeDriver: true }).start();
       // 150ms into fade-out: challenger name fades in
       challengerSwitchInnerTimersRef.current.push(setTimeout(() => {
         Animated.timing(challengerTransitionOpacity, { toValue: 1, duration: 350, useNativeDriver: true }).start();
@@ -394,7 +394,7 @@ export default function GameScreen() {
       challengerSwitchInnerTimersRef.current.push(setTimeout(() => {
         Animated.timing(challengerTransitionOpacity, { toValue: 0, duration: 350, useNativeDriver: true }).start();
         setShowChallengerTimeline(true);
-        Animated.timing(timelineFade, { toValue: 1, duration: 550, useNativeDriver: true }).start();
+        Animated.timing(timelineFade, { toValue: 1, duration: 400, useNativeDriver: true }).start();
       }, 1100));
     }, 1950);
     // No cleanup return — timers live in refs and are cancelled only by Effect 1 above.
@@ -1790,7 +1790,7 @@ export default function GameScreen() {
   ) : null;
 
   const castFab = (amHost && game?.visibility !== 'public') ? (
-    <TouchableOpacity style={[styles.castFab, { top: insets.top + 14 }]} onPress={() => setCastVisible(true)} activeOpacity={0.8}>
+    <TouchableOpacity style={[styles.castFab, { top: insets.top + 20, right: insets.right + 20 }]} onPress={() => setCastVisible(true)} activeOpacity={0.8}>
       <CastToTVIcon size={16} color="rgba(255,255,255,0.75)" />
     </TouchableOpacity>
   ) : null;
@@ -1808,7 +1808,7 @@ export default function GameScreen() {
   );
   const leaveChip = showLeaveChip ? (
     <TouchableOpacity
-      style={[styles.leaveChip, { top: insets.top + 14 }]}
+      style={[styles.leaveChip, { top: insets.top + 20, left: insets.left + 20 }]}
       onPress={() => setShowLeaveDialog(true)}
       activeOpacity={0.8}
       hitSlop={10}
@@ -1833,14 +1833,14 @@ export default function GameScreen() {
   // during the reveal-winner optimistic insert.
   const persistentOverlays = (
     <>
-      <PlayerChips players={players} myId={myPlayerId} topInset={insets.top} hasCastFab={!!castFab} />
+      <PlayerChips players={players} myId={myPlayerId} topInset={insets.top} rightInset={insets.right} hasCastFab={!!castFab} />
       {leaveChip}
       {leaveModal}
       {castFab}
       {castOverlay}
       {airPlayAvailable && amHost && !castVisible && !tvMode && !tvBannerDismissed && (
         <TouchableOpacity
-          style={[styles.tvDetectedBanner, { top: insets.top + 56 }]}
+          style={[styles.tvDetectedBanner, { top: insets.top + 62, left: insets.left + 16, right: insets.right + 16 }]}
           onPress={() => { setTvBannerDismissed(true); setCastVisible(true); }}
           activeOpacity={0.85}
         >
@@ -1870,7 +1870,7 @@ export default function GameScreen() {
           <View style={styles.gameArea}>
             <Animated.View style={[styles.timelineAreaFull, { paddingBottom: timelinePaddingBottom }]}>
               {amActive ? (
-                <View style={{ position: 'absolute', top: 8, left: 0, right: 0, alignItems: 'center' }}>
+                <View style={{ position: 'absolute', top: 20, left: 0, right: 0, alignItems: 'center' }}>
                   <HourglassTimer durationMs={30000} size={40} onExpire={handlePlacementTimeout} label="to place the card in the timeline" paused={bonusPanelOpen} />
                 </View>
               ) : (
@@ -2690,10 +2690,11 @@ export default function GameScreen() {
 
 const PLAYER_CHIP_COLORS = ['#E8372A','#54B0D9','#F5C518','#8B5CF6','#10B981','#F97316','#EC4899','#6366F1'];
 
-function PlayerChips({ players, myId, topInset, hasCastFab }: { players: Player[]; myId: string | null; topInset: number; hasCastFab: boolean }) {
+function PlayerChips({ players, myId, topInset, rightInset, hasCastFab }: { players: Player[]; myId: string | null; topInset: number; rightInset: number; hasCastFab: boolean }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  // When castFab is present (right: 20, 34px tall, top: topInset+14), shift chips below it
-  const topOffset = topInset + (hasCastFab ? 56 : 8);
+  // Without castFab: align with the leave button at topInset+20.
+  // With castFab (34px tall, top: topInset+20): drop below it with an 8px gap.
+  const topOffset = topInset + (hasCastFab ? 62 : 20);
 
   return (
     <>
@@ -2704,7 +2705,7 @@ function PlayerChips({ players, myId, topInset, hasCastFab }: { players: Player[
           activeOpacity={1}
         />
       )}
-      <View style={[styles.playerChipsWrap, { top: topOffset }]}>
+      <View style={[styles.playerChipsWrap, { top: topOffset, right: rightInset + 12 }]}>
         {players.map((p, i) => {
           const color = PLAYER_CHIP_COLORS[i % PLAYER_CHIP_COLORS.length];
           const isMe = p.id === myId;
@@ -3180,7 +3181,7 @@ const styles = StyleSheet.create({
 
   placePromptRow: {
     position: 'absolute',
-    top: 10,
+    top: 20,
     left: 0,
     right: 0,
     zIndex: 1,
@@ -3191,7 +3192,7 @@ const styles = StyleSheet.create({
   },
   placePrompt: {
     position: 'absolute',
-    top: 10,
+    top: 20,
     left: 0,
     right: 0,
     color: C.textSubDark,
@@ -3643,7 +3644,7 @@ const styles = StyleSheet.create({
 
   // ── PlayerChips ──
   playerChipsWrap: {
-    position: 'absolute', right: 8, zIndex: 11,
+    position: 'absolute', zIndex: 11,
     flexDirection: 'column', alignItems: 'flex-end', gap: 4,
   },
   playerChip: {
@@ -4054,7 +4055,7 @@ const styles = StyleSheet.create({
     fontSize: FS.sm,
   },
   castFab: {
-    position: 'absolute', right: 20,
+    position: 'absolute',
     width: 34, height: 34, borderRadius: 17,
     backgroundColor: 'rgba(0,0,0,0.45)',
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
@@ -4062,7 +4063,7 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   leaveChip: {
-    position: 'absolute', left: 20,
+    position: 'absolute',
     width: 34, height: 34, borderRadius: 17,
     backgroundColor: 'rgba(0,0,0,0.45)',
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
@@ -4070,7 +4071,7 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   tvDetectedBanner: {
-    position: 'absolute', left: 16, right: 16,
+    position: 'absolute',
     backgroundColor: 'rgba(20,20,30,0.92)',
     borderRadius: 10,
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',

@@ -25,9 +25,10 @@ interface Props {
   visible: boolean;
   onClose: () => void;
   onSelected: (choice: ModeChoice) => void;
+  autoOpenMode?: 'insane' | 'collection' | null;
 }
 
-export function ModePickerModal({ visible, onClose, onSelected }: Props) {
+export function ModePickerModal({ visible, onClose, onSelected, autoOpenMode }: Props) {
   const router = useRouter();
   const { authUser, isPremium, setIsPremium } = useAppStore();
 
@@ -40,6 +41,14 @@ export function ModePickerModal({ visible, onClose, onSelected }: Props) {
   useEffect(() => {
     if (visible) loadCollections();
   }, [visible]);
+
+  // Auto-resume the user's pre-sign-in intent
+  useEffect(() => {
+    if (!visible || !autoOpenMode) return;
+    if (autoOpenMode === 'insane') pickInsane();
+    else if (autoOpenMode === 'collection') pickCollection();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, autoOpenMode]);
 
   async function loadCollections() {
     setLoadingCollections(true);
@@ -59,7 +68,7 @@ export function ModePickerModal({ visible, onClose, onSelected }: Props) {
   }
 
   function pickInsane() {
-    if (!authUser) { onClose(); router.push('/sign-in?returnTo=local'); return; }
+    if (!authUser) { onClose(); router.push('/sign-in?returnTo=local&pendingMode=insane'); return; }
     if (!isPremium) { setPaywallPendingMode('insane'); setPaywallVisible(true); return; }
     onSelected({ mode: 'insane' });
     onClose();
@@ -68,7 +77,7 @@ export function ModePickerModal({ visible, onClose, onSelected }: Props) {
   function pickCollection() {
     if (!authUser) {
       onClose();
-      router.push('/sign-in?returnTo=local');
+      router.push('/sign-in?returnTo=local&pendingMode=collection');
       return;
     }
     if (!isPremium) {

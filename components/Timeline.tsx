@@ -308,15 +308,20 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
       return <View key={`gap-${index}`} style={styles.gapSpacer} />;
     }
 
-    // ── Interactive: selected gap — dashed outline with confirm checkmark ──
+    // ── Interactive: selected gap — dashed outline, whole area taps to confirm ──
     if (selectedInterval === index) {
       return (
         <View key={`gap-${index}`} ref={activeGapRef} style={styles.activeGap}>
-          <View style={styles.cardPlaceholder}>
-            <TouchableOpacity style={styles.confirmCheckmark} onPress={onConfirm} activeOpacity={0.7}>
+          <Text style={styles.confirmHint}>TAP TO CONFIRM</Text>
+          <TouchableOpacity
+            style={styles.cardPlaceholder}
+            onPress={onConfirm}
+            activeOpacity={0.7}
+          >
+            <View style={styles.confirmCheckmark}>
               <CheckIcon size={18} color='rgba(245,197,24,0.9)' />
-            </TouchableOpacity>
-          </View>
+            </View>
+          </TouchableOpacity>
         </View>
       );
     }
@@ -574,6 +579,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(74,158,196,0.06)',
+  },
+  confirmHint: {
+    position: 'absolute',
+    top: -16,
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+    color: '#4A9EC4',
+    fontSize: 9,
+    fontFamily: Fonts.label,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    opacity: 0.95,
   },
   confirmCheckmark: {
     width: 34,

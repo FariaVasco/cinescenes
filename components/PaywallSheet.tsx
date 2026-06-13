@@ -3,7 +3,7 @@ import {
   View, Text, TouchableOpacity, StyleSheet, Modal,
   ActivityIndicator, Alert,
 } from 'react-native';
-import Purchases, { PurchasesPackage, PackageType } from 'react-native-purchases';
+import Purchases, { PurchasesOffering, PurchasesPackage } from 'react-native-purchases';
 import { C, R, T, SP } from '@/constants/theme';
 import { CinemaButton } from '@/components/CinemaButton';
 import { ENTITLEMENT_ID } from '@/lib/revenuecat';
@@ -23,24 +23,35 @@ interface Plan {
   badge?: string;
 }
 
-function buildPlans(packages: PurchasesPackage[]): Plan[] {
-  const order = [PackageType.ANNUAL, PackageType.LIFETIME, PackageType.MONTHLY];
-  const sorted = [...packages].sort(
-    (a, b) => order.indexOf(a.packageType as PackageType) - order.indexOf(b.packageType as PackageType)
-  );
-  return sorted.map((pkg) => {
-    const price = pkg.product.priceString;
-    switch (pkg.packageType as PackageType) {
-      case PackageType.MONTHLY:
-        return { pkg, label: 'Monthly', price, detail: 'per month', badge: undefined };
-      case PackageType.ANNUAL:
-        return { pkg, label: 'Annual', price, detail: 'per year', badge: 'BEST VALUE' };
-      case PackageType.LIFETIME:
-        return { pkg, label: 'Lifetime', price, detail: 'one-time', badge: 'FOREVER' };
-      default:
-        return { pkg, label: pkg.product.title, price, detail: '', badge: undefined };
-    }
-  });
+function buildPlans(offering: PurchasesOffering): Plan[] {
+  const plans: Plan[] = [];
+  if (offering.annual) {
+    plans.push({
+      pkg: offering.annual,
+      label: 'Annual',
+      price: offering.annual.product.priceString,
+      detail: 'per year',
+      badge: 'BEST VALUE',
+    });
+  }
+  if (offering.lifetime) {
+    plans.push({
+      pkg: offering.lifetime,
+      label: 'Lifetime',
+      price: offering.lifetime.product.priceString,
+      detail: 'one-time',
+      badge: 'FOREVER',
+    });
+  }
+  if (offering.monthly) {
+    plans.push({
+      pkg: offering.monthly,
+      label: 'Monthly',
+      price: offering.monthly.product.priceString,
+      detail: 'per month',
+    });
+  }
+  return plans;
 }
 
 export function PaywallSheet({ visible, onClose, onPurchased }: Props) {
@@ -57,13 +68,17 @@ export function PaywallSheet({ visible, onClose, onPurchased }: Props) {
     setLoading(true);
     try {
       const offerings = await Purchases.getOfferings();
-      if (offerings.current?.availablePackages.length) {
-        const built = buildPlans(offerings.current.availablePackages);
+      console.log('[Paywall] offerings.current:', JSON.stringify(offerings.current, null, 2));
+      console.log('[Paywall] all offerings:', Object.keys(offerings.all));
+      if (offerings.current) {
+        const built = buildPlans(offerings.current);
         setPlans(built);
         setSelected(built[0]?.pkg.identifier ?? null);
+      } else {
+        console.log('[Paywall] No current offering returned');
       }
-    } catch {
-      // offerings unavailable — show fallback UI
+    } catch (e) {
+      console.log('[Paywall] offerings error:', e);
     }
     setLoading(false);
   }
@@ -104,20 +119,18 @@ export function PaywallSheet({ visible, onClose, onPurchased }: Props) {
     <Modal
       visible={visible}
       transparent
-      animationType="slide"
+      animationType="fade"
       onRequestClose={onClose}
     >
       <View style={styles.overlay}>
         <View style={styles.sheet}>
           {/* Decorative background */}
           <View style={styles.decoTL} pointerEvents="none">
-            <DecoClapperboard size={80} opacity={0.06} />
+            <DecoClapperboard size={72} opacity={0.06} />
           </View>
           <View style={styles.decoTR} pointerEvents="none">
-            <DecoFilmReel size={72} opacity={0.06} />
+            <DecoFilmReel size={64} opacity={0.06} />
           </View>
-
-          <View style={styles.handle} />
 
           <View style={styles.headerGroup}>
             <Text style={styles.overline}>CINESCENES PREMIUM</Text>
@@ -196,16 +209,20 @@ export function PaywallSheet({ visible, onClose, onPurchased }: Props) {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.75)',
-    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: SP.lg,
   },
   sheet: {
     backgroundColor: C.surfaceHigh,
-    borderTopLeftRadius: R.card,
-    borderTopRightRadius: R.card,
+    borderRadius: R.sheet,
+    borderWidth: 2,
+    borderColor: C.ink,
     paddingHorizontal: SP.lg,
-    paddingBottom: SP.xl + SP.md,
-    paddingTop: SP.md,
+    paddingVertical: SP.lg,
+    width: '100%',
+    maxWidth: 560,
     overflow: 'hidden',
   },
 
@@ -213,18 +230,10 @@ const styles = StyleSheet.create({
   decoTL: { position: 'absolute', top: -8, left: -8, transform: [{ rotate: '-15deg' }] },
   decoTR: { position: 'absolute', top: -4, right: -4, transform: [{ rotate: '10deg' }] },
 
-  handle: {
-    width: 40, height: 4,
-    borderRadius: 2,
-    backgroundColor: C.border,
-    alignSelf: 'center',
-    marginBottom: SP.lg,
-  },
-
   headerGroup: {
     alignItems: 'center',
-    gap: SP.sm,
-    marginBottom: SP.lg,
+    gap: SP.xs,
+    marginBottom: SP.md,
   },
   overline: { ...T.overline },
   title: { ...T.display, color: C.textPrimary, textAlign: 'center' },

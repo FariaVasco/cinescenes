@@ -1,14 +1,18 @@
+import { Platform } from 'react-native';
 import Purchases, { LOG_LEVEL } from 'react-native-purchases';
 import RevenueCatUI, { PAYWALL_RESULT } from 'react-native-purchases-ui';
 import * as Sentry from '@sentry/react-native';
 
-const RC_KEY = process.env.EXPO_PUBLIC_REVENUECAT_KEY ?? '';
+const RC_KEY = Platform.OS === 'ios'
+  ? (process.env.EXPO_PUBLIC_REVENUECAT_KEY_IOS ?? '')
+  : (process.env.EXPO_PUBLIC_REVENUECAT_KEY_ANDROID ?? '');
 
 // Must match the entitlement identifier set in the RevenueCat dashboard
 export const ENTITLEMENT_ID = 'Cinescenes Pro';
 
 export function initRevenueCat() {
-  Purchases.setLogLevel(LOG_LEVEL.ERROR);
+  if (!RC_KEY) return;
+  Purchases.setLogLevel(LOG_LEVEL.VERBOSE);
   Purchases.configure({ apiKey: RC_KEY });
   Purchases.getCustomerInfo().catch((e) => Sentry.captureException(e));
 }

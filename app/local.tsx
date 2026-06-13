@@ -8,7 +8,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { C, R, FS, Fonts, SP } from '@/constants/theme';
@@ -21,6 +21,7 @@ const lcMovieTicket  = require('@/assets/lc-movie-ticket.png');
 
 export default function LocalScreen() {
   const router = useRouter();
+  const { pendingMode } = useLocalSearchParams<{ pendingMode?: string }>();
   const {
     authUser,
     setSelectedGameMode,
@@ -36,6 +37,19 @@ export default function LocalScreen() {
   const [displayName, setDisplayName] = useState(getDefaultName);
   const [inviteCode, setInviteCode] = useState('');
   const [modePickerVisible, setModePickerVisible] = useState(false);
+  const [autoOpenMode, setAutoOpenMode] = useState<'insane' | 'collection' | null>(null);
+
+  // If we returned from sign-in with a pending mode intent, auto-open the picker
+  useEffect(() => {
+    if (!pendingMode || !authUser) return;
+    if (pendingMode === 'insane' || pendingMode === 'collection') {
+      setAutoOpenMode(pendingMode);
+      setModePickerVisible(true);
+      // Clear the URL param so this doesn't re-fire on re-mount
+      router.setParams({ pendingMode: undefined });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingMode, authUser]);
 
   useFocusEffect(
     useCallback(() => {
@@ -170,8 +184,9 @@ export default function LocalScreen() {
 
       <ModePickerModal
         visible={modePickerVisible}
-        onClose={() => setModePickerVisible(false)}
+        onClose={() => { setModePickerVisible(false); setAutoOpenMode(null); }}
         onSelected={handleModeSelected}
+        autoOpenMode={autoOpenMode}
       />
     </SafeAreaView>
   );

@@ -15,17 +15,26 @@ const lcMysteryCard = require('@/assets/lc-mystery-card.png');
 
 export default function SignInScreen() {
   const router = useRouter();
-  const { returnTo } = useLocalSearchParams<{ returnTo: string }>();
+  const { returnTo, pendingMode } = useLocalSearchParams<{ returnTo: string; pendingMode: string }>();
   const { signInWithApple, signInWithGoogle } = useAuth();
   const [loading, setLoading] = useState(false);
   const { width, height } = useWindowDimensions();
   const landscape = width > height;
 
+  function navigateBack() {
+    const target = '/' + ((returnTo as string) ?? '').replace(/^\//, '');
+    if (pendingMode) {
+      router.replace({ pathname: target as any, params: { pendingMode: pendingMode as string } });
+    } else {
+      router.replace((target as any) || '/');
+    }
+  }
+
   async function handleApple() {
     setLoading(true);
     try {
       await signInWithApple();
-      router.replace((returnTo as any) ?? '/');
+      navigateBack();
     } catch (e: any) {
       if (e?.code !== 'ERR_REQUEST_CANCELED') {
         Alert.alert('Sign in failed', e?.message ?? 'Could not sign in with Apple');
@@ -39,7 +48,7 @@ export default function SignInScreen() {
     setLoading(true);
     try {
       await signInWithGoogle();
-      router.replace((returnTo as any) ?? '/');
+      navigateBack();
     } catch (e: any) {
       Alert.alert('Sign in failed', e?.message ?? 'Could not sign in with Google');
     } finally {

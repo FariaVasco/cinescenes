@@ -9,7 +9,15 @@
       "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "android": {
+        "buildType": "app-bundle",
+        "autoIncrement": true
+      },
+      "env": {
+        "SENTRY_ORG": "cinescenes",
+        "SENTRY_PROJECT": "react-native"
+      }
     },
     "production": {
       "distribution": "store",

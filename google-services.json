@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "158676998426-8fpihppagku961c8d3aocfq9nqop9kne.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.cinescenes.app",
+            "certificate_hash": "fb94490a756e2876a313346a784207a8fb5696ff"
+          }
+        },
+        {
           "client_id": "158676998426-ortcqhtr9snb7n2lcfb24r6jr956ctv5.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
