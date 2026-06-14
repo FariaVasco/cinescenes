@@ -1,36 +1,64 @@
 import { useEffect, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Modal,
-  ActivityIndicator, Alert,
+  ActivityIndicator, Alert, useWindowDimensions, Platform,
 } from 'react-native';
 import Purchases, { PurchasesOffering, PurchasesPackage } from 'react-native-purchases';
-import { C, R, T, SP } from '@/constants/theme';
-import { CinemaButton } from '@/components/CinemaButton';
+import { C, R, FS, Fonts, SP } from '@/constants/theme';
 import { ENTITLEMENT_ID } from '@/lib/revenuecat';
-import { DecoFilmReel, DecoClapperboard } from '@/components/CinemaIcons';
+import { CloseIcon } from '@/components/CinemaIcons';
 
 interface Props {
   visible: boolean;
   onClose: () => void;
-  onPurchased: () => void;
+  onPurchased: (isPremium: boolean) => void;
+  /** Dev-only: render with mock plans (skips RevenueCat fetch). Use for paywall design iteration on simulator. */
+  mockPlans?: Plan[];
 }
 
-interface Plan {
-  pkg: PurchasesPackage;
-  label: string;
-  price: string;
-  detail: string;
-  badge?: string;
+export interface Plan {
+  pkg: PurchasesPackage | null;
+  label: string;        // e.g. 'Monthly', 'Annual', 'Lifetime'
+  price: string;        // big primary price, e.g. '€3.59'
+  detail: string;       // small text under label, e.g. 'Save 30%'
+  priceUnit: string;    // small text under price, e.g. '/ MONTH'
+  badge?: string;       // floating badge label, e.g. 'BEST VALUE'
+}
+
+function annualSavingsDetail(annualPrice: number, monthlyPrice: number): string {
+  if (!annualPrice || !monthlyPrice) return '';
+  const projectedAnnual = monthlyPrice * 12;
+  if (projectedAnnual <= annualPrice) return '';
+  const percentOff = Math.round(((projectedAnnual - annualPrice) / projectedAnnual) * 100);
+  return percentOff > 0 ? `Save ${percentOff}%` : '';
+}
+
+function annualPerMonthUnit(annualPrice: number, currencySymbol: string): string {
+  if (!annualPrice) return '';
+  const monthly = annualPrice / 12;
+  return `${currencySymbol}${monthly.toFixed(2)}/mo`;
 }
 
 function buildPlans(offering: PurchasesOffering): Plan[] {
   const plans: Plan[] = [];
+  const monthlyPrice = offering.monthly?.product.price;
+  if (offering.monthly) {
+    plans.push({
+      pkg: offering.monthly,
+      label: 'Monthly',
+      price: offering.monthly.product.priceString,
+      detail: '',
+      priceUnit: '',
+    });
+  }
   if (offering.annual) {
+    const symbol = offering.annual.product.priceString.replace(/[\d.,\s]/g, '');
     plans.push({
       pkg: offering.annual,
       label: 'Annual',
       price: offering.annual.product.priceString,
-      detail: 'per year',
+      detail: annualSavingsDetail(offering.annual.product.price, monthlyPrice ?? 0),
+      priceUnit: annualPerMonthUnit(offering.annual.product.price, symbol),
       badge: 'BEST VALUE',
     });
   }
@@ -39,30 +67,42 @@ function buildPlans(offering: PurchasesOffering): Plan[] {
       pkg: offering.lifetime,
       label: 'Lifetime',
       price: offering.lifetime.product.priceString,
-      detail: 'one-time',
-      badge: 'FOREVER',
-    });
-  }
-  if (offering.monthly) {
-    plans.push({
-      pkg: offering.monthly,
-      label: 'Monthly',
-      price: offering.monthly.product.priceString,
-      detail: 'per month',
+      detail: 'Pay once. Yours forever.',
+      priceUnit: '',
     });
   }
   return plans;
 }
 
-export function PaywallSheet({ visible, onClose, onPurchased }: Props) {
+export function PaywallSheet({ visible, onClose, onPurchased, mockPlans }: Props) {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [purchasing, setPurchasing] = useState(false);
+  const { width, height } = useWindowDimensions();
+  const landscape = width > height;
+
+  // Preselect Annual when available; fall back to first plan otherwise.
+  function pickDefault(list: Plan[]): string | null {
+    const annual = list.find((p) => p.label === 'Annual');
+    const target = annual ?? list[0];
+    return target ? (target.pkg?.identifier ?? target.label) : null;
+  }
+
+  function planKey(p: Plan): string {
+    return p.pkg?.identifier ?? p.label;
+  }
 
   useEffect(() => {
-    if (visible) loadOfferings();
-  }, [visible]);
+    if (!visible) return;
+    if (mockPlans) {
+      setPlans(mockPlans);
+      setSelected(pickDefault(mockPlans));
+      setLoading(false);
+      return;
+    }
+    loadOfferings();
+  }, [visible, mockPlans]);
 
   async function loadOfferings() {
     setLoading(true);
@@ -73,23 +113,39 @@ export function PaywallSheet({ visible, onClose, onPurchased }: Props) {
       if (offerings.current) {
         const built = buildPlans(offerings.current);
         setPlans(built);
-        setSelected(built[0]?.pkg.identifier ?? null);
+        setSelected(pickDefault(built));
       } else {
         console.log('[Paywall] No current offering returned');
       }
     } catch (e) {
       console.log('[Paywall] offerings error:', e);
+      if (__DEV__) {
+        // Dev fallback: RevenueCat unconfigured (e.g. iOS sim with no key)
+        // — render mock plans so paywall design can still be iterated on.
+        const fallback: Plan[] = [
+          { pkg: null, label: 'Monthly',  price: '€3.59',  detail: '',                          priceUnit: '' },
+          { pkg: null, label: 'Annual',   price: '€29.99', detail: 'Save 30%',                  priceUnit: '€2.50/mo', badge: 'BEST VALUE' },
+          { pkg: null, label: 'Lifetime', price: '€59.99', detail: 'Pay once. Yours forever.', priceUnit: '' },
+        ];
+        setPlans(fallback);
+        setSelected(pickDefault(fallback));
+      }
     }
     setLoading(false);
   }
 
   async function handleSubscribe() {
-    const plan = plans.find((p) => p.pkg.identifier === selected);
+    const plan = plans.find((p) => planKey(p) === selected);
     if (!plan) return;
+    if (!plan.pkg) {
+      Alert.alert('Preview mode', 'This is a mock plan. Real purchases are disabled here.');
+      return;
+    }
     setPurchasing(true);
     try {
-      await Purchases.purchasePackage(plan.pkg);
-      onPurchased();
+      const result = await Purchases.purchasePackage(plan.pkg);
+      const isActive = result.customerInfo.entitlements.active[ENTITLEMENT_ID] !== undefined;
+      onPurchased(isActive);
     } catch (e: any) {
       if (!e.userCancelled) {
         Alert.alert('Purchase failed', e.message ?? 'Something went wrong. Please try again.');
@@ -103,8 +159,9 @@ export function PaywallSheet({ visible, onClose, onPurchased }: Props) {
     setPurchasing(true);
     try {
       const info = await Purchases.restorePurchases();
-      if (info.entitlements.active[ENTITLEMENT_ID]) {
-        onPurchased();
+      const isActive = info.entitlements.active[ENTITLEMENT_ID] !== undefined;
+      if (isActive) {
+        onPurchased(true);
       } else {
         Alert.alert('Nothing to restore', 'No active subscription found for this account.');
       }
@@ -115,91 +172,130 @@ export function PaywallSheet({ visible, onClose, onPurchased }: Props) {
     }
   }
 
+  const selectedPlan = plans.find((p) => planKey(p) === selected);
+  const ctaLabel = purchasing
+    ? '…'
+    : selectedPlan
+    ? `START PREMIUM · ${selectedPlan.price}`
+    : 'START PREMIUM';
+  const storeName = Platform.OS === 'ios' ? 'App Store' : 'Play Store';
+
   return (
     <Modal
       visible={visible}
       transparent
       animationType="fade"
       onRequestClose={onClose}
+      supportedOrientations={['portrait', 'landscape', 'landscape-left', 'landscape-right']}
     >
       <View style={styles.overlay}>
-        <View style={styles.sheet}>
-          {/* Decorative background */}
-          <View style={styles.decoTL} pointerEvents="none">
-            <DecoClapperboard size={72} opacity={0.06} />
-          </View>
-          <View style={styles.decoTR} pointerEvents="none">
-            <DecoFilmReel size={64} opacity={0.06} />
-          </View>
-
-          <View style={styles.headerGroup}>
-            <Text style={styles.overline}>CINESCENES PREMIUM</Text>
-            <Text style={styles.title}>Unlock Everything</Text>
-            <Text style={styles.subtitle}>
-              Themed collections, and everything{'\n'}we add in the future
-            </Text>
-          </View>
-
-          {loading ? (
-            <ActivityIndicator color={C.gold} style={styles.loader} />
-          ) : plans.length === 0 ? (
-            <Text style={styles.errorText}>Pricing unavailable — please try again later.</Text>
-          ) : (
-            <View style={styles.plans}>
-              {plans.map((plan) => {
-                const isSelected = plan.pkg.identifier === selected;
-                return (
-                  <TouchableOpacity
-                    key={plan.pkg.identifier}
-                    style={[styles.planRow, isSelected && styles.planRowSelected]}
-                    onPress={() => setSelected(plan.pkg.identifier)}
-                    activeOpacity={0.8}
-                  >
-                    <View style={styles.planLeft}>
-                      <View style={[styles.radio, isSelected && styles.radioSelected]}>
-                        {isSelected && <View style={styles.radioDot} />}
-                      </View>
-                      <View>
-                        <Text style={[styles.planLabel, isSelected && styles.planLabelSelected]}>
-                          {plan.label}
-                        </Text>
-                        <Text style={styles.planDetail}>{plan.detail}</Text>
-                      </View>
-                    </View>
-                    <View style={styles.planRight}>
-                      <Text style={[styles.planPrice, isSelected && styles.planPriceSelected]}>
-                        {plan.price}
-                      </Text>
-                      {plan.badge && (
-                        <View style={styles.badge}>
-                          <Text style={styles.badgeText}>{plan.badge}</Text>
-                        </View>
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          )}
-
-          <CinemaButton
-            size="lg"
-            onPress={handleSubscribe}
-            disabled={purchasing || loading || plans.length === 0}
-            style={styles.cta}
+        <View style={[styles.sheet, landscape && styles.sheetLandscape]}>
+          {/* Close button */}
+          <TouchableOpacity
+            onPress={onClose}
+            style={styles.closeBtn}
+            hitSlop={12}
+            activeOpacity={0.7}
           >
-            {purchasing ? '…' : 'GET PREMIUM'}
-          </CinemaButton>
+            <CloseIcon size={16} color={C.ink} />
+          </TouchableOpacity>
 
-          <View style={styles.footer}>
-            <TouchableOpacity onPress={handleRestore} disabled={purchasing}>
-              <Text style={styles.restoreText}>Restore purchases</Text>
-            </TouchableOpacity>
-            <Text style={styles.dot}>·</Text>
-            <TouchableOpacity onPress={onClose} disabled={purchasing}>
-              <Text style={styles.cancelText}>Not now</Text>
-            </TouchableOpacity>
-          </View>
+          {(() => {
+            const FooterBlock = (
+              <View style={landscape ? styles.footerLandscape : styles.footer}>
+                <TouchableOpacity onPress={handleRestore} disabled={purchasing} hitSlop={8}>
+                  <Text style={styles.footerLink}>RESTORE PURCHASE</Text>
+                </TouchableOpacity>
+                <Text style={styles.footerInfo}>CANCEL ANYTIME · {storeName.toUpperCase()}</Text>
+              </View>
+            );
+
+            return (
+              <View style={landscape ? styles.landscapeRow : undefined}>
+                {/* LEFT (or top in portrait): Header (and footer text in landscape) */}
+                <View style={landscape ? styles.landscapeLeft : undefined}>
+                  <View style={landscape ? styles.landscapeLeftHeader : undefined}>
+                    <View style={[styles.header, landscape && styles.headerLandscape]}>
+                      <Text style={[styles.title, landscape && styles.titleLandscape]}>
+                        Unlock every mode 
+                      </Text>
+                      <Text style={[styles.subtitle, landscape && styles.subtitleLandscape]}>
+                        Insane mode is a premium feature. Subscribe to access everything.
+                      </Text>
+                    </View>
+                  </View>
+                  {landscape ? FooterBlock : null}
+                </View>
+
+                {/* RIGHT (or bottom in portrait): Plans + CTA (+ footer in portrait) */}
+                <View style={landscape ? styles.landscapeRight : undefined}>
+                  {loading ? (
+                    <ActivityIndicator color={C.ochre} style={styles.loader} />
+                  ) : plans.length === 0 ? (
+                    <Text style={styles.errorText}>Pricing unavailable — please try again later.</Text>
+                  ) : (
+                    <View style={[styles.plans, landscape && styles.plansLandscape]}>
+                      {plans.map((plan) => {
+                        const key = planKey(plan);
+                        const isSelected = key === selected;
+                        return (
+                          <View key={key} style={styles.planWrap}>
+                            <TouchableOpacity
+                              style={[
+                                styles.planRow,
+                                landscape && styles.planRowLandscape,
+                                isSelected ? styles.planRowSelected : styles.planRowUnselected,
+                              ]}
+                              onPress={() => setSelected(key)}
+                              activeOpacity={0.85}
+                            >
+                              <View style={styles.planLeft}>
+                                <Text style={[styles.planLabel, isSelected ? styles.planLabelSelected : styles.planLabelUnselected]}>
+                                  {plan.label.toUpperCase()}
+                                </Text>
+                                {plan.detail ? (
+                                  <Text style={[styles.planDetail, isSelected ? styles.planDetailSelected : styles.planDetailUnselected]}>
+                                    {plan.detail.toUpperCase()}
+                                  </Text>
+                                ) : null}
+                              </View>
+                              <View style={styles.planRight}>
+                                <Text style={[styles.planPrice, isSelected ? styles.planPriceSelected : styles.planPriceUnselected]}>
+                                  {plan.price}
+                                </Text>
+                                {plan.priceUnit ? (
+                                  <Text style={[styles.planPriceUnit, isSelected ? styles.planDetailSelected : styles.planDetailUnselected]}>
+                                    {plan.priceUnit.toUpperCase()}
+                                  </Text>
+                                ) : null}
+                              </View>
+                            </TouchableOpacity>
+                            {plan.badge ? (
+                              <View style={styles.badgeWrap}>
+                                <Text style={styles.badgeText}>{plan.badge}</Text>
+                              </View>
+                            ) : null}
+                          </View>
+                        );
+                      })}
+                    </View>
+                  )}
+
+                  {/* CTA */}
+                  <TouchableOpacity
+                    style={[styles.cta, (purchasing || loading || plans.length === 0) && styles.ctaDisabled]}
+                    onPress={handleSubscribe}
+                    disabled={purchasing || loading || plans.length === 0}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.ctaText}>{ctaLabel}</Text>
+                  </TouchableOpacity>
+
+                  {!landscape ? FooterBlock : null}
+                </View>
+              </View>
+            );
+          })()}
         </View>
       </View>
     </Modal>
@@ -212,92 +308,220 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: SP.lg,
+    padding: SP.md,
   },
   sheet: {
     backgroundColor: C.surfaceHigh,
     borderRadius: R.sheet,
     borderWidth: 2,
     borderColor: C.ink,
-    paddingHorizontal: SP.lg,
-    paddingVertical: SP.lg,
+    paddingHorizontal: SP.md,
+    paddingVertical: SP.md,
     width: '100%',
-    maxWidth: 560,
-    overflow: 'hidden',
+    maxWidth: 480,
+    overflow: 'visible',
+  },
+  sheetLandscape: {
+    maxWidth: 540,
+    paddingVertical: SP.sm,
+    paddingHorizontal: SP.md,
   },
 
-  // Decorative icons
-  decoTL: { position: 'absolute', top: -8, left: -8, transform: [{ rotate: '-15deg' }] },
-  decoTR: { position: 'absolute', top: -4, right: -4, transform: [{ rotate: '10deg' }] },
+  // Two-column landscape layout
+  landscapeRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: SP.sm,
+  },
+  landscapeLeft: {
+    flex: 1,
+    paddingVertical: 4,
+  },
+  landscapeLeftHeader: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  landscapeRight: {
+    flex: 1.3,
+    paddingTop: 24,
+  },
 
-  headerGroup: {
+  // Close button (top-right)
+  closeBtn: {
+    position: 'absolute',
+    top: SP.xs,
+    right: SP.xs,
+    width: 26, height: 26,
+    borderRadius: 13,
+    borderWidth: 1.5,
+    borderColor: C.ink,
     alignItems: 'center',
-    gap: SP.xs,
-    marginBottom: SP.md,
+    justifyContent: 'center',
+    zIndex: 2,
   },
-  overline: { ...T.overline },
-  title: { ...T.display, color: C.textPrimary, textAlign: 'center' },
-  subtitle: { ...T.body, textAlign: 'center' },
 
-  loader: { marginVertical: SP.xl },
-  errorText: { ...T.caption, textAlign: 'center', marginVertical: SP.xl },
+  // Header
+  header: {
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: SP.sm,
+  },
+  headerLandscape: {
+    alignItems: 'flex-start',
+    marginBottom: 0,
+  },
+  title: {
+    fontFamily: Fonts.display,
+    fontSize: 22,
+    color: C.textPrimary,
+    textAlign: 'center',
+    letterSpacing: 0.8,
+  },
+  titleLandscape: {
+    fontSize: 28,
+    textAlign: 'left',
+    lineHeight: 32,
+  },
+  subtitle: {
+    fontFamily: Fonts.label,
+    fontSize: 13,
+    color: C.textSub,
+    lineHeight: 17,
+    letterSpacing: 0.3,
+    textAlign: 'center',
+  },
+  subtitleLandscape: {
+    textAlign: 'left',
+    fontSize: 13,
+    lineHeight: 17,
+  },
 
-  plans: { gap: SP.sm, marginBottom: SP.lg },
+  loader: { marginVertical: SP.lg },
+  errorText: {
+    fontFamily: Fonts.body,
+    fontSize: FS.sm,
+    color: C.textSub,
+    textAlign: 'center',
+    marginVertical: SP.lg,
+  },
+
+  // Plan rows
+  plans: { gap: 6, marginBottom: SP.sm },
+  plansLandscape: { gap: 5, marginBottom: SP.xs },
+  planWrap: { position: 'relative' },
   planRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: C.surface,
     borderRadius: R.md,
-    borderWidth: 1,
-    borderColor: C.border,
-    paddingVertical: SP.md,
+    paddingVertical: 8,
     paddingHorizontal: SP.md,
+    borderWidth: 1.5,
+  },
+  planRowLandscape: {
+    paddingVertical: 6,
+    paddingHorizontal: SP.sm + 4,
+  },
+  planRowUnselected: {
+    backgroundColor: C.surface,
+    borderColor: C.ink,
   },
   planRowSelected: {
-    borderColor: C.gold,
-    backgroundColor: C.goldFaint,
+    backgroundColor: C.ochre,
+    borderColor: C.ink,
   },
 
-  planLeft: { flexDirection: 'row', alignItems: 'center', gap: SP.md },
-  radio: {
-    width: 20, height: 20,
+  planLeft: { flex: 1, gap: 0 },
+  planLabel: {
+    fontFamily: Fonts.display,
+    fontSize: FS.md,
+    letterSpacing: 0.5,
+    lineHeight: 20,
+  },
+  planLabelUnselected: { color: C.textPrimary },
+  planLabelSelected:   { color: C.ink },
+  planDetail: {
+    fontFamily: Fonts.label,
+    fontSize: 9,
+    letterSpacing: 1.4,
+    lineHeight: 12,
+  },
+  planDetailUnselected: { color: C.textMuted },
+  planDetailSelected:   { color: 'rgba(26,26,26,0.65)' },
+
+  planRight: { alignItems: 'flex-end', gap: 0 },
+  planPrice: {
+    fontFamily: Fonts.display,
+    fontSize: FS.lg,
+    letterSpacing: 0.3,
+    lineHeight: 22,
+  },
+  planPriceUnselected: { color: C.textPrimary },
+  planPriceSelected:   { color: C.ink },
+  planPriceUnit: {
+    fontFamily: Fonts.label,
+    fontSize: 9,
+    letterSpacing: 1.4,
+    lineHeight: 12,
+  },
+
+  // BEST VALUE badge (floats on top-right corner of plan)
+  badgeWrap: {
+    position: 'absolute',
+    top: -7,
+    right: SP.md,
+    backgroundColor: C.vermillion,
     borderRadius: R.full,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+  },
+  badgeText: {
+    fontFamily: Fonts.label,
+    fontSize: 8,
+    color: '#FFFFFF',
+    letterSpacing: 1.3,
+  },
+
+  // CTA
+  cta: {
+    backgroundColor: C.ochre,
+    borderRadius: R.btn,
     borderWidth: 2,
-    borderColor: C.textMuted,
+    borderColor: C.ink,
+    paddingVertical: 10,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: SP.xs,
   },
-  radioSelected: { borderColor: C.gold },
-  radioDot: {
-    width: 10, height: 10,
-    borderRadius: R.full,
-    backgroundColor: C.gold,
+  ctaDisabled: { opacity: 0.5 },
+  ctaText: {
+    fontFamily: Fonts.display,
+    fontSize: FS.md,
+    color: C.ink,
+    letterSpacing: 0.8,
   },
-  planLabel: { ...T.label, color: C.textSub },
-  planLabelSelected: { color: C.textPrimary },
-  planDetail: { ...T.caption },
 
-  planRight: { alignItems: 'flex-end', gap: 4 },
-  planPrice: { ...T.subtitle, color: C.textSub },
-  planPriceSelected: { color: C.gold },
-  badge: {
-    backgroundColor: C.goldFaint,
-    borderRadius: R.xs,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  badgeText: { ...T.micro, color: C.gold },
-
-  cta: { width: '100%', marginBottom: SP.md },
-
+  // Footer
   footer: {
     flexDirection: 'row',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: SP.sm,
   },
-  restoreText: { ...T.caption },
-  dot: { ...T.caption },
-  cancelText: { ...T.caption },
+  footerLandscape: {
+    gap: 6,
+    alignItems: 'flex-start',
+  },
+  footerLink: {
+    fontFamily: Fonts.label,
+    fontSize: 10,
+    color: C.textSub,
+    letterSpacing: 1.4,
+    textDecorationLine: 'underline',
+  },
+  footerInfo: {
+    fontFamily: Fonts.label,
+    fontSize: 10,
+    color: C.textMuted,
+    letterSpacing: 1.4,
+  },
 });

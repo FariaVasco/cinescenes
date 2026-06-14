@@ -12,7 +12,29 @@ async function syncProfile(userId: string) {
 export function useAuth() {
   const { setAuthUser, setIsPremium } = useAppStore();
 
+  function mockDevSignIn() {
+    // Dev-only: skip real auth so paywall/etc. can be iterated on the simulator
+    // where Apple/Google Sign-In don't work cleanly. Sets a fake user, skips
+    // Supabase + RevenueCat sync.
+    const fakeUser = {
+      id: 'dev-user-00000000-0000-0000-0000-000000000000',
+      email: 'dev@cinescenes.app',
+      user_metadata: { full_name: 'Dev User', given_name: 'Dev' },
+      app_metadata: {},
+      aud: 'authenticated',
+      created_at: new Date().toISOString(),
+    } as any;
+    setAuthUser(fakeUser);
+  }
+
   async function signInWithApple() {
+    if (__DEV__) {
+      // Apple Sign-In can crash hard on iOS Simulator (capability/entitlement issues).
+      // In dev we skip the native call entirely and just mock a user.
+      // To test real Apple Sign-In, build a production-profile build.
+      mockDevSignIn();
+      return;
+    }
     const AppleAuthentication = require('expo-apple-authentication');
     const credential = await AppleAuthentication.signInAsync({
       requestedScopes: [
@@ -32,6 +54,13 @@ export function useAuth() {
   }
 
   async function signInWithGoogle() {
+    if (__DEV__) {
+      // Google Sign-In requires Play Services + correct SHA-1 signing, which
+      // dev clients can't reliably provide on simulators/emulators.
+      // In dev we skip the native call and just mock a user.
+      mockDevSignIn();
+      return;
+    }
     const { GoogleSignin } = require('@react-native-google-signin/google-signin');
     await GoogleSignin.hasPlayServices();
     const userInfo = await GoogleSignin.signIn();

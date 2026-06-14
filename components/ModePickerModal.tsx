@@ -88,9 +88,11 @@ export function ModePickerModal({ visible, onClose, onSelected, autoOpenMode }: 
     setCollectionPickerVisible(true);
   }
 
-  async function onPaywallPurchased() {
+  async function onPaywallPurchased(isPremiumFromPurchase: boolean) {
     setPaywallVisible(false);
-    const premium = await checkPremium();
+    // Trust the purchase result first (authoritative immediately after purchase).
+    // Fall back to checkPremium only if the purchase result says no entitlement.
+    const premium = isPremiumFromPurchase || (await checkPremium());
     setIsPremium(premium);
     if (!premium) return;
     if (paywallPendingMode === 'insane') {
