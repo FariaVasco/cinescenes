@@ -250,9 +250,16 @@ export function PaywallSheet({ visible, onClose, onPurchased, mockPlans }: Props
                               activeOpacity={0.85}
                             >
                               <View style={styles.planLeft}>
-                                <Text style={[styles.planLabel, isSelected ? styles.planLabelSelected : styles.planLabelUnselected]}>
-                                  {plan.label.toUpperCase()}
-                                </Text>
+                                <View style={styles.planLabelRow}>
+                                  <Text style={[styles.planLabel, isSelected ? styles.planLabelSelected : styles.planLabelUnselected]}>
+                                    {plan.label.toUpperCase()}
+                                  </Text>
+                                  {plan.badge ? (
+                                    <View style={styles.badgeInline}>
+                                      <Text style={styles.badgeText}>{plan.badge}</Text>
+                                    </View>
+                                  ) : null}
+                                </View>
                                 {plan.detail ? (
                                   <Text style={[styles.planDetail, isSelected ? styles.planDetailSelected : styles.planDetailUnselected]}>
                                     {plan.detail.toUpperCase()}
@@ -270,11 +277,6 @@ export function PaywallSheet({ visible, onClose, onPurchased, mockPlans }: Props
                                 ) : null}
                               </View>
                             </TouchableOpacity>
-                            {plan.badge ? (
-                              <View style={styles.badgeWrap}>
-                                <Text style={styles.badgeText}>{plan.badge}</Text>
-                              </View>
-                            ) : null}
                           </View>
                         );
                       })}
@@ -431,7 +433,12 @@ const styles = StyleSheet.create({
     borderColor: C.ink,
   },
 
-  planLeft: { flex: 1, gap: 0 },
+  planLeft: { flex: 1, gap: 2 },
+  planLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   planLabel: {
     fontFamily: Fonts.display,
     fontSize: FS.md,
@@ -465,11 +472,8 @@ const styles = StyleSheet.create({
     lineHeight: 12,
   },
 
-  // BEST VALUE badge (floats on top-right corner of plan)
-  badgeWrap: {
-    position: 'absolute',
-    top: -7,
-    right: SP.md,
+  // BEST VALUE badge (inline next to the Annual label)
+  badgeInline: {
     backgroundColor: C.vermillion,
     borderRadius: R.full,
     paddingHorizontal: 6,
