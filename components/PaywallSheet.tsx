@@ -8,6 +8,8 @@ import { C, R, FS, Fonts, SP } from '@/constants/theme';
 import { ENTITLEMENT_ID } from '@/lib/revenuecat';
 import { CloseIcon } from '@/components/CinemaIcons';
 
+const log = __DEV__ ? console.log : () => {};
+
 interface Props {
   visible: boolean;
   onClose: () => void;
@@ -108,17 +110,17 @@ export function PaywallSheet({ visible, onClose, onPurchased, mockPlans }: Props
     setLoading(true);
     try {
       const offerings = await Purchases.getOfferings();
-      console.log('[Paywall] offerings.current:', JSON.stringify(offerings.current, null, 2));
-      console.log('[Paywall] all offerings:', Object.keys(offerings.all));
+      log('[Paywall] offerings.current:', JSON.stringify(offerings.current, null, 2));
+      log('[Paywall] all offerings:', Object.keys(offerings.all));
       if (offerings.current) {
         const built = buildPlans(offerings.current);
         setPlans(built);
         setSelected(pickDefault(built));
       } else {
-        console.log('[Paywall] No current offering returned');
+        log('[Paywall] No current offering returned');
       }
     } catch (e) {
-      console.log('[Paywall] offerings error:', e);
+      log('[Paywall] offerings error:', e);
       if (__DEV__) {
         // Dev fallback: RevenueCat unconfigured (e.g. iOS sim with no key)
         // — render mock plans so paywall design can still be iterated on.

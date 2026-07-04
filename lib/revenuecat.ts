@@ -12,7 +12,7 @@ export const ENTITLEMENT_ID = 'Cinescenes Pro';
 
 export function initRevenueCat() {
   if (!RC_KEY) return;
-  Purchases.setLogLevel(LOG_LEVEL.VERBOSE);
+  Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.VERBOSE : LOG_LEVEL.ERROR);
   Purchases.configure({ apiKey: RC_KEY });
   Purchases.getCustomerInfo().catch((e) => Sentry.captureException(e));
 }

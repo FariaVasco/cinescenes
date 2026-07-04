@@ -22,8 +22,8 @@
       "bundleIdentifier": "com.cinescenes.app",
       "infoPlist": {
         "NSCameraUsageDescription": "Cinescenes needs camera access to scan movie card QR codes.",
-        "NSMicrophoneUsageDescription": "Cinescenes needs the microphone to let you speak your movie and director guess.",
-        "NSSpeechRecognitionUsageDescription": "Cinescenes uses speech recognition to let you name the movie and director.",
+        "NSMicrophoneUsageDescription": "Cinescenes uses the microphone to record your voice guesses. Recordings are sent to Groq for transcription and are not stored by Cinescenes.",
+        "NSSpeechRecognitionUsageDescription": "Cinescenes converts your voice to text so it can check your movie and director guesses. Transcription is done via Groq.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
