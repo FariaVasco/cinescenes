@@ -30,6 +30,7 @@ const lcFriendsCinema   = require('@/assets/lc-friends-cinema.png');
 const lcPeopleHomeTV    = require('@/assets/lc-people-home-tv.png');
 const lcFriendsCardsW   = require('@/assets/lc-friends-cards-wide.jpg');
 const lcFeedback        = require('@/assets/lc-feedback.png');
+const tmdbLogo          = require('@/assets/tmdb-logo.png');
 
 type MenuView = 'play' | 'rules' | 'settings';
 
@@ -322,6 +323,17 @@ function SettingsView() {
         <Text style={styles.sectionLabel}>PREFERENCES</Text>
         <View style={styles.sectionCard}>
           <PrefRow label="Vibration" value={settings.vibration} onChange={() => setSetting('vibration', !settings.vibration)} />
+        </View>
+
+        {/* About section — TMDB attribution required by their terms of use */}
+        <Text style={styles.sectionLabel}>ABOUT</Text>
+        <View style={styles.sectionCard}>
+          <View style={styles.attributionRow}>
+            <Image source={tmdbLogo} style={styles.tmdbLogo} resizeMode="contain" />
+            <Text style={styles.attributionText}>
+              This product uses the TMDB API but is not endorsed or certified by TMDB.
+            </Text>
+          </View>
         </View>
       </ScrollView>
     </View>
@@ -642,5 +654,24 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.body,
     fontSize: FS.base,
     color: C.textPrimary,
+  },
+
+  // TMDB attribution — required by TMDB's Terms of Use for any product using their API.
+  attributionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SP.md,
+    paddingVertical: 4,
+  },
+  tmdbLogo: {
+    width: 60,
+    height: 32,
+  },
+  attributionText: {
+    flex: 1,
+    fontFamily: Fonts.body,
+    fontSize: FS.sm,
+    color: C.textSub,
+    lineHeight: 18,
   },
 });

@@ -411,6 +411,19 @@ export default function GameScreen() {
       .filter(c => c.interval_index !== -1)
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
     const total = 1 + finalised.length; // active player + challengers/passers
+
+    // Short-circuit when every observer passed — no drama to build, so skip
+    // the per-row reveal. Show all rows instantly (so passers still see the
+    // outcome summary) and move to the flip after a brief pause.
+    const allPassed = finalised.length > 0 && finalised.every(c => c.interval_index === -2);
+    if (allPassed) {
+      setBetRevealCount(total);
+      betRevealTimerRef.current = setTimeout(() => {
+        if (isActivePlayer()) handleReveal();
+      }, 1500);
+      return () => { if (betRevealTimerRef.current) { clearTimeout(betRevealTimerRef.current); betRevealTimerRef.current = null; } };
+    }
+
     let count = 0;
     const tick = () => {
       count++;
@@ -2399,16 +2412,32 @@ export default function GameScreen() {
 
     // Status badge: shown as a floating label inside the timeline, no layout impact
     let badgeText: string | null = null;
+    const otherPickerName = (inSeqPhase && currentPicker && currentPicker.id !== myPlayerId)
+      ? currentPicker.display_name
+      : null;
     if (amActive) {
-      badgeText = (pendingChallengers || !everybodyIn) ? 'Waiting for others to decide…' : canRevealNow ? 'Revealing…' : 'All decided';
+      if (otherPickerName) {
+        badgeText = `${otherPickerName} is picking a slot…`;
+      } else {
+        badgeText = (pendingChallengers || !everybodyIn) ? 'Waiting for others to decide…' : canRevealNow ? 'Revealing…' : 'All decided';
+      }
     } else if (isPickingInterval) {
       badgeText = '↑  Tap a gap to place your coin';
-    } else if (!inSeqPhase && myChallenge?.interval_index === -1) {
-      badgeText = '⚡ You challenged!  Waiting for others…';
-    } else if (inSeqPhase && myChallenge !== null && myChallenge.interval_index >= 0 && !isPickingInterval) {
-      badgeText = 'Coin placed.  Waiting for others…';
     } else if (myChallenge?.interval_index === -3) {
       badgeText = 'You withdrew.';
+    } else if (!inSeqPhase && myChallenge?.interval_index === -1) {
+      badgeText = '⚡ You challenged!  Waiting for others…';
+    } else if (
+      otherPickerName &&
+      myChallenge &&
+      (myChallenge.interval_index === -1 || myChallenge.interval_index >= 0)
+    ) {
+      // Another challenger is currently picking their slot — let me know who
+      badgeText = myChallenge.interval_index >= 0
+        ? `Coin placed.  ${otherPickerName} is picking a slot…`
+        : `⚡ ${otherPickerName} is picking a slot…`;
+    } else if (inSeqPhase && myChallenge !== null && myChallenge.interval_index >= 0 && !isPickingInterval) {
+      badgeText = 'Coin placed.  Waiting for others…';
     }
     // Keep panel open until the player has decided — don't hide early just because
     // other players filled the challenger slots (inSeqPhase).

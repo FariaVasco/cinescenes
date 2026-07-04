@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -16,6 +16,14 @@ const MOCK_PLANS: Plan[] = [
 // Navigate to /debug-paywall in the app (works in Expo dev client / simulator / device).
 export default function DebugPaywallScreen() {
   const router = useRouter();
+
+  // Guard: this dev-only route must never be reachable in production builds.
+  // The redirect handles a user who somehow navigates here; the null return
+  // below prevents any flash of the debug UI in prod.
+  useEffect(() => {
+    if (!__DEV__) router.replace('/');
+  }, []);
+
   const [paywallOpen, setPaywallOpen] = useState(true);
 
   // Lock to landscape — without this, the Modal in PaywallSheet crashes when
@@ -25,6 +33,8 @@ export default function DebugPaywallScreen() {
       ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
     }, [])
   );
+
+  if (!__DEV__) return null;
 
   return (
     <SafeAreaView style={styles.container}>

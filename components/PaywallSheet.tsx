@@ -138,6 +138,13 @@ export function PaywallSheet({ visible, onClose, onPurchased, mockPlans }: Props
     const plan = plans.find((p) => planKey(p) === selected);
     if (!plan) return;
     if (!plan.pkg) {
+      // Mock plan (only reachable in __DEV__, e.g. iOS simulator or /debug-paywall).
+      // Grant a fake premium locally so downstream flows (Insane mode, Collections)
+      // can be tested without a real Play purchase.
+      if (__DEV__) {
+        onPurchased(true);
+        return;
+      }
       Alert.alert('Preview mode', 'This is a mock plan. Real purchases are disabled here.');
       return;
     }
