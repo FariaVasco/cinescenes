@@ -15,6 +15,7 @@ import { C, R, FS, Fonts, SP } from '@/constants/theme';
 import { BackButton } from '@/components/BackButton';
 import { ModePickerModal, ModeChoice } from '@/components/ModePickerModal';
 import { useAppStore } from '@/store/useAppStore';
+import { GAME_CODE_LENGTH, GAME_CODE_PLACEHOLDER, sanitizeGameCodeInput } from '@/lib/game-code';
 
 const lcClapperboard = require('@/assets/lc-clapperboard.png');
 const lcMovieTicket  = require('@/assets/lc-movie-ticket.png');
@@ -138,11 +139,11 @@ export default function LocalScreen() {
             <TextInput
               style={[styles.input, styles.codeInput]}
               value={inviteCode}
-              onChangeText={(t) => setInviteCode(t.toUpperCase())}
-              placeholder="ABC123"
+              onChangeText={(t) => setInviteCode(sanitizeGameCodeInput(t))}
+              placeholder={GAME_CODE_PLACEHOLDER}
               placeholderTextColor={C.textMuted}
               autoCapitalize="characters"
-              maxLength={6}
+              maxLength={GAME_CODE_LENGTH}
               returnKeyType="go"
               onSubmitEditing={handleJoin}
             />

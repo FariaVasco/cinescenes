@@ -27,6 +27,7 @@ import { CinemaButton } from '@/components/CinemaButton';
 import { BackButton } from '@/components/BackButton';
 const lcClapperboard = require('../assets/lc-clapperboard.png');
 import { useAppStore } from '@/store/useAppStore';
+import { generateGameCode } from '@/lib/game-code';
 import { supabase } from '@/lib/supabase';
 import { Game, Movie, Player } from '@/lib/database.types';
 import { fetchRandomInsaneMovie } from '@/lib/tmdb-insane';
@@ -188,10 +189,6 @@ export default function LocalLobbyScreen() {
     }, POLL_MS);
   }
 
-  function generateCode(): string {
-    return Math.random().toString(36).substring(2, 8).toUpperCase();
-  }
-
   function initials(name: string): string {
     return name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2);
   }
@@ -200,7 +197,7 @@ export default function LocalLobbyScreen() {
     if (!displayName.trim()) { router.back(); return; }
     setLoading(true);
     try {
-      const code = generateCode();
+      const code = generateGameCode();
       const { data: newGame, error: gameErr } = await db
         .from('games')
         .insert({

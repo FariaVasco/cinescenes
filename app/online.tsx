@@ -18,6 +18,7 @@ import { C, R, FS, Fonts, SP } from '@/constants/theme';
 import { BackButton } from '@/components/BackButton';
 import { ModePickerModal, ModeChoice } from '@/components/ModePickerModal';
 import { useAppStore } from '@/store/useAppStore';
+import { GAME_CODE_LENGTH, GAME_CODE_PLACEHOLDER, sanitizeGameCodeInput } from '@/lib/game-code';
 import { supabase } from '@/lib/supabase';
 import { Game } from '@/lib/database.types';
 
@@ -204,7 +205,6 @@ export default function OnlineScreen() {
                 data={entries}
                 keyExtractor={(item) => item.game.id}
                 contentContainerStyle={entries.length === 0 ? styles.emptyContainer : styles.listContent}
-                style={styles.gamesList}
                 refreshControl={
                   <RefreshControl
                     refreshing={refreshing}
@@ -263,11 +263,11 @@ export default function OnlineScreen() {
                 <TextInput
                   style={[styles.input, styles.codeInput]}
                   value={inviteCode}
-                  onChangeText={(t) => setInviteCode(t.toUpperCase())}
-                  placeholder="ABC123"
+                  onChangeText={(t) => setInviteCode(sanitizeGameCodeInput(t))}
+                  placeholder={GAME_CODE_PLACEHOLDER}
                   placeholderTextColor={C.textMuted}
                   autoCapitalize="characters"
-                  maxLength={6}
+                  maxLength={GAME_CODE_LENGTH}
                   returnKeyType="go"
                   editable={nameReady}
                   onSubmitEditing={() => { if (canJoinByCode) joinGame(inviteCode.trim()); }}

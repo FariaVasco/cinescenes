@@ -30,6 +30,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Snackbar } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
+import { useKeepAwake } from 'expo-keep-awake';
 import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
 import { Challenge, Movie, Player, Turn } from '@/lib/database.types';
@@ -84,6 +85,7 @@ const PREVIEW_DURATION = 6000; // ms — timeline study countdown before trailer
 const EXTRA_SUSPENSE_MS = 1500;
 
 export default function GameScreen() {
+  useKeepAwake();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const timelinePaddingBottom = Math.max(80, 78 + insets.top - insets.bottom);
@@ -104,6 +106,11 @@ export default function GameScreen() {
   const [players, setLocalPlayers] = useState<Player[]>(storePlayers);
   const [currentTurn, setLocalTurn] = useState<Turn | null>(null);
   const [challenges, setLocalChallenges] = useState<Challenge[]>([]);
+  // Host = first player by created_at (matches local-lobby ordering). In private games
+  // only the host's phone plays the trailer video; public games play it on every phone.
+  // Single source of truth — effects and render branches must use these, not re-derive.
+  const amHost = players.length > 0 && players[0].id === myPlayerId;
+  const showsVideo = amHost || game?.visibility === 'public';
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const [trailerEnded, setTrailerEnded] = useState(false);
   const [trailerRevealed, setTrailerRevealed] = useState(false);
@@ -126,7 +133,8 @@ export default function GameScreen() {
   const [castVisible, setCastVisible] = useState(false);
   const [tvBannerDismissed, setTvBannerDismissed] = useState(false);
   const airPlayAvailable = useAirPlayAvailable();
-  const [bonusPanelOpen, setBonusPanelOpen] = useState(false);
+  const [bonusExpanded, setBonusExpanded] = useState<boolean | null>(null);
+  const bonusExpandAnim = useRef(new Animated.Value(0)).current;
 
   const [selectedInterval, setSelectedInterval] = useState<number | null>(null);
   const [hasPassed, setHasPassed] = useState(false);
@@ -146,7 +154,6 @@ export default function GameScreen() {
   const challengerTransitionOpacity = useRef(new Animated.Value(0)).current;
   const challengePanelY = useRef(new Animated.Value(200)).current;
   const leftPanelFade = useRef(new Animated.Value(1)).current;
-  const bonusPanelAnim = useRef(new Animated.Value(0)).current;
   // "Lights on" transition: dark overlay that fades away when drawing phase appears after reveal
   const lightsOnAnim = useRef(new Animated.Value(0)).current;
   // Cross-fade between countdown overlay and trailer overlay
@@ -282,10 +289,8 @@ export default function GameScreen() {
   // since TrailerPlayer is not rendered for them. Manually open the gate when countdown fires.
   useEffect(() => {
     if (!countdownDone) return;
-    const amHost_ = players.length > 0 && players[0].id === myPlayerId;
-    const showVideo_ = amHost_ || game?.visibility === 'public';
-    if (!showVideo_) setTrailerRevealed(true);
-  }, [countdownDone]);
+    if (!showsVideo) setTrailerRevealed(true);
+  }, [countdownDone, showsVideo]);
 
   // Suspense → flip → result reveal sequence.
   // Challenges are fetched immediately (for the suspense overlay).
@@ -474,7 +479,6 @@ export default function GameScreen() {
   // recalculates layout (causing visible glitching) and disrupts speech recognition.
   useEffect(() => {
     const amActive = myPlayerId === currentTurn?.active_player_id;
-    const amHost = players.length > 0 && players[0].id === myPlayerId;
     if (trailerEnded && !readyToPlace && amActive) {
       setReadyToPlace(true); // skip guess screen — panel lives on placement screen
       // Private games: only the host plays the trailer. When the host is ALSO the active
@@ -512,11 +516,10 @@ export default function GameScreen() {
     const curr = currentTurn?.placed_interval ?? null;
     const prev = prevPlacedIntervalRef.current;
     prevPlacedIntervalRef.current = curr;
-    const isHost = players.length > 0 && players[0].id === myPlayerId;
     const isActive = myPlayerId === currentTurn?.active_player_id;
     // Only act if: host, not their turn, private game, trailer already ended on host,
     // and placed_interval just went from non-null back to null (= replay request).
-    if (isHost && !isActive && game?.visibility !== 'public'
+    if (amHost && !isActive && game?.visibility !== 'public'
         && trailerEnded && prev !== undefined && prev !== null && curr === null) {
       setTrailerEnded(false);
       setTrailerRevealed(false);
@@ -531,6 +534,9 @@ export default function GameScreen() {
 
   // When the app returns from background during trailer playback the WebView freezes.
   // Force-remount the player so it loads fresh — the title burn hides the restart.
+  // Only fires on devices that actually render the WebView (host, or any player in a
+  // public game). Non-host players in private games have no WebView to unfreeze, and
+  // resetting their state would hide the "I know it!" button that gates their placement.
   const wasBackgroundedRef = useRef(false);
   useEffect(() => {
     const sub = AppState.addEventListener('change', nextState => {
@@ -538,7 +544,7 @@ export default function GameScreen() {
         wasBackgroundedRef.current = true;
       } else if (nextState === 'active' && wasBackgroundedRef.current) {
         wasBackgroundedRef.current = false;
-        if (currentTurn?.status === 'placing' && !trailerEnded) {
+        if (showsVideo && currentTurn?.status === 'placing' && !trailerEnded) {
           setTrailerEnded(false);
           setTrailerRevealed(false);
           setCountdownDone(false);
@@ -550,7 +556,10 @@ export default function GameScreen() {
       }
     });
     return () => sub.remove();
-  }, [currentTurn?.status, trailerEnded]);
+    // Booleans only — `players` itself is a fresh array every poll tick and would
+    // resubscribe the listener continuously.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentTurn?.status, trailerEnded, showsVideo]);
 
   // Skip-trailer gate: for public games, the active player must watch at least half
   // the safe window before "I know it!" becomes tappable.
@@ -827,12 +836,10 @@ export default function GameScreen() {
           setMovieGuess('');
           setDirectorGuess('');
           setRevealLocked(true);
-          voiceStateRef.current = 'idle';
-          setVoiceState('idle');
+          cancelVoice();
           setVoiceError('');
-          setVoiceResult(null);
-          setBonusPanelOpen(false);
-          bonusPanelAnim.setValue(0);
+          setBonusExpanded(null);
+          bonusExpandAnim.setValue(0);
         }
       }
 
@@ -1011,6 +1018,41 @@ export default function GameScreen() {
     currentTurnRef.current = optimistic;
     await db.from('turns').update({ placed_interval: selectedInterval, status: 'challenging' }).eq('id', currentTurn.id);
     pendingTurnWrite.current = false;
+  }
+
+  function resetVoice() {
+    voiceStateRef.current = 'idle';
+    setVoiceState('idle');
+    setVoiceResult(null);
+  }
+
+  // Full voice teardown: stops the recorder and metering loop, not just the UI state.
+  // stopVoice's in-flight transcription checks voiceStateRef and discards a late result.
+  function cancelVoice() {
+    if (meteringIntervalRef.current) { clearInterval(meteringIntervalRef.current); meteringIntervalRef.current = null; }
+    resetVoice();
+    if (recorder.isRecording) {
+      recorder.stop()
+        .then(() => setAudioModeAsync({ allowsRecording: false }))
+        .catch(() => {});
+    }
+  }
+
+  function expandBonus() {
+    haptics.select();
+    setBonusExpanded(true);
+    Animated.spring(bonusExpandAnim, { toValue: 1, useNativeDriver: true, tension: 90, friction: 11 }).start();
+  }
+  function collapseBonus() {
+    Keyboard.dismiss();
+    // Close also cancels any in-flight voice capture (mic off, metering stopped).
+    // Read the ref, not state — callers may have just reset state in the same tick.
+    if (voiceStateRef.current !== 'idle' && voiceStateRef.current !== 'error') {
+      cancelVoice();
+    }
+    Animated.timing(bonusExpandAnim, { toValue: 0, duration: 220, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(({ finished }) => {
+      if (finished) setBonusExpanded(false);
+    });
   }
 
   async function handlePlacementTimeout() {
@@ -1218,6 +1260,8 @@ export default function GameScreen() {
       if (!uri) throw new Error('No recording URI');
 
       const transcript = await transcribeAudio(uri);
+      // Cancelled (panel closed / turn changed) while transcribing — discard the result.
+      if (voiceStateRef.current !== 'processing') return;
 
       if (!transcript) {
         voiceStateRef.current = 'error';
@@ -1255,39 +1299,18 @@ export default function GameScreen() {
         }
       }
 
+      // The LLM/TMDB lookups above also await — re-check cancellation before surfacing.
+      if (voiceStateRef.current !== 'processing') return;
       setVoiceResult({ movie: titleValue ?? transcript, director: directorValue ?? '' });
       voiceStateRef.current = 'result';
       setVoiceState('result');
     } catch (e: any) {
+      if (voiceStateRef.current !== 'processing') return;
       console.error('[voice] stopVoice error:', e?.message ?? e);
       voiceStateRef.current = 'error';
       setVoiceError(e?.message ?? 'Transcription failed. Please type instead.');
       setVoiceState('error');
     }
-  }
-
-  function openBonus() {
-    haptics.select();
-    setBonusPanelOpen(true);
-    Animated.spring(bonusPanelAnim, { toValue: 1, useNativeDriver: true, tension: 80, friction: 12 }).start();
-  }
-  function closeBonus() {
-    Keyboard.dismiss();
-    Animated.timing(bonusPanelAnim, { toValue: 0, duration: 180, useNativeDriver: true }).start(() => setBonusPanelOpen(false));
-  }
-  function handleReplayBonus() {
-    setBonusPanelOpen(false);
-    bonusPanelAnim.setValue(0);
-    Keyboard.dismiss();
-    setHasReplayed(true);
-    setReadyToPlace(false);
-    setTrailerEnded(false);
-    setTrailerRevealed(false);
-    setVideoStarted(false);
-    setUserPaused(false);
-    trailerRevealAnim.setValue(0);
-    countdownFadeAnim.setValue(1);
-    setTrailerKey(k => k + 1);
   }
 
   // Wraps handleNextTurn with a "lights out" fade so the reveal→drawing hand-off
@@ -1580,7 +1603,6 @@ export default function GameScreen() {
     const startingMovie = startingPair
       ? (activeMovies.find(m => m.id === startingPair.id) ?? activeMovies.find(m => m.year === startingYear) ?? null)
       : (activeMovies.find(m => m.year === startingYear) ?? null);
-    const amHostIntro = players.length > 0 && players[0].id === myPlayerId;
     const allPlayersReady = players.length > 0 && players.every(p => p.last_seen !== null);
     return (
       <GameIntroScreen
@@ -1602,7 +1624,7 @@ export default function GameScreen() {
         }}
         allMovies={activeMovies}
         players={players}
-        amHost={amHostIntro}
+        amHost={amHost}
         allPlayersReady={allPlayersReady}
       />
     );
@@ -1612,8 +1634,6 @@ export default function GameScreen() {
   const activePlayer = getActivePlayer();
   const amActive = isActivePlayer();
   const timeline = getActivePlayerTimeline();
-  // Host = first player by created_at (matches local-lobby ordering)
-  const amHost = players.length > 0 && players[0].id === myPlayerId;
 
   // My own timeline (for "my timeline" modal and drawing phase display).
   // Use myTimelineFloorRef as a floor so the interval poll can't briefly show a
@@ -1874,7 +1894,9 @@ export default function GameScreen() {
     // ── Timeline (after trailer + ready) ──
     if (readyToPlace) {
       const bonusEntered = !!(movieGuess.trim() || directorGuess.trim());
-      const bonusScale = bonusPanelAnim.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] });
+      const voiceActive = voiceState === 'recording' || voiceState === 'processing' || voiceState === 'result';
+      // Default collapsed. Voice states force expanded so the waveform / result view have room.
+      const dockExpanded = voiceActive || bonusExpanded === true;
 
       return (
         <>
@@ -1884,7 +1906,7 @@ export default function GameScreen() {
             <Animated.View style={[styles.timelineAreaFull, { paddingBottom: timelinePaddingBottom }]}>
               {amActive ? (
                 <View style={{ position: 'absolute', top: 20, left: 0, right: 0, alignItems: 'center' }}>
-                  <HourglassTimer durationMs={30000} size={40} onExpire={handlePlacementTimeout} label="to place the card in the timeline" paused={bonusPanelOpen} />
+                  <HourglassTimer durationMs={30000} size={40} onExpire={handlePlacementTimeout} label="to place the card in the timeline" paused={dockExpanded} />
                 </View>
               ) : (
                 <View style={styles.placePromptRow}>
@@ -1898,7 +1920,12 @@ export default function GameScreen() {
                 currentCardMovie={amActive ? (movie ?? undefined) : undefined}
                 interactive={amActive}
                 selectedInterval={amActive ? selectedInterval : null}
-                onIntervalSelect={amActive ? (i) => { setSelectedInterval(i); if (bonusPanelOpen) closeBonus(); } : () => {}}
+                onIntervalSelect={amActive ? (i) => {
+                  setSelectedInterval(i);
+                  // Picking a slot closes the guess panel — otherwise the panel would
+                  // keep the placement timer paused while the timeline stays usable.
+                  if (dockExpanded) collapseBonus();
+                } : () => {}}
                 onConfirm={amActive ? handleAnimatedConfirm : () => {}}
                 placedMovies={placedMovies}
                 hideFloatingCard
@@ -1906,127 +1933,124 @@ export default function GameScreen() {
             </Animated.View>
           </View>
 
-          {/* ── Bonus FABs — floats above bottom inset, last child → on top ── */}
+          {/* ── Bonus dock — coin pill bottom-center (above the My Timeline tab); panel
+                 rises out of the pill like a genie and folds back into it on collapse ── */}
           {amActive && (
-            <View style={[styles.bonusFabColumn, { bottom: insets.bottom + 12 }]}>
-              {/* Coin FAB row — with first-turn tooltip to the left */}
-              <View style={styles.bonusFabMainRow}>
-                {myTimeline.length <= 1 && !bonusEntered && !bonusPanelOpen && (
-                  <View style={styles.bonusFabTip}>
-                    <Text style={styles.bonusFabTipText}>Guess title &amp; director for a bonus coin</Text>
-                    <Text style={styles.bonusFabTipArrow}>›</Text>
-                  </View>
-                )}
-                <TouchableOpacity
-                  style={[styles.bonusFab, bonusEntered && styles.bonusFabDone]}
-                  onPress={bonusPanelOpen ? closeBonus : openBonus}
-                  activeOpacity={0.85}
-                >
-                  {bonusEntered
-                    ? <Text style={styles.bonusFabCheck}>✓</Text>
-                    : <Image source={lcCoin} style={styles.bonusFabIcon} />
-                  }
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
-
-          {/* ── Bonus overlay — right-side panel, anchored above the FAB ── */}
-          {amActive && bonusPanelOpen && (
-            <Animated.View
-              style={[styles.bonusOverlay, {
-                bottom: insets.bottom + 62,
-                maxHeight: screenHeight - insets.top - insets.bottom - 62 - 12,
-                opacity: bonusPanelAnim,
-                transform: [{ scale: bonusScale }],
-              }]}
+            <View
+              style={[styles.bonusDockAnchor, { bottom: insets.bottom + 32 }]}
+              pointerEvents="box-none"
             >
-              {/* Header */}
-              <View style={styles.bonusOverlayHeader}>
-                <Text style={styles.bonusOverlayTitle}>🪙  Name the movie</Text>
-                <TouchableOpacity onPress={closeBonus} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <CloseIcon size={14} color={C.textSubDark} />
-                </TouchableOpacity>
-              </View>
-
-              {/* Body: voice result OR inputs */}
-              {voiceState === 'result' && voiceResult ? (
-                <View style={styles.bonusVoiceResultStack}>
-                  <Text style={styles.bonusVoiceResultTitle}>{voiceResult.movie || '—'}</Text>
-                  <Text style={styles.bonusVoiceResultSub}>{voiceResult.director || '—'}</Text>
-                  <View style={styles.bonusVoiceResultBtns}>
-                    <TouchableOpacity style={styles.bonusVoiceRetryBtn} onPress={() => { voiceStateRef.current = 'idle'; setVoiceState('idle'); setVoiceResult(null); setMovieGuess(''); setDirectorGuess(''); }} activeOpacity={0.7}>
-                      <Text style={styles.bonusVoiceRetryText}>Retry</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.bonusVoiceRetryBtn} onPress={() => {
-                      setMovieGuess(voiceResult.movie ?? '');
-                      setDirectorGuess(voiceResult.director ?? '');
-                      voiceStateRef.current = 'idle'; setVoiceState('idle'); setVoiceResult(null);
-                    }} activeOpacity={0.7}>
-                      <Text style={styles.bonusVoiceRetryText}>Edit</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.bonusVoiceAcceptBtn, { flex: 1 }]} onPress={() => {
-                      setMovieGuess(voiceResult.movie ?? '');
-                      setDirectorGuess(voiceResult.director ?? '');
-                      voiceStateRef.current = 'idle'; setVoiceState('idle'); setVoiceResult(null);
-                      closeBonus();
-                    }} activeOpacity={0.7}>
-                      <Text style={styles.bonusVoiceAcceptText}>Confirm</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ) : voiceState === 'recording' ? (
-                <View style={styles.bonusVoiceRecordColumn}>
-                  <View style={styles.waveformRow}>
-                    {waveformBars.map((anim, i) => (
-                      <Animated.View key={i} style={[styles.waveformBar, { transform: [{ scaleY: anim }] }]} />
-                    ))}
-                  </View>
-                  <TouchableOpacity style={styles.voiceStopBtn} onPress={stopVoice} activeOpacity={0.75}>
-                    <View style={styles.voiceStopSquare} />
-                  </TouchableOpacity>
-                </View>
-              ) : voiceState === 'processing' ? (
-                <View style={styles.bonusVoiceRecordColumn}>
-                  <ActivityIndicator color={C.ochre} size="small" />
-                  <Text style={styles.bonusInputPlaceholder}>Processing…</Text>
-                </View>
-              ) : (
-                <View style={styles.bonusInputsStack}>
-                  <TextInput
-                    style={styles.bonusInput}
-                    placeholder="Movie title…"
-                    placeholderTextColor={C.textMutedDark}
-                    value={movieGuess}
-                    onChangeText={setMovieGuess}
-                    autoCorrect={false}
-                    returnKeyType="next"
-                  />
-                  <View style={styles.bonusInputDirectorRow}>
-                    <TextInput
-                      style={[styles.bonusInput, { flex: 1 }]}
-                      placeholder="Director…"
-                      placeholderTextColor={C.textMutedDark}
-                      value={directorGuess}
-                      onChangeText={setDirectorGuess}
-                      autoCorrect={false}
-                      returnKeyType="done"
-                    />
-                    <TouchableOpacity style={styles.bonusMicBtn} onPress={startVoice} activeOpacity={0.75}>
-                      <Text style={styles.bonusMicIcon}>🎤</Text>
-                    </TouchableOpacity>
-                  </View>
-                  {voiceState === 'error' && (
-                    <View style={{ gap: 4 }}>
-                      {!!voiceError && <Text style={styles.voiceErrorText}>{voiceError}</Text>}
-                      <TouchableOpacity onPress={() => { voiceStateRef.current = 'idle'; setVoiceState('idle'); setVoiceError(''); }} activeOpacity={0.7}>
-                        <Text style={styles.bonusVoiceRetryText}>⚠ Retry</Text>
+              {dockExpanded && (
+                <Animated.View
+                  style={[
+                    styles.bonusDockPanel,
+                    {
+                      opacity: bonusExpandAnim,
+                      transform: [
+                        { translateY: bonusExpandAnim.interpolate({ inputRange: [0, 1], outputRange: [26, 0] }) },
+                        { scale: bonusExpandAnim.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] }) },
+                      ],
+                    },
+                  ]}
+                >
+                  {voiceState === 'recording' ? (
+                    <View style={styles.bonusDockVoiceRow}>
+                      <View style={[styles.waveformRow, { flex: 1 }]}>
+                        {waveformBars.map((anim, i) => (
+                          <Animated.View key={i} style={[styles.waveformBar, { transform: [{ scaleY: anim }] }]} />
+                        ))}
+                      </View>
+                      <TouchableOpacity style={styles.voiceStopBtn} onPress={stopVoice} activeOpacity={0.75}>
+                        <View style={styles.voiceStopSquare} />
+                      </TouchableOpacity>
+                    </View>
+                  ) : voiceState === 'processing' ? (
+                    <View style={styles.bonusDockVoiceRow}>
+                      <ActivityIndicator color={C.ochre} size="small" />
+                      <Text style={styles.bonusVoiceResultSub}>Transcribing…</Text>
+                    </View>
+                  ) : voiceState === 'result' && voiceResult ? (
+                    <View style={styles.bonusDockResultCol}>
+                      <Text style={styles.bonusVoiceResultTitle} numberOfLines={1}>{voiceResult.movie || '—'}</Text>
+                      <Text style={styles.bonusVoiceResultSub} numberOfLines={1}>{voiceResult.director || '—'}</Text>
+                      <View style={styles.bonusDockResultBtns}>
+                        <TouchableOpacity style={styles.bonusVoiceRetryBtn} onPress={() => { resetVoice(); setMovieGuess(''); setDirectorGuess(''); }} activeOpacity={0.7}>
+                          <Text style={styles.bonusVoiceRetryText}>Retry</Text>
+                        </TouchableOpacity>
+                        {/* Edit drops back to the inputs for tweaking; Confirm accepts and closes. */}
+                        <TouchableOpacity style={styles.bonusVoiceRetryBtn} onPress={() => {
+                          setMovieGuess(voiceResult.movie ?? '');
+                          setDirectorGuess(voiceResult.director ?? '');
+                          resetVoice();
+                        }} activeOpacity={0.7}>
+                          <Text style={styles.bonusVoiceRetryText}>Edit</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.bonusVoiceAcceptBtn} onPress={() => {
+                          setMovieGuess(voiceResult.movie ?? '');
+                          setDirectorGuess(voiceResult.director ?? '');
+                          resetVoice();
+                          collapseBonus();
+                        }} activeOpacity={0.7}>
+                          <Text style={styles.bonusVoiceAcceptText}>Confirm</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ) : (
+                    <View style={styles.bonusDockStackRow}>
+                      <View style={styles.bonusDockInputsStack}>
+                        <TextInput
+                          style={styles.bonusDockInput}
+                          placeholder="Movie title…"
+                          placeholderTextColor={C.textMutedDark}
+                          value={movieGuess}
+                          onChangeText={setMovieGuess}
+                          autoCorrect={false}
+                          autoComplete="off"
+                          returnKeyType="next"
+                        />
+                        <TextInput
+                          style={styles.bonusDockInput}
+                          placeholder="Director…"
+                          placeholderTextColor={C.textMutedDark}
+                          value={directorGuess}
+                          onChangeText={setDirectorGuess}
+                          autoCorrect={false}
+                          autoComplete="off"
+                          returnKeyType="done"
+                        />
+                      </View>
+                      <TouchableOpacity style={styles.bonusMicBtnTall} onPress={startVoice} activeOpacity={0.75}>
+                        <Text style={styles.bonusMicIcon}>🎤</Text>
                       </TouchableOpacity>
                     </View>
                   )}
-                </View>
+                  {voiceState === 'error' && !!voiceError && (
+                    <TouchableOpacity onPress={() => { resetVoice(); setVoiceError(''); }} activeOpacity={0.7}>
+                      <Text style={styles.voiceErrorText}>⚠ {voiceError} — tap to retry</Text>
+                    </TouchableOpacity>
+                  )}
+                </Animated.View>
               )}
-            </Animated.View>
+
+              <View style={styles.bonusDockPillRow}>
+                {myTimeline.length <= 1 && !bonusEntered && !dockExpanded && (
+                  <View style={styles.bonusDockTip}>
+                    <Text style={styles.bonusDockTipText}>Guess the movie &amp; director for a bonus coin</Text>
+                    <Text style={styles.bonusDockTipArrow}>›</Text>
+                  </View>
+                )}
+                <TouchableOpacity
+                  onPress={dockExpanded ? collapseBonus : expandBonus}
+                  activeOpacity={0.85}
+                  style={[styles.bonusDockPill, bonusEntered && styles.bonusDockPillDone]}
+                >
+                  {bonusEntered
+                    ? <Text style={styles.bonusFabCheck}>✓</Text>
+                    : <Image source={lcCoin} style={styles.bonusDockCoin} />}
+                  <Text style={[styles.bonusDockLabelText, bonusEntered && { color: C.leaf }]}>+1 coin</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           )}
 
           {myTimeline.length > 0 && (
@@ -2087,9 +2111,6 @@ export default function GameScreen() {
       }
 
 
-    // In private games, only the host's phone plays the actual video.
-    const showVideo = amHost || game?.visibility === 'public';
-
     // Remaining countdown duration — synced across devices via placing_started_at
     // (requires DB migration: ALTER TABLE turns ADD COLUMN placing_started_at TIMESTAMPTZ)
     const remainingPreview = currentTurn.placing_started_at
@@ -2131,7 +2152,7 @@ export default function GameScreen() {
       <Animated.View style={[StyleSheet.absoluteFillObject, { backgroundColor: '#000', opacity: trailerRevealAnim }]}
         pointerEvents={(countdownDone && trailerRevealed) ? 'auto' : 'none'}>
         {/* Video: host's phone only in private games; all phones in public games */}
-        {showVideo && (
+        {showsVideo && (
           <TrailerPlayer
             key={`${currentTurn.id}-${trailerKey}`}
             ref={trailerRef}
@@ -2144,7 +2165,7 @@ export default function GameScreen() {
         )}
 
         {/* Non-host observers: waiting message */}
-        {!showVideo && !amActive && (
+        {!showsVideo && !amActive && (
           <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }} edges={['top', 'bottom']}>
             <Image source={lcPopcorn} style={styles.endedTitleIcon} />
             <Text style={styles.endedWaiting}>{players[0]?.display_name} is watching the trailer…</Text>
@@ -2152,7 +2173,7 @@ export default function GameScreen() {
         )}
 
         {/* Touch blocker — prevents YouTube from showing title on tap */}
-        {showVideo && !userPaused && (
+        {showsVideo && !userPaused && (
           <TouchableOpacity
             style={StyleSheet.absoluteFillObject}
             activeOpacity={1}
@@ -2163,7 +2184,7 @@ export default function GameScreen() {
         )}
 
         {/* Controls: active player watching video (host / public) — corner overlay */}
-        {amActive && showVideo && trailerRevealed && (
+        {amActive && showsVideo && trailerRevealed && (
           <SafeAreaView style={styles.trailerControls} edges={['top', 'bottom', 'right']} pointerEvents="box-none">
             <View />
             <View style={styles.cornerActions}>
@@ -2192,7 +2213,7 @@ export default function GameScreen() {
         )}
 
         {/* Controls: active player not watching video (private game, not host) — centered */}
-        {amActive && !showVideo && countdownDone && (
+        {amActive && !showsVideo && countdownDone && (
           <SafeAreaView style={styles.activeNoVideoOverlay} edges={['top', 'bottom', 'left', 'right']} pointerEvents="box-none">
             <View />
             <View style={styles.activeNoVideoCenter}>
@@ -2223,7 +2244,7 @@ export default function GameScreen() {
         )}
 
         {/* Observer label */}
-        {!amActive && showVideo && trailerRevealed && (
+        {!amActive && showsVideo && trailerRevealed && (
           <SafeAreaView style={styles.trailerControls} edges={['top']} pointerEvents="box-none">
             <View style={styles.watchingBadge}>
               <Text style={styles.watchingBadgeText}>👀 {activePlayer?.display_name} is playing</Text>
@@ -2232,7 +2253,7 @@ export default function GameScreen() {
         )}
 
         {/* Pause overlay */}
-        {amActive && showVideo && (
+        {amActive && showsVideo && (
           <FadePauseOverlay
             visible={userPaused}
             onPress={() => { setUserPaused(false); trailerRef.current?.resume(); }}
@@ -2312,12 +2333,12 @@ export default function GameScreen() {
                 Phase 2 — once 'playing' fires (or immediately for non-video devices), show
                            the accurate countdown keyed to TITLE_CARD_BURN. */}
             <View style={{ position: 'absolute', bottom: PULL_TAB_H + 8, left: 0, right: 0, alignItems: 'center' }}>
-              {showVideo && !videoStarted ? (
+              {showsVideo && !videoStarted ? (
                 <ChoosingMovieLabel />
               ) : (
                 <TrailerCountdown
                   key={videoStarted ? 'started' : 'sync'}
-                  durationMs={showVideo ? TITLE_CARD_BURN : remainingPreview}
+                  durationMs={showsVideo ? TITLE_CARD_BURN : remainingPreview}
                   onExpire={() => setCountdownDone(true)}
                 />
               )}
@@ -2504,8 +2525,12 @@ export default function GameScreen() {
             <View style={[styles.challengePickRow, { paddingBottom: insets.bottom || 10 }]}>
               <HourglassTimer durationMs={15000} size={36} onExpire={handlePickerTimeout} />
               {!amFirstChallenger && (
-                <TouchableOpacity style={styles.withdrawOverlayBtn} onPress={handleWithdrawChallenge} activeOpacity={0.7}>
-                  <Text style={styles.withdrawOverlayBtnText}>↩  Withdraw</Text>
+                <TouchableOpacity
+                  style={[styles.withdrawBtn, { left: insets.left + 16 }]}
+                  onPress={handleWithdrawChallenge}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.withdrawBtnText}>↩  Withdraw</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -3359,19 +3384,21 @@ const styles = StyleSheet.create({
     fontSize: FS.sm,
     textAlign: 'center',
   },
-  withdrawOverlayBtn: {
+  withdrawBtn: {
     position: 'absolute',
     bottom: 12,
-    right: 16,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
+    borderRadius: R.btn,
+    borderWidth: 2,
+    borderColor: C.ink,
+    backgroundColor: C.vermillion,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
   },
-  withdrawOverlayBtnText: {
-    color: 'rgba(255,255,255,0.8)',
-    fontFamily: Fonts.label,
-    fontSize: FS.sm,
+  withdrawBtnText: {
+    color: C.textOnRed,
+    fontFamily: Fonts.display,
+    fontSize: FS.md,
+    letterSpacing: 0.5,
   },
   watchingBadge: {
     alignSelf: 'flex-start',
@@ -3766,132 +3793,109 @@ const styles = StyleSheet.create({
   },
   myTimelinePlaceholderYear: { color: C.ochre, fontFamily: Fonts.bodyBold, fontSize: FS.md },
 
-  // Bonus coin guess inputs (trailerEnded screen)
-  bonusCoinBox: {
-    alignItems: 'stretch', gap: 8, marginTop: 12, width: '100%', paddingHorizontal: 16,
+  // ── Bonus dock (coin pill bottom-center of placement screen; panel rises above it) ──
+  bonusDockAnchor: {
+    position: 'absolute',
+    left: 0, right: 0,
+    alignItems: 'center',
+    gap: 4,
   },
-  bonusCoinHint: {
-    color: C.ochre, fontFamily: Fonts.label, fontSize: FS.xs,
-    textAlign: 'center', letterSpacing: 0.5, textTransform: 'uppercase',
-  },
-  guessInputRow: {
+  bonusDockPillRow: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
   },
-  guessInputIcon: {
-    width: 28, height: 28, resizeMode: 'contain',
-  },
-  guessInput: {
-    backgroundColor: 'rgba(255,255,255,0.07)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)',
-    borderRadius: R.sm, paddingHorizontal: 12, paddingVertical: 12,
-    color: C.textPrimaryDark, fontFamily: Fonts.body, fontSize: FS.base,
-  },
-
-  // ── Bonus overlay (FAB popup) ──
-  bonusOverlay: {
-    position: 'absolute', right: 20, width: 220,
-    backgroundColor: C.inkSurface,
-    borderRadius: R.sheet,
-    borderWidth: 1.5, borderColor: C.ochre,
-    elevation: 20,
-    shadowColor: '#000', shadowOffset: { width: 0, height: -3 }, shadowOpacity: 0.4, shadowRadius: 10,
-    paddingHorizontal: 14, paddingVertical: 10,
-    gap: 8,
-  },
-  bonusOverlayHeader: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-  },
-  bonusOverlayTitle: { color: C.ochre, fontFamily: Fonts.label, fontSize: FS.xs, letterSpacing: 1.5, textTransform: 'uppercase' },
-  bonusOverlayActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  bonusOverlayReplayBtn: { paddingVertical: 2 },
-  bonusOverlayReplayText: { color: C.textSubDark, fontFamily: Fonts.label, fontSize: FS.sm },
-  bonusInputsStack: { gap: 6 },
-  bonusInputDirectorRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  bonusInput: {
-    height: 34,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: R.sm, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
-    paddingHorizontal: 10,
-    color: C.textPrimaryDark, fontFamily: Fonts.body, fontSize: FS.sm,
-  },
-  bonusMicBtn: {
-    width: 34, height: 34, borderRadius: R.sm,
-    backgroundColor: 'rgba(245,197,24,0.10)',
-    borderWidth: 1, borderColor: 'rgba(245,197,24,0.35)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  bonusMicIcon: { fontSize: 16 },
-  bonusVoiceRecordColumn: {
-    alignItems: 'center', gap: 10, paddingVertical: 6,
-  },
-  bonusVoiceResultStack: {
-    gap: 6,
-  },
-  bonusVoiceResultTitle: {
-    color: C.textPrimaryDark, fontFamily: Fonts.bodyBold, fontSize: FS.sm,
-  },
-  bonusVoiceResultSub: {
-    color: C.textSubDark, fontFamily: Fonts.body, fontSize: FS.sm,
-    marginBottom: 2,
-  },
-  bonusVoiceResultBtns: {
-    flexDirection: 'row', flexWrap: 'wrap', gap: 6,
-  },
-  bonusVoiceRetryBtn: {
-    paddingHorizontal: 10, paddingVertical: 8,
-    borderRadius: R.sm, backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
-    alignItems: 'center',
-  },
-  bonusVoiceRetryText: { color: C.textSubDark, fontFamily: Fonts.label, fontSize: FS.sm },
-  bonusVoiceAcceptBtn: {
-    paddingHorizontal: 10, paddingVertical: 8,
-    borderRadius: R.sm, backgroundColor: C.ochre,
-    alignItems: 'center',
-  },
-  bonusVoiceAcceptText: { color: C.textOnOchre, fontFamily: Fonts.bodyBold, fontSize: FS.sm },
-  bonusInputPlaceholder: { color: C.textMutedDark, fontFamily: Fonts.body, fontSize: FS.sm },
-  // ── Bonus FAB ──
-  bonusFabColumn: {
-    position: 'absolute', right: 20,
-    flexDirection: 'column-reverse', alignItems: 'flex-end', gap: 8,
-  },
-  bonusFabMainRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-  },
-  bonusFabTip: {
+  bonusDockTip: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     backgroundColor: C.inkSurface,
     borderRadius: R.full, borderWidth: 1, borderColor: 'rgba(245,197,24,0.3)',
     paddingHorizontal: 10, paddingVertical: 5,
   },
-  bonusFabTipText: {
+  bonusDockTipText: {
     color: C.textSubDark, fontFamily: Fonts.label, fontSize: FS.xs,
   },
-  bonusFabTipArrow: {
+  bonusDockTipArrow: {
     color: C.ochre, fontFamily: Fonts.bodyBold, fontSize: FS.sm,
   },
-  bonusFab: {
-    width: 44, height: 44, borderRadius: 22,
+  bonusDockPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
     backgroundColor: C.inkSurface,
-    borderWidth: 2, borderColor: C.ochre,
-    alignItems: 'center', justifyContent: 'center',
+    borderRadius: R.full,
+    borderWidth: 1.5, borderColor: C.ochre,
+    paddingHorizontal: 12, paddingVertical: 5,
+    elevation: 8,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 5,
+  },
+  bonusDockPillDone: {
+    borderColor: C.leaf,
+    backgroundColor: 'rgba(61,170,92,0.10)',
+  },
+  bonusDockPanel: {
+    minWidth: 300, maxWidth: 340,
+    backgroundColor: C.inkSurface,
+    borderRadius: R.md,
+    borderWidth: 1, borderColor: C.ochre,
+    paddingHorizontal: 8, paddingVertical: 5,
+    gap: 3,
     elevation: 10,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.4, shadowRadius: 6,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.35, shadowRadius: 6,
   },
-  bonusFabDone: { borderColor: C.leaf, backgroundColor: 'rgba(61,170,92,0.15)' },
-  bonusFabIcon: { width: 24, height: 24, resizeMode: 'contain' },
+  bonusDockVoiceRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingVertical: 4,
+  },
+  bonusDockResultCol: {
+    gap: 4,
+  },
+  bonusDockResultBtns: {
+    flexDirection: 'row', gap: 6,
+  },
+  bonusDockCoin: { width: 16, height: 16, resizeMode: 'contain' },
+  bonusDockLabelText: {
+    color: C.ochre, fontFamily: Fonts.label, fontSize: FS.xs,
+    letterSpacing: 0.5, textTransform: 'uppercase',
+  },
+  bonusDockStackRow: {
+    flexDirection: 'row', alignItems: 'stretch', gap: 6,
+  },
+  bonusDockInputsStack: {
+    flex: 1, gap: 3,
+  },
+  bonusDockInput: {
+    height: 28,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: R.sm, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
+    paddingHorizontal: 10,
+    color: C.textPrimaryDark, fontFamily: Fonts.body, fontSize: FS.sm,
+    letterSpacing: 0, textAlign: 'left',
+    includeFontPadding: false, textAlignVertical: 'center',
+  },
+  bonusMicBtnTall: {
+    width: 44, borderRadius: R.sm,
+    backgroundColor: 'rgba(245,197,24,0.14)',
+    borderWidth: 1, borderColor: 'rgba(245,197,24,0.45)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  bonusMicIcon: { fontSize: 18 },
+  bonusVoiceResultTitle: {
+    color: C.textPrimaryDark, fontFamily: Fonts.bodyBold, fontSize: FS.sm,
+  },
+  bonusVoiceResultSub: {
+    color: C.textSubDark, fontFamily: Fonts.body, fontSize: FS.sm,
+  },
+  bonusVoiceRetryBtn: {
+    paddingHorizontal: 12, paddingVertical: 8,
+    borderRadius: R.sm, backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+  },
+  bonusVoiceRetryText: { color: C.textSubDark, fontFamily: Fonts.label, fontSize: FS.sm },
+  bonusVoiceAcceptBtn: {
+    paddingHorizontal: 14, paddingVertical: 8,
+    borderRadius: R.sm, backgroundColor: C.ochre,
+    borderWidth: 1, borderColor: C.ink,
+    alignItems: 'center',
+  },
+  bonusVoiceAcceptText: { color: C.textOnOchre, fontFamily: Fonts.bodyBold, fontSize: FS.sm },
   bonusFabCheck: { color: C.leaf, fontFamily: Fonts.bodyBold, fontSize: FS.md, includeFontPadding: false },
-  voiceMicBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 10, paddingVertical: 14, borderRadius: R.card,
-    backgroundColor: 'rgba(245,197,24,0.07)',
-    borderWidth: 2, borderColor: 'rgba(245,197,24,0.4)',
-  },
-  voiceMicIcon: { fontSize: 22 },
-  voiceRecordingView: {
-    flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14,
-  },
   waveformRow: {
     flexDirection: 'row', alignItems: 'center', gap: 3,
   },
@@ -3907,50 +3911,9 @@ const styles = StyleSheet.create({
   voiceStopSquare: {
     width: 14, height: 14, borderRadius: 3, backgroundColor: '#e63946',
   },
-  voiceMicText: {
-    color: C.ochre, fontFamily: Fonts.bodyBold, fontSize: FS.base,
-  },
-  voiceErrorBox: {
-    backgroundColor: 'rgba(232,55,42,0.08)',
-    borderWidth: 2, borderColor: 'rgba(232,55,42,0.35)',
-    borderRadius: R.sm, padding: 14, gap: 8, alignItems: 'center',
-  },
   voiceErrorText: {
     color: C.textSubDark, fontFamily: Fonts.body, fontSize: FS.sm, textAlign: 'center', lineHeight: 18,
   },
-  voiceRetryText: {
-    color: C.ochre, fontFamily: Fonts.bodyBold, fontSize: FS.sm,
-  },
-  voiceUnavailableText: {
-    color: C.textMutedDark, fontFamily: Fonts.body, fontSize: FS.sm, textAlign: 'center',
-  },
-  guessPlaceBtn: {
-    flex: 1, height: 52, backgroundColor: C.ochre, borderRadius: R.card,
-    borderWidth: 2, borderColor: C.ink,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  guessPlaceText: {
-    color: C.textOnOchre, fontFamily: Fonts.display, fontSize: FS.md, letterSpacing: 0.4,
-  },
-  guessResultLabel: {
-    color: C.textSubDark, fontFamily: Fonts.label, fontSize: FS.xs,
-    letterSpacing: 2.5, textTransform: 'uppercase', marginBottom: 4,
-  },
-  guessResultCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: R.card, paddingHorizontal: 20, paddingVertical: 16,
-  },
-  guessResultIcon: { fontSize: 22 },
-  guessResultText: { flex: 1, color: C.textPrimaryDark, fontFamily: Fonts.bodyBold, fontSize: FS.lg },
-  guessRetryBtn: {
-    flex: 1, height: 52, borderRadius: R.card,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 2, borderColor: 'rgba(255,255,255,0.18)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  guessRetryText: { color: C.textSubDark, fontFamily: Fonts.label, fontSize: FS.base },
-
 
   // ── Game Over ──
   gameOverLayout: {
