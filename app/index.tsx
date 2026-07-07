@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Switch,
   Alert,
+  Linking,
   Platform,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -334,6 +335,19 @@ function SettingsView() {
               This product uses the TMDB API but is not endorsed or certified by TMDB.
             </Text>
           </View>
+          <TouchableOpacity
+            style={styles.legalLinkRow}
+            onPress={() => Linking.openURL('https://cinescenes.app/privacy-policy')}
+            activeOpacity={0.7}
+          >
+            {/* Title column matches the TMDB logo's 60pt slot so both descriptions
+                align; the title wraps to two lines to stay inside it */}
+            <Text style={styles.legalLinkTitle}>{'Privacy\nPolicy'}</Text>
+            <Text style={styles.legalLinkDesc}>
+              How your account, voice recordings, and purchases are handled.
+            </Text>
+            <Text style={styles.legalLinkChevron}>›</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </View>
@@ -673,5 +687,34 @@ const styles = StyleSheet.create({
     fontSize: FS.sm,
     color: C.textSub,
     lineHeight: 18,
+  },
+  legalLinkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SP.md,
+    borderTopWidth: 1,
+    borderTopColor: C.borderLight,
+    marginTop: 8,
+    paddingTop: 10,
+    paddingBottom: 2,
+  },
+  legalLinkTitle: {
+    width: 60,
+    fontFamily: Fonts.body,
+    fontSize: FS.base,
+    color: C.textPrimary,
+    lineHeight: 19,
+  },
+  legalLinkDesc: {
+    flex: 1,
+    fontFamily: Fonts.body,
+    fontSize: FS.sm,
+    color: C.textSub,
+    lineHeight: 18,
+  },
+  legalLinkChevron: {
+    fontFamily: Fonts.body,
+    fontSize: FS.xl,
+    color: C.textSub,
   },
 });
