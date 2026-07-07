@@ -18,6 +18,7 @@ import {
   Platform,
   Keyboard,
   PanResponder,
+  Pressable,
   Settings,
 } from 'react-native';
 import { useAudioRecorder, useAudioPlayer, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
@@ -53,6 +54,13 @@ import { BrandedLoader, ChoosingMovieLabel } from '@/components/GameLoaders';
 import { GameIntroScreen } from '@/components/GameIntroScreen';
 
 const log = __DEV__ ? console.log : () => {};
+
+// A player whose device hasn't heartbeated last_seen for this long is treated as
+// having quit (app killed / crashed / offline) and is removed from the game the
+// same way a voluntary Leave is. Heartbeats fire every poll tick (~0.75-2s), so
+// this allows ~30+ missed beats — brief backgrounding (a call, a notification)
+// won't trigger it.
+const PRESENCE_TIMEOUT_MS = 60_000;
 
 const lcTrophy        = require('../assets/lc-trophy.png');
 const lcDirectorsChair = require('../assets/lc-directors-chair.png');
@@ -222,7 +230,6 @@ export default function GameScreen() {
   const [voiceState, setVoiceState] = useState<'idle' | 'recording' | 'processing' | 'result' | 'error'>('idle');
   const [voiceError, setVoiceError] = useState('');
   const [voiceResult, setVoiceResult] = useState<{ movie: string; director: string } | null>(null);
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const voiceStateRef = useRef<'idle' | 'recording' | 'processing' | 'result' | 'error'>('idle');
   const recorder = useAudioRecorder({ ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true });
   const revealSound = useAudioPlayer(require('../assets/sounds/reveal.mp3'));
@@ -236,6 +243,9 @@ export default function GameScreen() {
   // Refs so the interval always has the latest values
   const currentTurnRef = useRef<Turn | null>(null);
   const gameIdRef = useRef<string | null>(null);
+  // Player ids currently being evicted for going silent — prevents the sweeper
+  // from processing the same departure on every poll tick while writes land.
+  const evictingRef = useRef<Set<string>>(new Set());
 
   // Whole game is landscape from intro through play.
   useEffect(() => {
@@ -262,11 +272,6 @@ export default function GameScreen() {
     return () => sub.remove();
   }, []);
 
-  useEffect(() => {
-    const show = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
-    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
-    return () => { show.remove(); hide.remove(); };
-  }, []);
 
   // Fade the "lights on" overlay from opaque → transparent when the placing phase appears after reveal.
   // The setValue(1) happens synchronously in the render body so the first painted frame is already dark.
@@ -728,6 +733,38 @@ export default function GameScreen() {
         return (local?.last_seen && !fp.last_seen) ? local : fp;
       }));
       setPlayers(freshPlayers as Player[]);
+    }
+
+    // ── Presence sweep ──
+    // Runs only during actual gameplay (turn exists, intro done on this device).
+    if (latestTurn && freshPlayers && introShownRef.current && !showIntroRef.current) {
+      const fp = freshPlayers as Player[];
+
+      // I was evicted while backgrounded — my row is tombstoned, exit gracefully.
+      if (myPlayerId && !fp.find(p => p.id === myPlayerId)) {
+        stopPolling();
+        ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+        router.replace('/');
+        return;
+      }
+
+      // Evict players whose devices went silent. Only the first alive player (by
+      // join order) sweeps, so devices don't race; the unique live-turn index
+      // guards the turn-advance write if two sweeps ever overlap.
+      const nowMs = Date.now();
+      const isSilent = (p: Player) =>
+        p.id !== myPlayerId && p.last_seen !== null &&
+        nowMs - new Date(p.last_seen).getTime() > PRESENCE_TIMEOUT_MS;
+      const silent = fp.filter(isSilent);
+      if (silent.length > 0 && fp.find(p => !isSilent(p))?.id === myPlayerId) {
+        for (const p of silent) {
+          if (evictingRef.current.has(p.id)) continue;
+          evictingRef.current.add(p.id);
+          processDeparture(p.id)
+            .catch(() => {})
+            .finally(() => evictingRef.current.delete(p.id));
+        }
+      }
     }
 
     if (latestTurn) {
@@ -1695,80 +1732,84 @@ export default function GameScreen() {
     ? PLAYER_CHIP_COLORS[activePlayerIdx % PLAYER_CHIP_COLORS.length]
     : C.textSub;
 
-  // ── Leave game ──
+  // ── Player departure ──
+  // Shared by voluntary Leave and the presence sweep (player's app killed/offline).
+  // Advances or completes the live turn as needed, then tombstones the player.
+  async function processDeparture(departedId: string) {
+    const g = game;
+    if (!g) return;
+    const ct = currentTurnRef.current;
+    const { data: currentPlayers } = await db.from('players').select('*')
+      .eq('game_id', g.id).is('left_at', null).order('created_at');
+    const allPlayers = (currentPlayers ?? []) as Player[];
+    if (!allPlayers.find(p => p.id === departedId)) return; // already tombstoned
+    const remaining = allPlayers.filter(p => p.id !== departedId);
+
+    if (remaining.length === 1) {
+      // Sole survivor wins by default. Mark the live turn complete first
+      // so polls on the winner's device see a consistent finished state.
+      if (ct && ct.status !== 'complete') {
+        await db.from('turns').update({ status: 'complete' }).eq('id', ct.id);
+      }
+      await db.from('games').update({ status: 'finished' }).eq('id', g.id);
+    } else if (remaining.length > 1 && ct && ct.active_player_id === departedId &&
+               (ct.status === 'drawing' || ct.status === 'placing')) {
+      // The departed player was the active player — advance the turn so the
+      // game doesn't stall waiting on a tombstoned player.
+      const departedIdx = allPlayers.findIndex(p => p.id === departedId);
+      const nextPlayer = remaining[departedIdx % remaining.length] ?? remaining[0];
+      const leavePlatform = (g.trailer_platform ?? 'ios') as 'ios' | 'android';
+      const { data: pastTurns } = await db.from('turns').select('movie_id').eq('game_id', g.id);
+      let leaveNextMovieId: string;
+      if (g.game_mode === 'insane') {
+        const m = await fetchRandomInsaneMovie(db, leavePlatform);
+        leaveNextMovieId = m.id;
+      } else {
+        const leavePastIds = new Set<string>(pastTurns?.map((t: { movie_id: string }) => t.movie_id) ?? []);
+        const leavePastYears = new Set<number>(
+          [...leavePastIds]
+            .map(id => activeMovies.find(m => m.id === id)?.year)
+            .filter((y): y is number => y !== undefined)
+        );
+        const leaveStartYears = new Set<number>(
+          allPlayers.flatMap(p => p.timeline ?? []).filter(year => !leavePastYears.has(year))
+        );
+        const usedIds = new Set<string>([
+          ...leavePastIds,
+          ...startingMovieIds,
+          ...activeMovies.filter(m => leaveStartYears.has(m.year)).map(m => m.id),
+        ]);
+        const leavePlatformPool = activeMovies.filter(m =>
+          leavePlatform === 'ios' ? m.available_ios !== false : m.available_android !== false
+        );
+        const pool = leavePlatformPool.filter(m => !usedIds.has(m.id));
+        const nextMovie = pool.length > 0
+          ? pool[Math.floor(Math.random() * pool.length)]
+          : leavePlatformPool[Math.floor(Math.random() * leavePlatformPool.length)];
+        leaveNextMovieId = nextMovie.id;
+      }
+      // Mark the abandoned turn as 'complete' first so the turns_one_live_per_game
+      // unique index allows the successor insert. winner_id stays null (no card awarded).
+      await db.from('turns').update({ status: 'complete' }).eq('id', ct.id);
+      await db.from('turns').insert({
+        game_id: g.id,
+        active_player_id: nextPlayer.id,
+        movie_id: leaveNextMovieId,
+        status: 'placing',
+        placing_started_at: new Date().toISOString(),
+      });
+    } else if (remaining.length === 0) {
+      // Last one in. Cancel the game so it doesn't linger.
+      await db.from('games').update({ status: 'cancelled' }).eq('id', g.id);
+    }
+    await db.from('players').update({ left_at: new Date().toISOString() }).eq('id', departedId);
+  }
+
   async function handleLeaveConfirmed() {
     setShowLeaveDialog(false);
     stopPolling();
-    const g = game;
-    const ct = currentTurnRef.current;
     try {
-      if (g) {
-        const { data: currentPlayers } = await db.from('players').select('*')
-          .eq('game_id', g.id).is('left_at', null).order('created_at');
-        const allPlayers = (currentPlayers ?? []) as Player[];
-        const remaining = allPlayers.filter(p => p.id !== myPlayerId);
-
-        if (remaining.length === 1) {
-          // Sole survivor wins by default. Mark the live turn complete first
-          // so polls on the winner's device see a consistent finished state.
-          if (ct && ct.status !== 'complete') {
-            await db.from('turns').update({ status: 'complete' }).eq('id', ct.id);
-          }
-          await db.from('games').update({ status: 'finished' }).eq('id', g.id);
-        } else if (remaining.length > 1 && ct && ct.active_player_id === myPlayerId &&
-                   (ct.status === 'drawing' || ct.status === 'placing')) {
-          // I was the active player — advance the turn before leaving so the
-          // game doesn't stall waiting on a tombstoned player.
-          const myIdx = allPlayers.findIndex(p => p.id === myPlayerId);
-          const nextPlayer = remaining[myIdx % remaining.length] ?? remaining[0];
-          const leavePlatform = (g.trailer_platform ?? 'ios') as 'ios' | 'android';
-          const { data: pastTurns } = await db.from('turns').select('movie_id').eq('game_id', g.id);
-          let leaveNextMovieId: string;
-          if (g.game_mode === 'insane') {
-            const m = await fetchRandomInsaneMovie(db, leavePlatform);
-            leaveNextMovieId = m.id;
-          } else {
-            const leavePastIds = new Set<string>(pastTurns?.map((t: { movie_id: string }) => t.movie_id) ?? []);
-            const leavePastYears = new Set<number>(
-              [...leavePastIds]
-                .map(id => activeMovies.find(m => m.id === id)?.year)
-                .filter((y): y is number => y !== undefined)
-            );
-            const leaveStartYears = new Set<number>(
-              allPlayers.flatMap(p => p.timeline ?? []).filter(year => !leavePastYears.has(year))
-            );
-            const usedIds = new Set<string>([
-              ...leavePastIds,
-              ...startingMovieIds,
-              ...activeMovies.filter(m => leaveStartYears.has(m.year)).map(m => m.id),
-            ]);
-            const leavePlatformPool = activeMovies.filter(m =>
-              leavePlatform === 'ios' ? m.available_ios !== false : m.available_android !== false
-            );
-            const pool = leavePlatformPool.filter(m => !usedIds.has(m.id));
-            const nextMovie = pool.length > 0
-              ? pool[Math.floor(Math.random() * pool.length)]
-              : leavePlatformPool[Math.floor(Math.random() * leavePlatformPool.length)];
-            leaveNextMovieId = nextMovie.id;
-          }
-          // Mark the abandoned turn as 'complete' first so the turns_one_live_per_game
-          // unique index allows the successor insert. winner_id stays null (no card awarded).
-          await db.from('turns').update({ status: 'complete' }).eq('id', ct.id);
-          await db.from('turns').insert({
-            game_id: g.id,
-            active_player_id: nextPlayer.id,
-            movie_id: leaveNextMovieId,
-            status: 'placing',
-            placing_started_at: new Date().toISOString(),
-          });
-        } else if (remaining.length === 0) {
-          // I was the last one in. Cancel the game so it doesn't linger.
-          await db.from('games').update({ status: 'cancelled' }).eq('id', g.id);
-        }
-      }
-      if (myPlayerId) {
-        await db.from('players').update({ left_at: new Date().toISOString() }).eq('id', myPlayerId);
-      }
+      if (myPlayerId) await processDeparture(myPlayerId);
     } catch (_) {
       // Best-effort — navigate away regardless.
     }
@@ -1902,7 +1943,9 @@ export default function GameScreen() {
         <>
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'height' : undefined}>
         <SafeAreaView style={[styles.container, { backgroundColor: C.bg }]} edges={['top', 'bottom']}>
-          <View style={styles.gameArea}>
+          {/* Pressable so tapping any non-control area closes the guess-dock keyboard
+              (the Timeline's own ScrollView already dismisses it natively) */}
+          <Pressable style={styles.gameArea} onPress={Keyboard.dismiss}>
             <Animated.View style={[styles.timelineAreaFull, { paddingBottom: timelinePaddingBottom }]}>
               {amActive ? (
                 <View style={{ position: 'absolute', top: 20, left: 0, right: 0, alignItems: 'center' }}>
@@ -1931,7 +1974,7 @@ export default function GameScreen() {
                 hideFloatingCard
               />
             </Animated.View>
-          </View>
+          </Pressable>
 
           {/* ── Bonus dock — coin pill bottom-center (above the My Timeline tab); panel
                  rises out of the pill like a genie and folds back into it on collapse ── */}
@@ -2033,12 +2076,6 @@ export default function GameScreen() {
               )}
 
               <View style={styles.bonusDockPillRow}>
-                {myTimeline.length <= 1 && !bonusEntered && !dockExpanded && (
-                  <View style={styles.bonusDockTip}>
-                    <Text style={styles.bonusDockTipText}>Guess the movie &amp; director for a bonus coin</Text>
-                    <Text style={styles.bonusDockTipArrow}>›</Text>
-                  </View>
-                )}
                 <TouchableOpacity
                   onPress={dockExpanded ? collapseBonus : expandBonus}
                   activeOpacity={0.85}
@@ -2049,6 +2086,13 @@ export default function GameScreen() {
                     : <Image source={lcCoin} style={styles.bonusDockCoin} />}
                   <Text style={[styles.bonusDockLabelText, bonusEntered && { color: C.leaf }]}>+1 coin</Text>
                 </TouchableOpacity>
+                {/* Tip hangs off the left of the centered pill (absolute → doesn't shift it) */}
+                {myTimeline.length <= 1 && !bonusEntered && !dockExpanded && (
+                  <View style={styles.bonusDockTip} pointerEvents="none">
+                    <Text style={styles.bonusDockTipText}>{'Guess the movie & director\nto earn a bonus coin'}</Text>
+                    <Text style={styles.bonusDockTipArrow}>›</Text>
+                  </View>
+                )}
               </View>
             </View>
           )}
@@ -2520,22 +2564,24 @@ export default function GameScreen() {
             </Animated.View>
           )}
 
-          {/* Picking-phase row: hourglass + optional withdraw — in normal flow */}
-          {isPickingInterval && (
-            <View style={[styles.challengePickRow, { paddingBottom: insets.bottom || 10 }]}>
-              <HourglassTimer durationMs={15000} size={36} onExpire={handlePickerTimeout} />
-              {!amFirstChallenger && (
-                <TouchableOpacity
-                  style={[styles.withdrawBtn, { left: insets.left + 16 }]}
-                  onPress={handleWithdrawChallenge}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.withdrawBtnText}>↩  Withdraw</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
         </View>
+
+        {/* Picking-phase row: hourglass (+ withdraw when allowed) — centered above the
+               My Timeline tab, same zone the +1 coin pill occupies during placement */}
+        {isPickingInterval && (
+          <View style={[styles.challengePickRow, { bottom: insets.bottom + 32 }]} pointerEvents="box-none">
+            <HourglassTimer durationMs={15000} size={36} onExpire={handlePickerTimeout} />
+            {!amFirstChallenger && (
+              <TouchableOpacity
+                style={styles.withdrawBtn}
+                onPress={handleWithdrawChallenge}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.withdrawBtnText}>↩  Withdraw</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
 
         {myTimeline.length > 0 && (
           <MyTimelinePanel timeline={myTimeline} cards={myTimelineCards} bottomInset={insets.bottom} screenHeight={screenHeight} />
@@ -3291,13 +3337,11 @@ const styles = StyleSheet.create({
   },
   challengePickRow: {
     position: 'absolute',
-    bottom: 0,
     left: 0,
     right: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
     gap: 16,
   },
   passBtn: {
@@ -3385,14 +3429,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   withdrawBtn: {
-    position: 'absolute',
-    bottom: 12,
     borderRadius: R.btn,
     borderWidth: 2,
     borderColor: C.ink,
     backgroundColor: C.vermillion,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 18,
   },
   withdrawBtnText: {
     color: C.textOnRed,
@@ -3801,19 +3843,25 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   bonusDockPillRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   bonusDockTip: {
+    position: 'absolute',
+    right: '50%', marginRight: 60,
     flexDirection: 'row', alignItems: 'center', gap: 4,
     backgroundColor: C.inkSurface,
-    borderRadius: R.full, borderWidth: 1, borderColor: 'rgba(245,197,24,0.3)',
-    paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: R.md, borderWidth: 1, borderColor: 'rgba(245,197,24,0.3)',
+    paddingHorizontal: 10, paddingVertical: 4,
   },
   bonusDockTipText: {
     color: C.textSubDark, fontFamily: Fonts.label, fontSize: FS.xs,
+    textAlign: 'right', lineHeight: 15,
   },
   bonusDockTipArrow: {
-    color: C.ochre, fontFamily: Fonts.bodyBold, fontSize: FS.sm,
+    color: C.ochre, fontFamily: Fonts.bodyBold, fontSize: FS.xl,
+    includeFontPadding: false,
   },
   bonusDockPill: {
     flexDirection: 'row', alignItems: 'center', gap: 6,

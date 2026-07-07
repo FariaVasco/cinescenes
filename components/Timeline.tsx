@@ -312,7 +312,6 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
     if (selectedInterval === index) {
       return (
         <View key={`gap-${index}`} ref={activeGapRef} style={styles.activeGap}>
-          <Text style={styles.confirmHint}>TAP TO CONFIRM</Text>
           <TouchableOpacity
             style={styles.cardPlaceholder}
             onPress={onConfirm}
@@ -321,6 +320,7 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
             <View style={styles.confirmCheckmark}>
               <CheckIcon size={18} color='rgba(245,197,24,0.9)' />
             </View>
+            <Text style={styles.confirmHint}>{'TAP TO\nCONFIRM'}</Text>
           </TouchableOpacity>
         </View>
       );
@@ -581,13 +581,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(74,158,196,0.06)',
   },
   confirmHint: {
-    position: 'absolute',
-    top: -16,
-    left: 0,
-    right: 0,
+    marginTop: 8,
     textAlign: 'center',
     color: '#4A9EC4',
     fontSize: 9,
+    lineHeight: 12,
     fontFamily: Fonts.label,
     letterSpacing: 0.8,
     textTransform: 'uppercase',

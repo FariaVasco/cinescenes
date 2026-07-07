@@ -19,6 +19,7 @@
     },
     "ios": {
       "supportsTablet": true,
+      "requireFullScreen": true,
       "bundleIdentifier": "com.cinescenes.app",
       "infoPlist": {
         "NSCameraUsageDescription": "Cinescenes needs camera access to scan movie card QR codes.",

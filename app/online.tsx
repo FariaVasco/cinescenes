@@ -6,6 +6,10 @@ import {
   TouchableOpacity,
   TextInput,
   FlatList,
+  Keyboard,
+  Platform,
+  Pressable,
+  ScrollView,
   StyleSheet,
   RefreshControl,
   ActivityIndicator,
@@ -19,6 +23,7 @@ import { BackButton } from '@/components/BackButton';
 import { ModePickerModal, ModeChoice } from '@/components/ModePickerModal';
 import { useAppStore } from '@/store/useAppStore';
 import { GAME_CODE_LENGTH, GAME_CODE_PLACEHOLDER, sanitizeGameCodeInput } from '@/lib/game-code';
+import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
 import { supabase } from '@/lib/supabase';
 import { Game } from '@/lib/database.types';
 
@@ -54,6 +59,44 @@ export default function OnlineScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [modePickerVisible, setModePickerVisible] = useState(false);
+  // Keyboard mode (iOS only, and only while the CODE field is focused — typing the
+  // name needs no handling: the name row sits at the top, above the keyboard).
+  // While typing the code, both right-column cards stay complete: the column
+  // compacts first (the create card stops stretching, cards hug their content at
+  // full size), and only if that still doesn't fit does everything shrink
+  // uniformly. No transforms/remounts — those make iPadOS dismiss the keyboard.
+  const keyboardHeight = useKeyboardHeight();
+  const [rightColH, setRightColH] = useState(0);
+  const [codeFocused, setCodeFocused] = useState(false);
+  // Compact-layout height at full size, measured once per keyboard session.
+  const [compactH, setCompactH] = useState(0);
+  const keyboardMode = Platform.OS === 'ios' && keyboardHeight > 0 && codeFocused;
+  const rightColScrollRef = useRef<ScrollView>(null);
+  useEffect(() => {
+    if (!keyboardMode) setCompactH(0);
+    // Pin the column to the top of its scroll area whenever the mode flips.
+    rightColScrollRef.current?.scrollTo({ y: 0, animated: false });
+  }, [keyboardMode]);
+  // 8pt safety margin: measured heights land a hair optimistic (rounding, borders),
+  // which showed as a sliver of card under the keyboard's top edge.
+  const fitHeight = keyboardMode && rightColH > 0
+    ? Math.max(80, rightColH - keyboardHeight - 8)
+    : undefined;
+  // Shrink only as a last resort — k stays 1 while the compact layout fits.
+  const k = fitHeight !== undefined && compactH > 0
+    ? Math.max(0.5, Math.min(1, fitHeight / compactH))
+    : 1;
+  const kz = (v: number) => Math.round(v * k);
+  const shrink = k < 1 ? {
+    createIcon: { width: kz(36), height: kz(36) },
+    createTitle: { fontSize: kz(FS.md) },
+    inviteIcon: { width: kz(22), height: kz(22) },
+    inviteHeading: { fontSize: Math.max(8, kz(FS.xs)) },
+    input: { fontSize: kz(FS.md), paddingVertical: kz(8) },
+    code: { fontSize: kz(FS.md), letterSpacing: kz(4) },
+    joinBtn: { paddingHorizontal: kz(12), paddingVertical: kz(8) },
+    joinBtnText: { fontSize: kz(FS.sm) },
+  } : null;
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useFocusEffect(
@@ -242,26 +285,46 @@ export default function OnlineScreen() {
 
           </View>
 
-          {/* RIGHT — Create card (top) + Invite-code card (bottom) */}
-          <View style={styles.rightCol}>
+          {/* RIGHT — Create card (top) + Invite-code card (bottom).
+              No automaticallyAdjustKeyboardInsets: UIKit's scroll-into-view runs
+              against the full-size layout during keyboard presentation and leaves a
+              stale offset once we compact — the compact layout already fits above
+              the keyboard. Scroll stays pinned to top. */}
+          <ScrollView
+            ref={rightColScrollRef}
+            style={styles.rightColScroll}
+            contentContainerStyle={[styles.rightCol, fitHeight !== undefined && { flexGrow: 0, height: fitHeight }]}
+            onLayout={(e) => setRightColH(e.nativeEvent.layout.height)}
+            scrollEnabled={!keyboardMode}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Tapping anywhere that isn't a control closes the keyboard */}
+            <Pressable
+              style={[styles.rightColInner, keyboardMode && styles.rightColInnerCompact]}
+              onPress={Keyboard.dismiss}
+              onLayout={(e) => {
+                if (keyboardMode && compactH === 0) setCompactH(e.nativeEvent.layout.height);
+              }}
+            >
             <TouchableOpacity
-              style={[styles.createCard, !nameReady && styles.btnDisabled]}
+              style={[styles.createCard, keyboardMode && styles.createCardCompact, !nameReady && styles.btnDisabled]}
               onPress={handleCreatePress}
               disabled={!nameReady}
               activeOpacity={0.85}
             >
-              <Image source={lcClapperboard} style={styles.createIcon} />
-              <Text style={styles.createTitle}>CREATE NEW GAME</Text>
+              <Image source={lcClapperboard} style={[styles.createIcon, shrink && shrink.createIcon]} />
+              <Text style={[styles.createTitle, shrink && shrink.createTitle]}>CREATE NEW GAME</Text>
             </TouchableOpacity>
 
             <View style={styles.inviteCard}>
               <View style={styles.inviteHeader}>
-                <Image source={lcMovieTicket} style={styles.inviteIcon} />
-                <Text style={styles.inviteHeading}>HAVE A CODE?</Text>
+                <Image source={lcMovieTicket} style={[styles.inviteIcon, shrink && shrink.inviteIcon]} />
+                <Text style={[styles.inviteHeading, shrink && shrink.inviteHeading]}>HAVE A CODE?</Text>
               </View>
               <View style={styles.inviteRow}>
                 <TextInput
-                  style={[styles.input, styles.codeInput]}
+                  style={[styles.input, styles.codeInput, shrink && shrink.input, shrink && shrink.code]}
                   value={inviteCode}
                   onChangeText={(t) => setInviteCode(sanitizeGameCodeInput(t))}
                   placeholder={GAME_CODE_PLACEHOLDER}
@@ -270,19 +333,22 @@ export default function OnlineScreen() {
                   maxLength={GAME_CODE_LENGTH}
                   returnKeyType="go"
                   editable={nameReady}
+                  onFocus={() => setCodeFocused(true)}
+                  onBlur={() => setCodeFocused(false)}
                   onSubmitEditing={() => { if (canJoinByCode) joinGame(inviteCode.trim()); }}
                 />
                 <TouchableOpacity
-                  style={[styles.codeJoinBtn, !canJoinByCode && styles.btnDisabled]}
+                  style={[styles.codeJoinBtn, shrink && shrink.joinBtn, !canJoinByCode && styles.btnDisabled]}
                   onPress={() => joinGame(inviteCode.trim())}
                   disabled={!canJoinByCode}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.codeJoinBtnText}>JOIN </Text>
+                  <Text style={[styles.codeJoinBtnText, shrink && shrink.joinBtnText]}>JOIN </Text>
                 </TouchableOpacity>
               </View>
             </View>
-          </View>
+            </Pressable>
+          </ScrollView>
         </View>
       </View>
 
@@ -440,9 +506,19 @@ const styles = StyleSheet.create({
   },
 
   // Right column
+  rightColScroll: {
+    flex: 1,
+  },
   rightCol: {
+    flexGrow: 1,
+  },
+  rightColInner: {
     flex: 1,
     gap: SP.sm,
+  },
+  rightColInnerCompact: {
+    flex: 0,
+    gap: 8,
   },
 
   // Create card
@@ -457,6 +533,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 0,
+  },
+  createCardCompact: {
+    flex: 0,
+    paddingVertical: 8,
   },
   createIcon: { width: 36, height: 36, resizeMode: 'contain' },
   createTitle: {

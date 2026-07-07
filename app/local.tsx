@@ -1,10 +1,14 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
   Image,
   TouchableOpacity,
   TextInput,
+  Keyboard,
+  Platform,
+  Pressable,
+  ScrollView,
   StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,6 +20,7 @@ import { BackButton } from '@/components/BackButton';
 import { ModePickerModal, ModeChoice } from '@/components/ModePickerModal';
 import { useAppStore } from '@/store/useAppStore';
 import { GAME_CODE_LENGTH, GAME_CODE_PLACEHOLDER, sanitizeGameCodeInput } from '@/lib/game-code';
+import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
 
 const lcClapperboard = require('@/assets/lc-clapperboard.png');
 const lcMovieTicket  = require('@/assets/lc-movie-ticket.png');
@@ -39,7 +44,50 @@ export default function LocalScreen() {
   const [inviteCode, setInviteCode] = useState('');
   const [modePickerVisible, setModePickerVisible] = useState(false);
   const [autoOpenMode, setAutoOpenMode] = useState<'insane' | 'collection' | null>(null);
-
+  // Keyboard mode (iOS only, and only while the CODE field is focused). The name
+  // field needs no special handling — it sits at the top of the screen, naturally
+  // above the keyboard; hiding things on mere keyboard-visibility would unmount
+  // the focused name input and kill its own keyboard.
+  // While typing the code, both panels stay side by side and complete: the layout
+  // compacts first (slack space collapses, panels hug their content at full size),
+  // and only if the compact layout still doesn't fit does everything shrink
+  // uniformly. No transforms/remounts — those make iPadOS dismiss the keyboard.
+  const keyboardHeight = useKeyboardHeight();
+  const [scrollAreaH, setScrollAreaH] = useState(0);
+  const [codeFocused, setCodeFocused] = useState(false);
+  // Compact-layout height at full size, measured once per keyboard session.
+  const [compactH, setCompactH] = useState(0);
+  const keyboardMode = Platform.OS === 'ios' && keyboardHeight > 0 && codeFocused;
+  const scrollRef = useRef<ScrollView>(null);
+  useEffect(() => {
+    if (!keyboardMode) setCompactH(0);
+    // Pin the strip to the top of the scroll area whenever the mode flips.
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
+  }, [keyboardMode]);
+  // 8pt safety margin: measured heights land a hair optimistic (rounding, borders),
+  // which showed as a sliver of panel under the keyboard's top edge.
+  const fitHeight = keyboardMode && scrollAreaH > 0
+    ? Math.max(90, scrollAreaH - keyboardHeight - 8)
+    : undefined;
+  const compact = keyboardMode ? {
+    panels: { flex: 0 as const, paddingTop: 2, paddingBottom: 4 },
+    panel: { justifyContent: 'flex-start' as const, gap: 6, paddingVertical: 6 },
+  } : null;
+  // Shrink only as a last resort — k stays 1 while the compact layout fits.
+  const k = fitHeight !== undefined && compactH > 0
+    ? Math.max(0.5, Math.min(1, fitHeight / compactH))
+    : 1;
+  const kz = (v: number) => Math.round(v * k);
+  const shrink = k < 1 ? {
+    icon: { width: kz(36), height: kz(36) },
+    title: { fontSize: kz(FS.lg), lineHeight: kz(FS.lg) + 2 },
+    hint: { fontSize: Math.max(8, kz(FS.xs)) },
+    input: { fontSize: kz(FS.md), paddingVertical: kz(9) },
+    code: { fontSize: kz(FS.lg), letterSpacing: kz(6) },
+    blurb: { fontSize: Math.max(9, kz(FS.sm)), lineHeight: kz(18) },
+    btn: { paddingVertical: kz(10) },
+    btnText: { fontSize: kz(FS.md) },
+  } : null;
   // If we returned from sign-in with a pending mode intent, auto-open the picker
   useEffect(() => {
     if (!pendingMode || !authUser) return;
@@ -109,9 +157,23 @@ export default function LocalScreen() {
         <View style={styles.headerSpacer} />
       </View>
 
-      <View style={styles.flex}>
-        {/* Single shared name field */}
-        <View style={styles.nameRow}>
+      {/* No automaticallyAdjustKeyboardInsets: UIKit's scroll-into-view runs against
+          the full-size layout during keyboard presentation and leaves a stale offset
+          once we compact — the compact layout already fits everything above the
+          keyboard, so no native adjustment is wanted. Scroll stays pinned to top. */}
+      <ScrollView
+        ref={scrollRef}
+        style={styles.flex}
+        contentContainerStyle={[styles.scrollContent, fitHeight !== undefined && { flexGrow: 0, height: fitHeight }]}
+        onLayout={(e) => setScrollAreaH(e.nativeEvent.layout.height)}
+        scrollEnabled={!keyboardMode}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Tapping anywhere that isn't a control closes the keyboard */}
+        <Pressable style={styles.dismissArea} onPress={Keyboard.dismiss}>
+        {/* Single shared name field — hidden while typing the code */}
+        <View style={[styles.nameRow, keyboardMode && styles.hidden]}>
           <Text style={styles.nameLabel}>Your name</Text>
           <TextInput
             style={styles.nameInput}
@@ -124,20 +186,25 @@ export default function LocalScreen() {
           />
         </View>
 
-        {/* Two panels */}
-        <View style={styles.panels}>
+        {/* Two panels — side by side; keyboard mode compacts them (shrinks only if needed) */}
+        <View
+          style={[styles.panels, compact && compact.panels]}
+          onLayout={(e) => {
+            if (keyboardMode && compactH === 0) setCompactH(e.nativeEvent.layout.height);
+          }}
+        >
           {/* JOIN panel */}
-          <View style={styles.panel}>
+          <View style={[styles.panel, compact && compact.panel]}>
             <View style={styles.panelHeader}>
-              <Image source={lcMovieTicket} style={styles.panelIcon} />
+              <Image source={lcMovieTicket} style={[styles.panelIcon, shrink && shrink.icon]} />
               <View style={styles.panelHeaderText}>
-                <Text style={styles.panelTitle}>JOIN</Text>
-                <Text style={styles.panelHint}>Enter the invite code</Text>
+                <Text style={[styles.panelTitle, shrink && shrink.title]}>JOIN</Text>
+                <Text style={[styles.panelHint, shrink && shrink.hint]}>Enter the invite code</Text>
               </View>
             </View>
 
             <TextInput
-              style={[styles.input, styles.codeInput]}
+              style={[styles.input, styles.codeInput, shrink && shrink.input, shrink && shrink.code]}
               value={inviteCode}
               onChangeText={(t) => setInviteCode(sanitizeGameCodeInput(t))}
               placeholder={GAME_CODE_PLACEHOLDER}
@@ -145,43 +212,46 @@ export default function LocalScreen() {
               autoCapitalize="characters"
               maxLength={GAME_CODE_LENGTH}
               returnKeyType="go"
+              onFocus={() => setCodeFocused(true)}
+              onBlur={() => setCodeFocused(false)}
               onSubmitEditing={handleJoin}
             />
 
             <TouchableOpacity
-              style={[styles.actionBtn, styles.joinBtn, !canJoin && styles.actionBtnDisabled]}
+              style={[styles.actionBtn, styles.joinBtn, shrink && shrink.btn, !canJoin && styles.actionBtnDisabled]}
               onPress={handleJoin}
               disabled={!canJoin}
               activeOpacity={0.85}
             >
-              <Text style={styles.actionBtnText}>JOIN GAME </Text>
+              <Text style={[styles.actionBtnText, shrink && shrink.btnText]}>JOIN GAME </Text>
             </TouchableOpacity>
           </View>
 
           {/* CREATE panel */}
-          <View style={styles.panel}>
+          <View style={[styles.panel, compact && compact.panel]}>
             <View style={styles.panelHeader}>
-              <Image source={lcClapperboard} style={styles.panelIcon} />
+              <Image source={lcClapperboard} style={[styles.panelIcon, shrink && shrink.icon]} />
               <View style={styles.panelHeaderText}>
-                <Text style={styles.panelTitle}>PRIVATE GAME</Text>
+                <Text style={[styles.panelTitle, shrink && shrink.title]}>PRIVATE GAME</Text>
               </View>
             </View>
 
-            <Text style={styles.createBlurb}>
+            <Text style={[styles.createBlurb, shrink && shrink.blurb]}>
               Start a new game and share the code with your friends.
             </Text>
 
             <TouchableOpacity
-              style={[styles.actionBtn, styles.createBtn, !nameReady && styles.actionBtnDisabled]}
+              style={[styles.actionBtn, styles.createBtn, shrink && shrink.btn, !nameReady && styles.actionBtnDisabled]}
               onPress={handleCreatePress}
               disabled={!nameReady}
               activeOpacity={0.85}
             >
-              <Text style={styles.actionBtnText}>CREATE GAME </Text>
+              <Text style={[styles.actionBtnText, shrink && shrink.btnText]}>CREATE GAME </Text>
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+        </Pressable>
+      </ScrollView>
 
       <ModePickerModal
         visible={modePickerVisible}
@@ -196,6 +266,9 @@ export default function LocalScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
   flex: { flex: 1 },
+  scrollContent: { flexGrow: 1 },
+  dismissArea: { flex: 1 },
+  hidden: { display: 'none' },
 
   // Header — Back + stacked title/subtitle centered
   header: {
