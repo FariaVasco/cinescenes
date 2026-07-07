@@ -32,6 +32,20 @@ export async function checkPremium(): Promise<boolean> {
 }
 
 /**
+ * checkPremium against a FRESH fetch — the SDK caches customer info for up to
+ * ~5 minutes, which can miss a seconds-old purchase. Use right after purchase
+ * or restore flows; plain checkPremium is fine everywhere else.
+ */
+export async function checkPremiumFresh(): Promise<boolean> {
+  try {
+    await Purchases.invalidateCustomerInfoCache();
+  } catch (_) {
+    // Cache invalidation is best-effort; fall through to the normal check.
+  }
+  return checkPremium();
+}
+
+/**
  * Presents RevenueCat's native paywall UI.
  * Returns true if the user purchased or restored successfully.
  */

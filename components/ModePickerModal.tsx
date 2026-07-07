@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Image,
-  ActivityIndicator, ScrollView,
+  ActivityIndicator, Alert, ScrollView,
 } from 'react-native';
+import * as Sentry from '@sentry/react-native';
 import { useRouter } from 'expo-router';
 import { C, R, T, SP, Fonts, FS } from '@/constants/theme';
 import { CinemaButton } from '@/components/CinemaButton';
 import { PaywallSheet } from '@/components/PaywallSheet';
-import { checkPremium } from '@/lib/revenuecat';
+import { checkPremiumFresh } from '@/lib/revenuecat';
 import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
 import { Collection } from '@/lib/database.types';
@@ -92,9 +93,17 @@ export function ModePickerModal({ visible, onClose, onSelected, autoOpenMode }: 
     setPaywallVisible(false);
     // Trust the purchase result first (authoritative immediately after purchase).
     // Fall back to checkPremium only if the purchase result says no entitlement.
-    const premium = isPremiumFromPurchase || (await checkPremium());
+    const premium = isPremiumFromPurchase || (await checkPremiumFresh());
     setIsPremium(premium);
-    if (!premium) return;
+    if (!premium) {
+      // Paid but no entitlement — never strand a paying user silently.
+      Sentry.captureMessage('Purchase succeeded but entitlement inactive', 'warning');
+      Alert.alert(
+        'Almost there',
+        "Your purchase went through, but premium didn't activate yet. Try \"Restore purchases\" on the paywall, or restart the app. Contact us via Feedback if it persists."
+      );
+      return;
+    }
     if (paywallPendingMode === 'insane') {
       onSelected({ mode: 'insane' });
       onClose();
