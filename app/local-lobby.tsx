@@ -526,7 +526,11 @@ export default function LocalLobbyScreen() {
             </View>
           )}
 
-          {localIsHost && (
+          {/* Online-created games (public) are remote by definition — "trailers on
+              host's phone" makes no sense there, so the choice only exists for
+              local games. Store visibility keeps the creation intent even after
+              a local host flips the toggle (which mutates the game row). */}
+          {localIsHost && selectedVisibility !== 'public' && (
             <View style={styles.trailerModeWrap}>
               <Text style={styles.settingLabel}>TRAILERS ON</Text>
               <View style={styles.trailerModeRow}>

@@ -167,6 +167,9 @@ export default function LocalScreen() {
         contentContainerStyle={[styles.scrollContent, fitHeight !== undefined && { flexGrow: 0, height: fitHeight }]}
         onLayout={(e) => setScrollAreaH(e.nativeEvent.layout.height)}
         scrollEnabled={!keyboardMode}
+        bounces={false}
+        alwaysBounceVertical={false}
+        overScrollMode="never"
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >

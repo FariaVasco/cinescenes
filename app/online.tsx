@@ -82,6 +82,9 @@ export default function OnlineScreen() {
   const fitHeight = keyboardMode && rightColH > 0
     ? Math.max(80, rightColH - keyboardHeight - 8)
     : undefined;
+  // Tall columns get the spacious invite-card layout (header top, full-width
+  // input, JOIN below); short ones keep the compact side-by-side row.
+  const roomy = rightColH >= 260;
   // Shrink only as a last resort — k stays 1 while the compact layout fits.
   const k = fitHeight !== undefined && compactH > 0
     ? Math.max(0.5, Math.min(1, fitHeight / compactH))
@@ -296,6 +299,9 @@ export default function OnlineScreen() {
             contentContainerStyle={[styles.rightCol, fitHeight !== undefined && { flexGrow: 0, height: fitHeight }]}
             onLayout={(e) => setRightColH(e.nativeEvent.layout.height)}
             scrollEnabled={!keyboardMode}
+            bounces={false}
+            alwaysBounceVertical={false}
+            overScrollMode="never"
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
@@ -317,14 +323,14 @@ export default function OnlineScreen() {
               <Text style={[styles.createTitle, shrink && shrink.createTitle]}>CREATE NEW GAME</Text>
             </TouchableOpacity>
 
-            <View style={styles.inviteCard}>
+            <View style={[styles.inviteCard, roomy && styles.inviteCardRoomy]}>
               <View style={styles.inviteHeader}>
                 <Image source={lcMovieTicket} style={[styles.inviteIcon, shrink && shrink.inviteIcon]} />
                 <Text style={[styles.inviteHeading, shrink && shrink.inviteHeading]}>HAVE A CODE?</Text>
               </View>
-              <View style={styles.inviteRow}>
+              <View style={[styles.inviteRow, roomy && styles.inviteRowRoomy]}>
                 <TextInput
-                  style={[styles.input, styles.codeInput, shrink && shrink.input, shrink && shrink.code]}
+                  style={[styles.input, styles.codeInput, roomy && styles.codeInputRoomy, shrink && shrink.input, shrink && shrink.code]}
                   value={inviteCode}
                   onChangeText={(t) => setInviteCode(sanitizeGameCodeInput(t))}
                   placeholder={GAME_CODE_PLACEHOLDER}
@@ -338,7 +344,7 @@ export default function OnlineScreen() {
                   onSubmitEditing={() => { if (canJoinByCode) joinGame(inviteCode.trim()); }}
                 />
                 <TouchableOpacity
-                  style={[styles.codeJoinBtn, shrink && shrink.joinBtn, !canJoinByCode && styles.btnDisabled]}
+                  style={[styles.codeJoinBtn, roomy && styles.codeJoinBtnRoomy, shrink && shrink.joinBtn, !canJoinByCode && styles.btnDisabled]}
                   onPress={() => joinGame(inviteCode.trim())}
                   disabled={!canJoinByCode}
                   activeOpacity={0.8}
@@ -546,8 +552,10 @@ const styles = StyleSheet.create({
     marginTop: -4,
   },
 
-  // Invite-code card
+  // Invite-code card — same flex as the create card so the column splits evenly
+  // on tall screens; on tight screens both compress toward their content.
   inviteCard: {
+    flex: 1,
     backgroundColor: C.surfaceWarm,
     borderRadius: R.card,
     borderWidth: 2,
@@ -555,6 +563,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: SP.sm,
     paddingVertical: SP.sm,
     gap: 8,
+    justifyContent: 'center',
   },
   inviteHeader: {
     flexDirection: 'row',
@@ -571,6 +580,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 6,
     alignItems: 'center',
+  },
+  // Roomy variants — header stays at the top, input + JOIN stack full-width
+  // and center in the leftover space.
+  inviteCardRoomy: {
+    justifyContent: 'flex-start',
+  },
+  inviteRowRoomy: {
+    flex: 1,
+    flexDirection: 'column',
+    justifyContent: 'center',
+    alignItems: 'stretch',
+    gap: 8,
+  },
+  codeInputRoomy: {
+    flex: 0,
+  },
+  codeJoinBtnRoomy: {
+    alignItems: 'center',
+    paddingVertical: 10,
   },
 
   input: {
