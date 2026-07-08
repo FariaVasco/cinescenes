@@ -4,8 +4,8 @@ import {
   ActivityIndicator, Alert, useWindowDimensions, Platform,
 } from 'react-native';
 import Purchases, { PurchasesOffering, PurchasesPackage } from 'react-native-purchases';
+import { logRc } from '@/lib/revenuecat';
 import { C, R, FS, Fonts, SP } from '@/constants/theme';
-import { ENTITLEMENT_ID } from '@/lib/revenuecat';
 import { CloseIcon } from '@/components/CinemaIcons';
 
 const log = __DEV__ ? console.log : () => {};
@@ -152,10 +152,15 @@ export function PaywallSheet({ visible, onClose, onPurchased, mockPlans }: Props
     }
     setPurchasing(true);
     try {
+      logRc(`purchasePackage(${plan.pkg.product.identifier}) starting`);
       const result = await Purchases.purchasePackage(plan.pkg);
-      const isActive = result.customerInfo.entitlements.active[ENTITLEMENT_ID] !== undefined;
+      // Any active entitlement counts — matching a hardcoded ID is fragile
+      // against dashboard identifier drift (single-entitlement project).
+      const isActive = Object.keys(result.customerInfo.entitlements.active).length > 0;
+      logRc(`purchase OK: user=${result.customerInfo.originalAppUserId}, active=${JSON.stringify(Object.keys(result.customerInfo.entitlements.active))}, products=${JSON.stringify(result.customerInfo.activeSubscriptions)}`);
       onPurchased(isActive);
     } catch (e: any) {
+      logRc(`purchase FAILED: cancelled=${!!e.userCancelled}, code=${e.code}, ${e.message}`);
       if (!e.userCancelled) {
         Alert.alert('Purchase failed', e.message ?? 'Something went wrong. Please try again.');
       }
@@ -168,7 +173,7 @@ export function PaywallSheet({ visible, onClose, onPurchased, mockPlans }: Props
     setPurchasing(true);
     try {
       const info = await Purchases.restorePurchases();
-      const isActive = info.entitlements.active[ENTITLEMENT_ID] !== undefined;
+      const isActive = Object.keys(info.entitlements.active).length > 0;
       if (isActive) {
         onPurchased(true);
       } else {

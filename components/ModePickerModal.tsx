@@ -97,6 +97,20 @@ export function ModePickerModal({ visible, onClose, onSelected, autoOpenMode }: 
     setIsPremium(premium);
     if (!premium) {
       // Paid but no entitlement — never strand a paying user silently.
+      // Attach the device's RC identity: if it differs from the customer the
+      // receipt landed on, that's the bug (see 2026-07-08 sandbox debugging).
+      try {
+        const Purchases = require('react-native-purchases').default;
+        const [appUserID, info] = await Promise.all([
+          Purchases.getAppUserID(),
+          Purchases.getCustomerInfo(),
+        ]);
+        Sentry.setContext('revenuecat', {
+          appUserID,
+          originalAppUserId: info.originalAppUserId,
+          activeEntitlements: Object.keys(info.entitlements.active),
+        });
+      } catch (_) {}
       Sentry.captureMessage('Purchase succeeded but entitlement inactive', 'warning');
       Alert.alert(
         'Almost there',
