@@ -65,7 +65,9 @@ async function isYouTubeUsable(videoId: string): Promise<boolean> {
     const cd = item.contentDetails;
     const status = item.status;
     if (status?.embeddable === false) return false;
-    if (status?.privacyStatus && status.privacyStatus !== 'public') return false;
+    // Unlisted plays fine in embeds (some studios publish trailers unlisted);
+    // only private is a guaranteed dead-end.
+    if (status?.privacyStatus === 'private') return false;
     if (status?.uploadStatus && status.uploadStatus !== 'processed') return false;
     if (cd?.contentRating?.ytRating === 'ytAgeRestricted') return false;
     if (cd?.regionRestriction) return false;
