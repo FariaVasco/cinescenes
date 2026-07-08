@@ -213,21 +213,6 @@ function SettingsView() {
   const { authUser, isPremium, settings, setSetting } = useAppStore();
   const { signInWithApple, signInWithGoogle, signOut, deleteAccount } = useAuth();
   const [authBusy, setAuthBusy] = useState(false);
-  const router = useRouter();
-  // TEMP: 5 taps on the TMDB logo open the RC diagnostics screen — remove
-  // together with app/rc-debug.tsx once the premium-activation bug is solved.
-  const debugTapCount = useRef(0);
-  const debugTapTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  function handleDebugTap() {
-    debugTapCount.current += 1;
-    clearTimeout(debugTapTimer.current);
-    if (debugTapCount.current >= 5) {
-      debugTapCount.current = 0;
-      router.push('/rc-debug');
-      return;
-    }
-    debugTapTimer.current = setTimeout(() => { debugTapCount.current = 0; }, 1500);
-  }
 
   async function handleSignIn() {
     setAuthBusy(true);
@@ -345,9 +330,7 @@ function SettingsView() {
         <Text style={styles.sectionLabel}>ABOUT</Text>
         <View style={styles.sectionCard}>
           <View style={styles.attributionRow}>
-            <TouchableOpacity activeOpacity={1} onPress={handleDebugTap}>
-              <Image source={tmdbLogo} style={styles.tmdbLogo} resizeMode="contain" />
-            </TouchableOpacity>
+            <Image source={tmdbLogo} style={styles.tmdbLogo} resizeMode="contain" />
             <Text style={styles.attributionText}>
               This product uses the TMDB API but is not endorsed or certified by TMDB.
             </Text>

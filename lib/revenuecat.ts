@@ -10,47 +10,21 @@ const RC_KEY = Platform.OS === 'ios'
 // Must match the entitlement identifier set in the RevenueCat dashboard
 export const ENTITLEMENT_ID = 'Cinescenes Pro';
 
-// ── TEMP diagnostics for the premium-activation bug — remove once solved ──
-// In-memory event log surfaced by app/rc-debug.tsx (Settings → 5 taps on the
-// TMDB logo). Records every identity/entitlement-relevant step with timing.
-const rcLog: string[] = [];
-export function logRc(msg: string) {
-  rcLog.push(`${new Date().toISOString().slice(11, 23)} ${msg}`);
-  if (rcLog.length > 80) rcLog.shift();
-}
-export function getRcLog(): string[] {
-  return [...rcLog];
-}
-
 export function initRevenueCat() {
-  if (!RC_KEY) {
-    logRc('initRevenueCat: NO API KEY — RevenueCat disabled');
-    return;
-  }
+  if (!RC_KEY) return;
   Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.VERBOSE : LOG_LEVEL.ERROR);
   Purchases.configure({ apiKey: RC_KEY });
-  logRc(`configure() called, key=${RC_KEY.slice(0, 8)}…`);
-  Purchases.getCustomerInfo()
-    .then((info) => logRc(`initial getCustomerInfo: user=${info.originalAppUserId}, active=${JSON.stringify(Object.keys(info.entitlements.active))}`))
-    .catch((e) => { logRc(`initial getCustomerInfo FAILED: ${e?.message}`); Sentry.captureException(e); });
+  Purchases.getCustomerInfo().catch((e) => Sentry.captureException(e));
 }
 
 export async function identifyUser(supabaseUserId: string) {
-  logRc(`logIn(${supabaseUserId.slice(0, 8)}…) starting`);
-  try {
-    const { customerInfo, created } = await Purchases.logIn(supabaseUserId);
-    logRc(`logIn OK, created=${created}, active=${JSON.stringify(Object.keys(customerInfo.entitlements.active))}`);
-  } catch (e: any) {
-    logRc(`logIn FAILED: ${e?.message}`);
-    throw e;
-  }
+  await Purchases.logIn(supabaseUserId);
 }
 
 export async function checkPremium(): Promise<boolean> {
   try {
     const info = await Purchases.getCustomerInfo();
     const activeKeys = Object.keys(info.entitlements.active);
-    logRc(`checkPremium: user=${info.originalAppUserId}, active=${JSON.stringify(activeKeys)}`);
     // The project has a single entitlement, so any active one means premium.
     // Matching by exact ID is fragile: an invisible identifier mismatch versus
     // the dashboard silently locks out every paying user.
@@ -61,8 +35,7 @@ export async function checkPremium(): Promise<boolean> {
       );
     }
     return activeKeys.length > 0;
-  } catch (e: any) {
-    logRc(`checkPremium FAILED: ${e?.message}`);
+  } catch (e) {
     Sentry.captureException(e);
     return false;
   }
