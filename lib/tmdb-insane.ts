@@ -44,16 +44,32 @@ export async function searchDirector(query: string): Promise<string | null> {
   return name ?? null;
 }
 
-/** Returns true if the YouTube video is HD (720p+). Falls back to true on any error. */
-async function isYouTubeHD(videoId: string): Promise<boolean> {
+/**
+ * Vets a candidate trailer with one videos.list call (same quota cost as the
+ * old HD-only check): embed permission, privacy, age restriction, region
+ * blocks, upload state, and HD quality. Any region restriction at all is a
+ * skip — the candidate pool is effectively infinite, so being conservative
+ * costs nothing and avoids "not available in your country" mid-game.
+ * Falls back to permissive on API errors so quota exhaustion or a revoked
+ * key never bricks Insane mode.
+ */
+async function isYouTubeUsable(videoId: string): Promise<boolean> {
   if (!YT_KEY) return true;
   try {
     const res = await fetch(
-      `https://www.googleapis.com/youtube/v3/videos?id=${videoId}&part=contentDetails&key=${YT_KEY}`
+      `https://www.googleapis.com/youtube/v3/videos?id=${videoId}&part=contentDetails,status&key=${YT_KEY}`
     );
     if (!res.ok) return true;
-    const data = await res.json();
-    return data?.items?.[0]?.contentDetails?.definition === 'hd';
+    const item = (await res.json())?.items?.[0];
+    if (!item) return false; // deleted / never existed
+    const cd = item.contentDetails;
+    const status = item.status;
+    if (status?.embeddable === false) return false;
+    if (status?.privacyStatus && status.privacyStatus !== 'public') return false;
+    if (status?.uploadStatus && status.uploadStatus !== 'processed') return false;
+    if (cd?.contentRating?.ytRating === 'ytAgeRestricted') return false;
+    if (cd?.regionRestriction) return false;
+    return cd?.definition === 'hd';
   } catch {
     return true;
   }
@@ -117,7 +133,7 @@ export async function fetchRandomInsaneMovie(db: Db, platform: 'ios' | 'android'
     // Find the first trailer that passes the HD quality check
     let trailer: any = null;
     for (const candidate of sorted) {
-      if (await isYouTubeHD(candidate.key)) { trailer = candidate; break; }
+      if (await isYouTubeUsable(candidate.key)) { trailer = candidate; break; }
     }
     if (!trailer) continue;
 
