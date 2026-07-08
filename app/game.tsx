@@ -3908,7 +3908,11 @@ const styles = StyleSheet.create({
     flex: 1, gap: 3,
   },
   bonusDockInput: {
-    height: 28,
+    // Android TextInputs have built-in vertical padding that clips the text
+    // inside a snug fixed height (it becomes internally scrollable) — zero it
+    // and give Android a taller box; iOS keeps its original metrics.
+    height: Platform.OS === 'android' ? 34 : 28,
+    paddingVertical: 0,
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: R.sm, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
     paddingHorizontal: 10,
