@@ -145,6 +145,10 @@ export default function GameScreen() {
   // Seconds left on the host's "waiting for stragglers" countdown during intro
   // (null when no countdown is active). Drives the auto-remove of non-spinners.
   const [introSecondsLeft, setIntroSecondsLeft] = useState<number | null>(null);
+  // Straggler-side mirror of that countdown: derived from the host's last_seen
+  // (which every device receives via polling) + the timeout, so the player who
+  // hasn't spun sees the same deadline the host's device will enforce.
+  const [spinWarnSecondsLeft, setSpinWarnSecondsLeft] = useState<number | null>(null);
   const [trailerKey, setTrailerKey] = useState(0);
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
   const [castVisible, setCastVisible] = useState(false);
@@ -538,6 +542,26 @@ export default function GameScreen() {
   // processDeparture is a stable hoisted declaration; players drives re-evaluation.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showIntro, amHost, players, myPlayerId, game]);
+
+  // ── Straggler-side warning (non-host, hasn't spun) ──
+  // Mirrors the host's kick deadline locally so the player at risk sees it on
+  // the "Let's spin!" screen. Derived from host.last_seen + timeout — written
+  // by the host's clock, compared against ours, so the number is approximate
+  // (a second or two of skew is fine for a warning).
+  useEffect(() => {
+    const host = players[0];
+    const me = players.find(p => p.id === myPlayerId);
+    const atRisk = showIntro && !amHost && host?.last_seen != null && me != null && me.last_seen == null;
+    if (!atRisk) {
+      setSpinWarnSecondsLeft(null);
+      return;
+    }
+    const deadline = new Date(host.last_seen!).getTime() + INTRO_STRAGGLER_TIMEOUT_MS;
+    const tick = () => setSpinWarnSecondsLeft(Math.max(0, Math.ceil((deadline - Date.now()) / 1000)));
+    tick();
+    const id = setInterval(tick, 500);
+    return () => clearInterval(id);
+  }, [showIntro, amHost, players, myPlayerId]);
 
   // Pause polling while the active player is typing on the guess screen.
   // Without this, the 2-second poll triggers state updates → KeyboardAvoidingView
@@ -1743,6 +1767,7 @@ export default function GameScreen() {
         amHost={amHost}
         allPlayersReady={allPlayersReady}
         kickCountdown={introSecondsLeft}
+        spinWarningSeconds={spinWarnSecondsLeft}
       />
     );
   }

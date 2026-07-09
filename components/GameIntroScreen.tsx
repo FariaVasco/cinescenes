@@ -30,6 +30,7 @@ export function GameIntroScreen({
   allPlayersReady,
   onSpinComplete,
   kickCountdown,
+  spinWarningSeconds,
 }: {
   startingMovie: Movie | null;
   playerName: string;
@@ -40,6 +41,7 @@ export function GameIntroScreen({
   allPlayersReady: boolean;
   onSpinComplete: () => void;
   kickCountdown?: number | null;
+  spinWarningSeconds?: number | null;
 }) {
   const { width: screenWidth } = useWindowDimensions();
   const arrowRight = screenWidth / 2 - WHEEL_RADIUS - CARD_W / 2 - 4;
@@ -168,7 +170,17 @@ export function GameIntroScreen({
               <Text style={styles.spinBtnText}>Let's spin! </Text>
             </View>
           </TouchableOpacity>
-          <View style={{ height: 32 }} />
+          {/* Fixed-height slot below the button — the kick warning appears here
+              without shifting the layout when the host's countdown starts. */}
+          <View style={{ height: 32, justifyContent: 'center' }}>
+            {spinWarningSeconds != null && (
+              <Text style={styles.spinWarnText}>
+                {spinWarningSeconds > 0
+                  ? `The game is waiting for you — spin within ${spinWarningSeconds}s or you'll be removed`
+                  : 'Removing you from the game…'}
+              </Text>
+            )}
+          </View>
         </SafeAreaView>
       </Animated.View>
 
@@ -502,5 +514,11 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.display,
     fontSize: FS.lg,
     letterSpacing: 0.5,
+  },
+  spinWarnText: {
+    color: C.gold,
+    fontFamily: Fonts.body,
+    fontSize: FS.sm,
+    textAlign: 'center',
   },
 });
