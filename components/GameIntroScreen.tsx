@@ -278,24 +278,29 @@ export function GameIntroScreen({
                 </View>
               )}
               {amHost ? (
-                <TouchableOpacity
-                  style={[styles.startBtn, !allPlayersReady && styles.startBtnDisabled]}
-                  onPress={allPlayersReady ? fadeOutAndDone : undefined}
-                  activeOpacity={allPlayersReady ? 0.8 : 1}
-                >
-                  {allPlayersReady ? (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <Text style={styles.startBtnText}>Let's start playing! </Text>
-                      <Image source={require('../assets/lc-clapperboard.png')} style={{ width: 18, height: 18 }} />
-                    </View>
-                  ) : (
-                    <Text style={[styles.startBtnText, { color: 'rgba(0,0,0,0.35)' }]}>
-                      {kickCountdown != null && kickCountdown > 0
-                        ? `Waiting for everyone… removing idle players in ${kickCountdown}s`
-                        : 'Waiting for everyone…'}
+                <View style={styles.hostActions}>
+                  <TouchableOpacity
+                    style={[styles.startBtn, !allPlayersReady && styles.startBtnDisabled]}
+                    onPress={allPlayersReady ? fadeOutAndDone : undefined}
+                    activeOpacity={allPlayersReady ? 0.8 : 1}
+                  >
+                    {allPlayersReady ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Text style={styles.startBtnText}>Let's start playing! </Text>
+                        <Image source={require('../assets/lc-clapperboard.png')} style={{ width: 18, height: 18 }} />
+                      </View>
+                    ) : (
+                      <Text style={[styles.startBtnText, { color: 'rgba(0,0,0,0.35)' }]}>
+                        Waiting for everyone…
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                  {!allPlayersReady && kickCountdown != null && kickCountdown > 0 && (
+                    <Text style={styles.kickCaption}>
+                      Removing idle players in {kickCountdown}s
                     </Text>
                   )}
-                </TouchableOpacity>
+                </View>
               ) : (
                 <Text style={styles.waitingHostText}>Waiting for host to start…</Text>
               )}
@@ -447,6 +452,16 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.4)',
     fontFamily: Fonts.body,
     fontSize: FS.sm,
+    textAlign: 'center',
+  },
+  hostActions: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  kickCaption: {
+    color: 'rgba(255,255,255,0.4)',
+    fontFamily: Fonts.body,
+    fontSize: FS.xs,
     textAlign: 'center',
   },
   contextInner: {
