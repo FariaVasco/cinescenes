@@ -29,6 +29,7 @@ export function GameIntroScreen({
   amHost,
   allPlayersReady,
   onSpinComplete,
+  kickCountdown,
 }: {
   startingMovie: Movie | null;
   playerName: string;
@@ -38,6 +39,7 @@ export function GameIntroScreen({
   amHost: boolean;
   allPlayersReady: boolean;
   onSpinComplete: () => void;
+  kickCountdown?: number | null;
 }) {
   const { width: screenWidth } = useWindowDimensions();
   const arrowRight = screenWidth / 2 - WHEEL_RADIUS - CARD_W / 2 - 4;
@@ -288,7 +290,9 @@ export function GameIntroScreen({
                     </View>
                   ) : (
                     <Text style={[styles.startBtnText, { color: 'rgba(0,0,0,0.35)' }]}>
-                      Waiting for everyone…
+                      {kickCountdown != null && kickCountdown > 0
+                        ? `Waiting for everyone… removing idle players in ${kickCountdown}s`
+                        : 'Waiting for everyone…'}
                     </Text>
                   )}
                 </TouchableOpacity>

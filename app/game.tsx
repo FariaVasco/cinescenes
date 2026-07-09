@@ -62,6 +62,12 @@ const log = __DEV__ ? console.log : () => {};
 // won't trigger it.
 const PRESENCE_TIMEOUT_MS = 60_000;
 
+// Once the host has spun their starting card and is waiting on others, players
+// who still haven't spun this long later are removed via the same departure
+// path as a voluntary Leave, so one idle player can't stall the intro forever.
+// Generous enough to cover the context screen + ~7s spin for anyone taking part.
+const INTRO_STRAGGLER_TIMEOUT_MS = 30_000;
+
 const lcTrophy        = require('../assets/lc-trophy.png');
 const lcDirectorsChair = require('../assets/lc-directors-chair.png');
 const lcPopcorn       = require('../assets/lc-popcorn.png');
@@ -136,6 +142,9 @@ export default function GameScreen() {
   // for new games — no BrandedLoader flash before the countdown appears.
   const [showCountdown, setShowCountdown] = useState(() => useAppStore.getState().gameJustStarted);
   const [showIntro, setShowIntro] = useState(false);
+  // Seconds left on the host's "waiting for stragglers" countdown during intro
+  // (null when no countdown is active). Drives the auto-remove of non-spinners.
+  const [introSecondsLeft, setIntroSecondsLeft] = useState<number | null>(null);
   const [trailerKey, setTrailerKey] = useState(0);
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
   const [castVisible, setCastVisible] = useState(false);
@@ -479,6 +488,53 @@ export default function GameScreen() {
     }
   }, [currentTurn?.placing_started_at, showIntro]);
 
+  // ── Intro straggler timeout (host-only) ──
+  // Once the host has spun and is waiting on at least one player who hasn't,
+  // run a countdown; when it expires, remove the non-spinners via the same
+  // processDeparture() path as a voluntary Leave. Only the host runs this, so
+  // there's no cross-device race. After removal the poll drops them from every
+  // screen and allPlayersReady flips true, enabling the host's start button.
+  const introKickDeadlineRef = useRef<number | null>(null);
+  useEffect(() => {
+    const hostReady = amHost && players[0]?.last_seen != null;
+    const someoneNotReady = players.length > 1 && players.some(p => p.last_seen == null);
+    if (!showIntro || !hostReady || !someoneNotReady) {
+      introKickDeadlineRef.current = null;
+      setIntroSecondsLeft(null);
+      return;
+    }
+    if (introKickDeadlineRef.current == null) {
+      introKickDeadlineRef.current = Date.now() + INTRO_STRAGGLER_TIMEOUT_MS;
+    }
+    const tick = () => {
+      // Deadline nulled after firing — stop ticking until the effect re-runs.
+      if (introKickDeadlineRef.current == null) return;
+      const left = Math.max(0, Math.ceil((introKickDeadlineRef.current - Date.now()) / 1000));
+      setIntroSecondsLeft(left);
+      if (left <= 0) {
+        introKickDeadlineRef.current = null;
+        // Re-read fresh so a player who spun in the last second isn't evicted.
+        if (game) {
+          db.from('players').select('*').eq('game_id', game.id).is('left_at', null)
+            .order('created_at')
+            .then(({ data }: { data: Player[] | null }) => {
+              for (const p of (data ?? [])) {
+                if (p.last_seen == null && p.id !== myPlayerId && !evictingRef.current.has(p.id)) {
+                  evictingRef.current.add(p.id);
+                  processDeparture(p.id).catch(() => {}).finally(() => evictingRef.current.delete(p.id));
+                }
+              }
+            });
+        }
+      }
+    };
+    tick();
+    const id = setInterval(tick, 500);
+    return () => clearInterval(id);
+  // processDeparture is a stable hoisted declaration; players drives re-evaluation.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showIntro, amHost, players, myPlayerId, game]);
+
   // Pause polling while the active player is typing on the guess screen.
   // Without this, the 2-second poll triggers state updates → KeyboardAvoidingView
   // recalculates layout (causing visible glitching) and disrupts speech recognition.
@@ -722,17 +778,36 @@ export default function GameScreen() {
       return;
     }
 
+    // Game cancelled (e.g. everyone left, or too few players remained after the
+    // intro timeout) — leave gracefully.
+    if (gameRow?.status === 'cancelled') {
+      stopPolling();
+      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+      router.replace('/');
+      return;
+    }
+
     // During the intro (spinning wheel) refresh players every tick so all devices
     // see who has written last_seen and the host's "ready" list stays current.
     // Preserve any locally-optimistic last_seen: if the DB row still shows null but
     // local state already has a value (write in-flight), keep the local value so the
     // UI doesn't flicker back to "Spinning" while waiting for the round-trip.
     if (showIntroRef.current && freshPlayers) {
-      setLocalPlayers(prev => (freshPlayers as Player[]).map(fp => {
-        const local = prev.find(p => p.id === fp.id);
-        return (local?.last_seen && !fp.last_seen) ? local : fp;
+      const fp = freshPlayers as Player[];
+      // Removed as a straggler while still on the intro (my row was tombstoned) —
+      // exit gracefully instead of lingering on the wheel forever. freshPlayers is
+      // only set on a successful read, so a missing self-row means real removal.
+      if (myPlayerId && !fp.find(p => p.id === myPlayerId)) {
+        stopPolling();
+        ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+        router.replace('/');
+        return;
+      }
+      setLocalPlayers(prev => fp.map(freshP => {
+        const local = prev.find(p => p.id === freshP.id);
+        return (local?.last_seen && !freshP.last_seen) ? local : freshP;
       }));
-      setPlayers(freshPlayers as Player[]);
+      setPlayers(fp);
     }
 
     // ── Presence sweep ──
@@ -1663,6 +1738,7 @@ export default function GameScreen() {
         players={players}
         amHost={amHost}
         allPlayersReady={allPlayersReady}
+        kickCountdown={introSecondsLeft}
       />
     );
   }
