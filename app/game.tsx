@@ -514,14 +514,18 @@ export default function GameScreen() {
       if (left <= 0) {
         introKickDeadlineRef.current = null;
         // Re-read fresh so a player who spun in the last second isn't evicted.
+        // Departures run SEQUENTIALLY: each processDeparture re-reads the player
+        // list, so concurrent calls would all see the pre-kick roster and none
+        // would take the sole-survivor branch when multiple stragglers leave the
+        // host alone. Sequential = same semantics as consecutive voluntary Leaves.
         if (game) {
           db.from('players').select('*').eq('game_id', game.id).is('left_at', null)
             .order('created_at')
-            .then(({ data }: { data: Player[] | null }) => {
+            .then(async ({ data }: { data: Player[] | null }) => {
               for (const p of (data ?? [])) {
                 if (p.last_seen == null && p.id !== myPlayerId && !evictingRef.current.has(p.id)) {
                   evictingRef.current.add(p.id);
-                  processDeparture(p.id).catch(() => {}).finally(() => evictingRef.current.delete(p.id));
+                  try { await processDeparture(p.id); } catch {} finally { evictingRef.current.delete(p.id); }
                 }
               }
             });
