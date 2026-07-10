@@ -202,7 +202,10 @@ export default function FilmCountdown({ from = 3, onComplete }: FilmCountdownPro
             <Animated.View
               style={[styles.overlay, { transform: [{ scale: numeralScale }] }]}
             >
-              <Text style={[styles.numeral, { fontSize: numeralSize }]}>{displayN}</Text>
+              {/* Trailing space: Bangers' italic overhang + the 4px shadow get
+                  clipped at the glyph's right edge without it (same convention
+                  as every other display-font label). */}
+              <Text style={[styles.numeral, { fontSize: numeralSize }]}>{displayN}{' '}</Text>
             </Animated.View>
 
           </View>
