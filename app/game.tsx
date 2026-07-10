@@ -2499,27 +2499,31 @@ export default function GameScreen() {
                            the accurate countdown keyed to TITLE_CARD_BURN. */}
             <View style={{ position: 'absolute', bottom: PULL_TAB_H + 8, left: 0, right: 0, alignItems: 'center' }}>
               {showsVideo && !videoStarted ? (
-                // Stall escalation SWAPS content (never stacks) and lays out in a
-                // row — landscape phones are short on height, so the stall UI must
-                // never grow taller than the single loading label it replaces.
-                trailerStallMs <= 10_000 ? (
+                // "Choosing a movie…" stays anchored on top; the stall info fades
+                // into a PRE-RESERVED slot below it (fixed height, single row), so
+                // nothing ever shifts and the block stays short enough for small
+                // landscape screens.
+                <View style={{ alignItems: 'center' }}>
                   <ChoosingMovieLabel />
-                ) : (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-                    <Text style={styles.trailerStallText}>
-                      Slow connection — still loading the trailer…
-                    </Text>
-                    {trailerStallMs > 15_000 && (
-                      <TouchableOpacity
-                        style={styles.trailerStallRetryBtn}
-                        onPress={() => setTrailerKey(k => k + 1)}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={styles.trailerStallRetryText}>Retry </Text>
-                      </TouchableOpacity>
+                  <View style={{ height: 38, justifyContent: 'center' }}>
+                    {trailerStallMs > 10_000 && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+                        <Text style={styles.trailerStallText}>
+                          Slow connection — still loading the trailer…
+                        </Text>
+                        {trailerStallMs > 15_000 && (
+                          <TouchableOpacity
+                            style={styles.trailerStallRetryBtn}
+                            onPress={() => setTrailerKey(k => k + 1)}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.trailerStallRetryText}>Retry </Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
                     )}
                   </View>
-                )
+                </View>
               ) : (
                 <TrailerCountdown
                   key={videoStarted ? 'started' : 'sync'}
