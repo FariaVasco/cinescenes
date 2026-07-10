@@ -130,6 +130,10 @@ export default function GameScreen() {
   const [trailerRevealed, setTrailerRevealed] = useState(false);
   const [countdownDone, setCountdownDone] = useState(false);
   const [videoStarted, setVideoStarted] = useState(false);
+  // Milliseconds this device has been waiting for trailer playback to start.
+  // Drives the slow-connection message (~10s) and Retry button (~15s) shown
+  // while the cover is down — the cover itself only lifts on real playback.
+  const [trailerStallMs, setTrailerStallMs] = useState(0);
   const [canSkipTrailer, setCanSkipTrailer] = useState(true);
   const skipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [readyToPlace, setReadyToPlace] = useState(false);
@@ -562,6 +566,18 @@ export default function GameScreen() {
     const id = setInterval(tick, 500);
     return () => clearInterval(id);
   }, [showIntro, amHost, players, myPlayerId]);
+
+  // Track how long this device has been waiting for the trailer to actually
+  // start playing (resets per turn and per Retry remount).
+  useEffect(() => {
+    if (!showsVideo || videoStarted) {
+      setTrailerStallMs(0);
+      return;
+    }
+    const startedAt = Date.now();
+    const id = setInterval(() => setTrailerStallMs(Date.now() - startedAt), 1000);
+    return () => clearInterval(id);
+  }, [showsVideo, videoStarted, currentTurn?.id, trailerKey]);
 
   // Pause polling while the active player is typing on the guess screen.
   // Without this, the 2-second poll triggers state updates → KeyboardAvoidingView
@@ -2483,7 +2499,23 @@ export default function GameScreen() {
                            the accurate countdown keyed to TITLE_CARD_BURN. */}
             <View style={{ position: 'absolute', bottom: PULL_TAB_H + 8, left: 0, right: 0, alignItems: 'center' }}>
               {showsVideo && !videoStarted ? (
-                <ChoosingMovieLabel />
+                <View style={{ alignItems: 'center', gap: 8 }}>
+                  <ChoosingMovieLabel />
+                  {trailerStallMs > 10_000 && (
+                    <Text style={styles.trailerStallText}>
+                      Slow connection — still loading the trailer…
+                    </Text>
+                  )}
+                  {trailerStallMs > 15_000 && (
+                    <TouchableOpacity
+                      style={styles.trailerStallRetryBtn}
+                      onPress={() => setTrailerKey(k => k + 1)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.trailerStallRetryText}>Retry </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               ) : (
                 <TrailerCountdown
                   key={videoStarted ? 'started' : 'sync'}
@@ -4202,6 +4234,26 @@ const styles = StyleSheet.create({
     color: C.ochre,
     fontFamily: Fonts.numeric,
     fontSize: FS.sm,
+  },
+  trailerStallText: {
+    color: C.textSubDark,
+    fontFamily: Fonts.body,
+    fontSize: FS.sm,
+    textAlign: 'center',
+  },
+  trailerStallRetryBtn: {
+    backgroundColor: C.ochre,
+    borderRadius: R.btn,
+    borderWidth: 2,
+    borderColor: C.ink,
+    paddingHorizontal: 20,
+    paddingVertical: 6,
+  },
+  trailerStallRetryText: {
+    color: C.textOnOchre,
+    fontFamily: Fonts.display,
+    fontSize: FS.sm,
+    letterSpacing: 0.4,
   },
   castFab: {
     position: 'absolute',

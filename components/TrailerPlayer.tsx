@@ -119,9 +119,15 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
     // the trailer duration; the tick uses this to actively stop playback.
     const dynEndRef           = useRef<number>(0);
 
-    const contentReadyRef  = useRef(false);
     const videoPlayingRef  = useRef(false);
     const seekToTimeRef    = useRef(0);
+    // Playback probe: watches the playhead advance to detect REAL playback,
+    // covering both a missed 'playing' state event and slow networks where
+    // 'ready' fires long before frames actually roll. The reveal is gated
+    // exclusively on confirmed playback — a non-playing player shows the
+    // video title (cued thumbnail / title overlay), which spoils the game.
+    const probeRef         = useRef<ReturnType<typeof setInterval> | null>(null);
+    const probeLastTimeRef = useRef<number | null>(null);
 
     // T0 = mount time; all [CS] timestamps are ms relative to this.
     const t0Ref = useRef(Date.now());
@@ -206,6 +212,41 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
       }
     }
 
+    function stopPlaybackProbe() {
+      if (probeRef.current) { clearInterval(probeRef.current); probeRef.current = null; }
+      probeLastTimeRef.current = null;
+    }
+
+    function startPlaybackProbe() {
+      stopPlaybackProbe();
+      probeRef.current = setInterval(async () => {
+        try {
+          const t = await playerRef.current?.getCurrentTime?.();
+          if (typeof t !== 'number') return;
+          const last = probeLastTimeRef.current;
+          probeLastTimeRef.current = t;
+          if (last == null) return;
+          const delta = t - last;
+          // Real playback advances ~0.5s per tick. A large jump is a seek
+          // (to safeStart/dynStart) landing while still paused/buffering —
+          // record the new baseline but don't mistake it for playback.
+          if (delta > 0.2 && delta < 2) markPlaying();
+        } catch {}
+      }, 500);
+    }
+
+    // The single authority on "playback is really happening": notifies the game
+    // and starts the title-card burn from THIS moment. Nothing else reveals.
+    function markPlaying() {
+      if (videoPlayingRef.current) return;
+      videoPlayingRef.current = true;
+      stopPlaybackProbe();
+      log(`[CS] playback confirmed    t=${ms()}  → burn ${TITLE_CARD_BURN}ms`);
+      onPlaying?.();
+      if (fallbackRef.current) clearTimeout(fallbackRef.current);
+      fallbackRef.current = setTimeout(() => doReveal(), TITLE_CARD_BURN);
+    }
+
     useImperativeHandle(ref, () => ({
       pause() {
         const elapsed = Date.now() - timerStartRef.current;
@@ -221,10 +262,10 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
       stop() {
         if (timerRef.current) clearTimeout(timerRef.current);
         if (fallbackRef.current) clearTimeout(fallbackRef.current);
+        stopPlaybackProbe();
         setPlaying(false);
       },
       replay() {
-        contentReadyRef.current = false;
         videoPlayingRef.current = false;
         if (timerRef.current) clearTimeout(timerRef.current);
         if (overlayTimerRef.current) clearTimeout(overlayTimerRef.current);
@@ -236,17 +277,19 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
         setTimeout(() => {
           playerRef.current?.seekTo(replayStart, true);
           setPlaying(true);
-          fallbackRef.current = setTimeout(() => {
-            doReveal();
-          }, TITLE_CARD_BURN + 1000);
+          // Same invariant as first play: the probe (or 'playing' event)
+          // confirms playback, then the burn reveals — never a blind timer.
+          startPlaybackProbe();
         }, 300);
       },
     }));
 
     async function handleYouTubeReady() {
-      // Guarantee videoStarted even if the 'playing' state fires before the
-      // onChangeState handler connects (race condition on fast second-movie loads).
-      if (!videoPlayingRef.current) onPlaying?.();
+      // Ready ≠ playing: the player frame is loaded, but on a slow connection
+      // frames may not roll for many seconds yet. Start the playhead probe —
+      // markPlaying (via probe or 'playing' event) is the only reveal trigger,
+      // so the cover can never lift onto a non-playing player.
+      startPlaybackProbe();
       if (useDynamicWindow) {
         skipEndTimerOnReady.current = true;
         if (fallbackRef.current) clearTimeout(fallbackRef.current);
@@ -263,33 +306,20 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
           dynStartRef.current = 0;
           dynEndRef.current   = 40; // fallback: cap at 40s of video time
         }
-        // Long fallback — fires only if 'playing' state never arrives
-        fallbackRef.current = setTimeout(() => {
-          if (!contentReadyRef.current) doReveal();
-        }, TITLE_CARD_BURN + 6000);
       } else {
         seekToTimeRef.current = Date.now();
         playerRef.current?.seekTo(safeStart, true);
-        if (fallbackRef.current) clearTimeout(fallbackRef.current);
-        fallbackRef.current = setTimeout(() => {
-          if (!contentReadyRef.current) doReveal();
-        }, TITLE_CARD_BURN + 6000);
       }
     }
 
     function handleYouTubeStateChange(state: string) {
-      if (state === 'playing' && !videoPlayingRef.current) {
-        videoPlayingRef.current = true;
-        onPlaying?.();
-        // Authoritative burn: start TITLE_CARD_BURN from actual playback, clearing the onReady fallback
-        if (fallbackRef.current) clearTimeout(fallbackRef.current);
-        fallbackRef.current = setTimeout(() => {
-          if (!contentReadyRef.current) doReveal();
-        }, TITLE_CARD_BURN);
+      if (state === 'playing') {
+        markPlaying();
       }
       if (state === 'ended') {
         if (timerRef.current) clearTimeout(timerRef.current);
         if (fallbackRef.current) clearTimeout(fallbackRef.current);
+        stopPlaybackProbe();
         onEnded?.();
       }
     }
@@ -299,6 +329,7 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
         if (timerRef.current) clearTimeout(timerRef.current);
         if (overlayTimerRef.current) clearTimeout(overlayTimerRef.current);
         if (fallbackRef.current) clearTimeout(fallbackRef.current);
+        if (probeRef.current) clearInterval(probeRef.current);
       };
     }, []);
 
