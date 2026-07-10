@@ -2499,23 +2499,27 @@ export default function GameScreen() {
                            the accurate countdown keyed to TITLE_CARD_BURN. */}
             <View style={{ position: 'absolute', bottom: PULL_TAB_H + 8, left: 0, right: 0, alignItems: 'center' }}>
               {showsVideo && !videoStarted ? (
-                <View style={{ alignItems: 'center', gap: 8 }}>
+                // Stall escalation SWAPS content (never stacks) and lays out in a
+                // row — landscape phones are short on height, so the stall UI must
+                // never grow taller than the single loading label it replaces.
+                trailerStallMs <= 10_000 ? (
                   <ChoosingMovieLabel />
-                  {trailerStallMs > 10_000 && (
+                ) : (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
                     <Text style={styles.trailerStallText}>
                       Slow connection — still loading the trailer…
                     </Text>
-                  )}
-                  {trailerStallMs > 15_000 && (
-                    <TouchableOpacity
-                      style={styles.trailerStallRetryBtn}
-                      onPress={() => setTrailerKey(k => k + 1)}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.trailerStallRetryText}>Retry </Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
+                    {trailerStallMs > 15_000 && (
+                      <TouchableOpacity
+                        style={styles.trailerStallRetryBtn}
+                        onPress={() => setTrailerKey(k => k + 1)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.trailerStallRetryText}>Retry </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )
               ) : (
                 <TrailerCountdown
                   key={videoStarted ? 'started' : 'sync'}
@@ -4236,7 +4240,9 @@ const styles = StyleSheet.create({
     fontSize: FS.sm,
   },
   trailerStallText: {
-    color: C.textSubDark,
+    // The countdown cover is parchment (C.bg) — needs the dark ink text,
+    // not the light-gray textSubDark meant for dark screens.
+    color: C.textPrimary,
     fontFamily: Fonts.body,
     fontSize: FS.sm,
     textAlign: 'center',
