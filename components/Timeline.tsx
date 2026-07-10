@@ -126,6 +126,13 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
         let wrapPos: { pageX: number; pageY: number } | null = null;
         const tryStart = () => {
           if (!slotPos || !wrapPos) return;
+          // Measurement failed (Android can still report zeros before layout
+          // settles) — a missing flight beats a flight to the wrong place:
+          // render the card directly in its slot.
+          if (slotPos.pageX === 0 && slotPos.pageY === 0) {
+            setInsertVisible(true);
+            return;
+          }
           setInsertOverlay({ x: slotPos.pageX - wrapPos.pageX, y: slotPos.pageY - wrapPos.pageY });
           runAnim();
         };
@@ -151,7 +158,10 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
   const trashTy  = trashAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -180] });
   const trashRot = trashAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '50deg'] });
   const trashOp  = trashAnim.interpolate({ inputRange: [0, 0.4, 1], outputRange: [1, 0.9, 0] });
-  const trashCollapseWidth  = collapseAnim.interpolate({ inputRange: [0, 1], outputRange: [96, 0] });
+  // Collapse ends at the gapSpacer's 20px (width 20 + margin 0), NOT zero —
+  // when trashGone swaps this slot for the spacer, the sizes match exactly and
+  // the timeline doesn't snap back open at the end of the animation.
+  const trashCollapseWidth  = collapseAnim.interpolate({ inputRange: [0, 1], outputRange: [96, 20] });
   const trashCollapseMargin = collapseAnim.interpolate({ inputRange: [0, 1], outputRange: [24, 0] });
 
   useEffect(() => {
@@ -194,6 +204,12 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
         let wrapperPos: { pageX: number; pageY: number } | null = null;
         const tryStart = () => {
           if (!cardPos || !wrapperPos) return;
+          // Zero measurement → skip the overlay; the in-slot card collapses with
+          // the slot instead of flying from a bogus origin.
+          if (cardPos.pageX === 0 && cardPos.pageY === 0) {
+            runAnim();
+            return;
+          }
           setTrashOverlay({ x: cardPos.pageX - wrapperPos!.pageX, y: cardPos.pageY - wrapperPos!.pageY });
           runAnim();
         };
@@ -253,8 +269,11 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
             // Slot already at full size (card is in the overlay flying in)
             return <View key={`gap-${index}`} style={{ width: 96, height: 120, marginHorizontal: 24 }} />;
           }
-          // Before animation: slot pre-expanded to full size for accurate position measurement
-          return <View key={`gap-${index}`} ref={insertSlotRef} style={{ width: 96, height: 120, marginHorizontal: 24 }} />;
+          // Before animation: slot pre-expanded to full size for accurate position
+          // measurement. collapsable={false} is load-bearing: Android flattens plain
+          // Views out of the native hierarchy and measure() on a flattened view
+          // returns zeros — which flew the card to the timeline's left edge.
+          return <View key={`gap-${index}`} ref={insertSlotRef} collapsable={false} style={{ width: 96, height: 120, marginHorizontal: 24 }} />;
         }
         if (trashAfter) {
           // Trash: card flies up-right (via absolute overlay), then slot collapses
@@ -266,9 +285,11 @@ export const Timeline = forwardRef<TimelineHandle, TimelineProps>(function Timel
               key={`gap-${index}`}
               style={{ width: trashCollapseWidth, marginHorizontal: trashCollapseMargin }}
             >
-              {/* Card only shown here until the overlay takes over */}
+              {/* Card only shown here until the overlay takes over.
+                  collapsable={false}: Android flattens plain Views and measure()
+                  then returns zeros, making the fly-off start from the wrong spot. */}
               {!trashOverlay && (
-                <View ref={trashCardRef}>
+                <View ref={trashCardRef} collapsable={false}>
                   <CardFront movie={revealingMovie} width={96} height={120} />
                 </View>
               )}
