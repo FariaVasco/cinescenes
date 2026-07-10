@@ -295,8 +295,5 @@ export function TrailerCountdown({ durationMs, onExpire }: TrailerCountdownProps
 const cdStyles = StyleSheet.create({
   wrap:   { flexDirection: 'row', alignItems: 'center', gap: 12 },
   label:  { fontFamily: Fonts.body, fontSize: 12, color: '#999', letterSpacing: 0.3, textAlign: 'right', lineHeight: 17 },
-  // Horizontal padding keeps the digit inside its layout box: Bangers' italic
-  // glyphs overhang to the right, and the zoom-settle animation scales the text
-  // up to 1.35× beyond its measured bounds.
-  number: { fontFamily: Fonts.display, fontSize: 44, color: OCHRE, lineHeight: 50, paddingRight: 10, paddingLeft: 4 },
+  number: { fontFamily: Fonts.display, fontSize: 44, color: OCHRE, lineHeight: 50 },
 });
