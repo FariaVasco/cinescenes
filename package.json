@@ -29,6 +29,7 @@
     }
   },
   "dependencies": {
+    "@expo-google-fonts/alfa-slab-one": "^0.4.1",
     "@expo-google-fonts/bangers": "^0.4.1",
     "@expo-google-fonts/comic-neue": "^0.4.1",
     "@expo-google-fonts/patrick-hand": "^0.4.1",

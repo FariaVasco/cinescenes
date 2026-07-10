@@ -4200,7 +4200,7 @@ const styles = StyleSheet.create({
   },
   myTimelinePanelYearText: {
     color: C.ochre,
-    fontFamily: Fonts.bodyBold,
+    fontFamily: Fonts.numeric,
     fontSize: FS.sm,
   },
   castFab: {

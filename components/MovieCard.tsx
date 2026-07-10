@@ -217,7 +217,7 @@ const s = StyleSheet.create({
   frontYear: {
     alignSelf: 'stretch',
     color: '#ffffff',
-    fontFamily: Fonts.display,
+    fontFamily: Fonts.numeric,
     letterSpacing: -0.5,
     textAlign: 'center',
   },

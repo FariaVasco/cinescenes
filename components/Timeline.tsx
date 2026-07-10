@@ -459,7 +459,7 @@ const styles = StyleSheet.create({
   cardYear: {
     color: C.ochre,
     fontSize: FS.md,
-    fontFamily: Fonts.display,
+    fontFamily: Fonts.numeric,
   },
   cardTitle: {
     color: C.textSubDark,

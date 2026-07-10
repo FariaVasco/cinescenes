@@ -18,6 +18,10 @@ export const Fonts = {
   body:      'ComicNeue_400Regular',    // UI body text, names, descriptions
   bodyBold:  'ComicNeue_700Bold',       // bold body text
   label:     'PatrickHand_400Regular',  // tags, captions, tracked small text
+  // Gameplay-critical digits (card years, timeline years). Bangers renders
+  // 1/7 and 0/O nearly identically, which can misplace a card; Alfa Slab One
+  // has unambiguous numerals.
+  numeric:   'AlfaSlabOne_400Regular',
 } as const;
 
 // ─────────────────────────────────────────────────────────────

@@ -7,6 +7,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { PaperProvider } from 'react-native-paper';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
+import { AlfaSlabOne_400Regular } from '@expo-google-fonts/alfa-slab-one';
 import { Bangers_400Regular } from '@expo-google-fonts/bangers';
 import { ComicNeue_400Regular, ComicNeue_700Bold } from '@expo-google-fonts/comic-neue';
 import { PatrickHand_400Regular } from '@expo-google-fonts/patrick-hand';
@@ -53,6 +54,7 @@ export default Sentry.wrap(function RootLayout() {
   const { updateRequired, openStore } = useForceUpdate();
 
   const [fontsLoaded] = useFonts({
+    AlfaSlabOne_400Regular,
     Bangers_400Regular,
     ComicNeue_400Regular,
     ComicNeue_700Bold,
