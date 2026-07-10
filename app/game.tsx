@@ -2207,13 +2207,22 @@ export default function GameScreen() {
                     : <Image source={lcCoin} style={styles.bonusDockCoin} />}
                   <Text style={[styles.bonusDockLabelText, bonusEntered && { color: C.leaf }]}>+1 coin</Text>
                 </TouchableOpacity>
-                {/* Tip hangs off the left of the centered pill (absolute → doesn't shift it) */}
-                {myTimeline.length <= 1 && !bonusEntered && !dockExpanded && (
+                {/* Tip hangs off the left of the centered pill (absolute → doesn't shift it).
+                    Once a slot is selected with no guess entered, it escalates to a
+                    warning — confirming the placement forfeits the bonus chance. */}
+                {selectedInterval !== null && !bonusEntered && !dockExpanded ? (
+                  <View style={[styles.bonusDockTip, styles.bonusDockTipWarn]} pointerEvents="none">
+                    <Text style={[styles.bonusDockTipText, styles.bonusDockTipWarnText]}>
+                      {'Forgot your bonus guess?\nLast chance before confirming!'}
+                    </Text>
+                    <Text style={[styles.bonusDockTipArrow, { color: C.vermillion }]}>›</Text>
+                  </View>
+                ) : myTimeline.length <= 1 && !bonusEntered && !dockExpanded ? (
                   <View style={styles.bonusDockTip} pointerEvents="none">
                     <Text style={styles.bonusDockTipText}>{'Guess the movie & director\nto earn a bonus coin'}</Text>
                     <Text style={styles.bonusDockTipArrow}>›</Text>
                   </View>
-                )}
+                ) : null}
               </View>
             </View>
           )}
@@ -4007,6 +4016,12 @@ const styles = StyleSheet.create({
   bonusDockTipArrow: {
     color: C.ochre, fontFamily: Fonts.bodyBold, fontSize: FS.xl,
     includeFontPadding: false,
+  },
+  bonusDockTipWarn: {
+    borderColor: 'rgba(232,55,42,0.65)', // C.vermillion at 65%
+  },
+  bonusDockTipWarnText: {
+    color: C.textPrimaryDark,
   },
   bonusDockPill: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
