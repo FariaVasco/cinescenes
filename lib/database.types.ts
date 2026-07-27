@@ -165,6 +165,7 @@ export interface Database {
         Row: {
           id: string;
           turn_id: string;
+          game_id: string;
           challenger_id: string;
           interval_index: number;
           resolved_at: string | null;
@@ -173,6 +174,7 @@ export interface Database {
         Insert: {
           id?: string;
           turn_id: string;
+          game_id: string;
           challenger_id: string;
           interval_index: number;
           resolved_at?: string | null;

@@ -79,12 +79,14 @@ create index if not exists turns_game_id_idx on turns (game_id);
 create table if not exists challenges (
   id              uuid primary key default uuid_generate_v4(),
   turn_id         uuid not null references turns (id) on delete cascade,
+  game_id         uuid not null references games (id) on delete cascade,
   challenger_id   uuid not null references players (id),
   interval_index  int  not null,
   resolved_at     timestamptz
 );
 
 create index if not exists challenges_turn_id_idx on challenges (turn_id);
+create index if not exists challenges_game_id_idx on challenges (game_id);
 
 -- ============================================================
 -- REPORTS

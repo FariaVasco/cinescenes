@@ -34,6 +34,7 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import { useKeepAwake } from 'expo-keep-awake';
 import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import { Challenge, Movie, Player, Turn } from '@/lib/database.types';
 import { TrailerPlayer, TrailerPlayerHandle, TITLE_CARD_BURN } from '@/components/TrailerPlayer';
 import { Timeline, TimelineHandle } from '@/components/Timeline';
@@ -90,6 +91,13 @@ const REPORT_OPTIONS = [
 
 const db = supabase as unknown as { from: (t: string) => any };
 const POLL_MS = 2000;
+// Realtime poll-accelerator (design §3, step 3): during gameplay the base poll
+// relaxes to a slow safety net because a Supabase Realtime channel fires an
+// immediate debounced poll on every turns/games/challenges change. Intro and
+// countdown keep the fast POLL_MS cadence (realtime is scoped to gameplay only).
+const GAMEPLAY_POLL_MS = 10_000;    // slow safety net; realtime covers fast reactions
+const HEARTBEAT_MS = 10_000;        // steady last_seen cadence, independent of poll bursts
+const REALTIME_DEBOUNCE_MS = 200;   // coalesce a burst of realtime events into one poll()
 const WIN_CARDS = 10;
 const PREVIEW_DURATION = 6000; // ms — timeline study countdown before trailer reveals
 
@@ -232,6 +240,8 @@ export default function GameScreen() {
   // Pairs for the winning challenger's existing timeline, fetched when reveal starts.
   const [winnerPairs, setWinnerPairs] = useState<{ year: number; id: string }[]>([]);
   const [gameOver, setGameOver] = useState<Player | null>(null);
+  // Bumped on foreground to force a clean realtime rejoin (§3g).
+  const [realtimeNonce, setRealtimeNonce] = useState(0);
   const introShownRef = useRef(false);
   const showIntroRef  = useRef(false);
   // Insane mode: current turn's movie may not be in the activeMovies store
@@ -257,6 +267,21 @@ export default function GameScreen() {
   const waveformHistory = useRef<number[]>(Array(30).fill(0.07));
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Single-flight guard for poll(): only one runPoll() body executes at a time.
+  // A request that arrives while a poll is in flight is coalesced into a single
+  // trailing re-run so no two polls ever apply turn state out of order (which
+  // could regress status, e.g. revealing → challenging — see design §3b), while
+  // still honoring "poll again after my write landed" from manual callers.
+  const pollInFlightRef = useRef(false);
+  const pollQueuedRef = useRef(false);
+  // Gameplay realtime channel + its debounce handle (poll-accelerator, §3).
+  const realtimeChannelRef = useRef<RealtimeChannel | null>(null);
+  const realtimeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Realtime health (ref, not state, so a flip never restarts the poll interval or
+  // setState after unmount). When false, gameplay polling falls back to the fast
+  // POLL_MS cadence; when true, it relaxes to the GAMEPLAY_POLL_MS safety net.
+  const realtimeConnectedRef = useRef(false);
+  const lastPollAtRef = useRef(0);
   // Refs so the interval always has the latest values
   const currentTurnRef = useRef<Turn | null>(null);
   const gameIdRef = useRef<string | null>(null);
@@ -579,9 +604,9 @@ export default function GameScreen() {
     return () => clearInterval(id);
   }, [showsVideo, videoStarted, currentTurn?.id, trailerKey]);
 
-  // Pause polling while the active player is typing on the guess screen.
-  // Without this, the 2-second poll triggers state updates → KeyboardAvoidingView
-  // recalculates layout (causing visible glitching) and disrupts speech recognition.
+  // Trailer-end / placement-screen sync (private games): drives the active player
+  // past the guess screen and coordinates the placed_interval=-1 handshake between
+  // host and active player so observers exit the "watching trailer" overlay.
   useEffect(() => {
     const amActive = myPlayerId === currentTurn?.active_player_id;
     if (trailerEnded && !readyToPlace && amActive) {
@@ -605,13 +630,10 @@ export default function GameScreen() {
       // Host's trailer ended but it's not their turn in a private game.
       // Write placed_interval=-1 so the active player's poll unblocks them.
       db.from('turns').update({ placed_interval: -1 }).eq('id', currentTurn!.id);
-    } else if (!loading) {
-      // Poll faster during placing (observer reacts to "I know it!") and during
-      // challenging (all devices see allDecided within ~750 ms instead of up to 2 s).
-      const isObserverWatchingTrailer = !amActive && currentTurn?.status === 'placing';
-      const isChallengingPhase = currentTurn?.status === 'challenging';
-      startPolling(isObserverWatchingTrailer || isChallengingPhase ? 750 : POLL_MS);
     }
+    // Poll cadence is owned by a dedicated effect below (coarse deps, so it isn't
+    // reset on every turn-state change), and the gameplay realtime channel supplies
+    // the fast reactions the old 750ms/2s fast-poll used to provide (design §3c).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trailerEnded, readyToPlace, myPlayerId, currentTurn?.active_player_id, currentTurn?.status, currentTurn?.placed_interval, loading]);
 
@@ -773,6 +795,131 @@ export default function GameScreen() {
     pollRef.current = setInterval(poll, intervalMs);
   }
 
+  // Tears down the gameplay realtime channel and any pending debounced poll.
+  // Called alongside every terminal stopPolling() so a late realtime event can't
+  // fire a poll() against a finished / navigated-away screen (design §3h).
+  function teardownRealtime() {
+    realtimeConnectedRef.current = false;
+    if (realtimeDebounceRef.current) { clearTimeout(realtimeDebounceRef.current); realtimeDebounceRef.current = null; }
+    if (realtimeChannelRef.current) { supabase.removeChannel(realtimeChannelRef.current); realtimeChannelRef.current = null; }
+  }
+
+  // ── Poll cadence (single owner) ──
+  // Deps are intentionally COARSE booleans (loading / countdown / intro / gameOver)
+  // so the interval is not torn down and restarted on every turn-state change — at
+  // the slow gameplay cadence that could perpetually reset the timer before it ever
+  // fires (design §3c). Intro/countdown keep the fast POLL_MS beat (realtime is
+  // scoped to gameplay). During gameplay we tick at POLL_MS but only actually poll
+  // when realtime is disconnected (fast fallback ≈ today's cadence) or the slow
+  // safety-net window has elapsed since the last poll of any kind — so a realtime
+  // outage degrades to 2s polling, not 10s. Cadence switching is driven by
+  // realtimeConnectedRef (a ref) so it never restarts this interval.
+  useEffect(() => {
+    if (loading || gameOver) { stopPolling(); return; }
+    const fastPhase = showCountdown || showIntro;
+    stopPolling();
+    if (fastPhase) {
+      pollRef.current = setInterval(poll, POLL_MS);
+    } else {
+      pollRef.current = setInterval(() => {
+        if (!realtimeConnectedRef.current || Date.now() - lastPollAtRef.current >= GAMEPLAY_POLL_MS) {
+          poll();
+        }
+      }, POLL_MS);
+      // setInterval has no leading tick — fire one immediately when entering gameplay
+      // so we catch up at once instead of waiting a full interval.
+      poll();
+    }
+    return () => stopPolling();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, showCountdown, showIntro, gameOver]);
+
+  // ── Heartbeat (steady, poll-independent) ──
+  // Writes last_seen on a fixed cadence once this device has finished the intro spin
+  // (introShownRef), so last_seen=null still reliably means "hasn't spun yet" during
+  // intro. Well within PRESENCE_TIMEOUT_MS, so presence eviction is unaffected.
+  useEffect(() => {
+    if (loading || gameOver) return;
+    const id = setInterval(() => {
+      if (myPlayerId && introShownRef.current) {
+        db.from('players').update({ last_seen: new Date().toISOString() }).eq('id', myPlayerId).then(() => {});
+      }
+    }, HEARTBEAT_MS);
+    return () => clearInterval(id);
+  }, [loading, myPlayerId, gameOver]);
+
+  // ── Gameplay realtime channel (poll accelerator, §3) ──
+  // One channel per active game on turns/games/challenges filtered by game_id; any
+  // change triggers a debounced guarded poll(). Scoped to gameplay only — NOT opened
+  // during loading/countdown/intro — and players is deliberately NOT subscribed
+  // (heartbeat storm, §3d). realtimeNonce lets the foreground handler force a clean
+  // rejoin (§3g). A dropped/failed subscribe just falls back to the poll safety net.
+  useEffect(() => {
+    const gid = game?.id;
+    if (!gid || loading || showCountdown || showIntro || gameOver) return;
+
+    let cancelled = false;
+    let retries = 0;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const triggerPoll = () => {
+      if (realtimeDebounceRef.current) clearTimeout(realtimeDebounceRef.current);
+      realtimeDebounceRef.current = setTimeout(() => { realtimeDebounceRef.current = null; poll(); }, REALTIME_DEBOUNCE_MS);
+    };
+
+    const join = () => {
+      const channel = supabase
+        .channel(`game:${gid}:${realtimeNonce}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'turns', filter: `game_id=eq.${gid}` }, triggerPoll)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'challenges', filter: `game_id=eq.${gid}` }, triggerPoll)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'games', filter: `id=eq.${gid}` }, triggerPoll)
+        .subscribe((status: string) => {
+          if (cancelled) return;
+          if (status === 'SUBSCRIBED') {
+            // Connected — relax gameplay polling to the slow safety net.
+            realtimeConnectedRef.current = true;
+            retries = 0;
+            return;
+          }
+          // Not connected — gameplay polling falls back to the fast 2s cadence.
+          if (status === 'TIMED_OUT' || status === 'CHANNEL_ERROR' || status === 'CLOSED') {
+            realtimeConnectedRef.current = false;
+            // TIMED_OUT can hit on a socket reused right after removeChannel (§3a);
+            // rejoin a few times before giving up — the poll fallback still covers us.
+            if (retries < 3) {
+              retries += 1;
+              if (realtimeChannelRef.current) { supabase.removeChannel(realtimeChannelRef.current); realtimeChannelRef.current = null; }
+              retryTimer = setTimeout(join, 1000 * retries);
+            }
+          }
+        });
+      realtimeChannelRef.current = channel;
+    };
+    join();
+
+    return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      teardownRealtime();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [game?.id, loading, showCountdown, showIntro, gameOver, realtimeNonce]);
+
+  // ── Realtime reconnect + catch-up on foreground (§3g) ──
+  // The websocket may have died while backgrounded (JS timers freeze under OS
+  // suspension), so on return to active we force a clean channel rejoin (via nonce)
+  // and an immediate poll — fixing both realtime resume and a pre-existing
+  // poll-staleness gap where the app resumed on a stale timer with no catch-up.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', next => {
+      if (next === 'active') {
+        poll();
+        setRealtimeNonce(n => n + 1);
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
   // Converts won-turn rows into sorted {year, id} pairs — canonical way to
   // reconstruct any player's timeline movies with no year-matching heuristics.
   function wonTurnsToPairs(wonTurns: { movie_id: string }[]): { year: number; id: string }[] {
@@ -783,7 +930,32 @@ export default function GameScreen() {
       .map(m => ({ year: m.year, id: m.id }));
   }
 
+  // Single-flight wrapper around the actual poll body (runPoll). If a poll is
+  // already running, mark that one more run is wanted and return; the in-flight
+  // poll fires exactly one trailing re-run when it finishes. This serializes all
+  // polls — interval, realtime-triggered (added later), and the manual poll()
+  // calls in handleNextTurn — so DB reads can never be applied out of order,
+  // while a caller's "re-poll after my write" intent is still honored.
   async function poll() {
+    if (pollInFlightRef.current) { pollQueuedRef.current = true; return; }
+    pollInFlightRef.current = true;
+    try {
+      await runPoll();
+    } finally {
+      pollInFlightRef.current = false;
+      // Timestamp every completed poll (interval OR realtime-triggered) so the
+      // gameplay safety-net tick can tell when a slow-cadence poll is actually due.
+      lastPollAtRef.current = Date.now();
+      if (pollQueuedRef.current) {
+        pollQueuedRef.current = false;
+        // Trailing run: honor the request(s) that arrived mid-flight so state
+        // converges immediately rather than waiting for the next interval tick.
+        poll();
+      }
+    }
+  }
+
+  async function runPoll() {
     const gId = gameIdRef.current;
     if (!gId) return;
 
@@ -801,12 +973,9 @@ export default function GameScreen() {
       db.from('players').select('*').eq('game_id', gId).is('left_at', null).order('created_at'),
     ]);
 
-    // Heartbeat — fire and forget, no await so poll isn't delayed
-    // Only runs after intro is done so last_seen=null reliably means "hasn't spun yet".
-    // .then(() => {}) forces the Supabase v2 lazy query to actually execute.
-    if (myPlayerId && introShownRef.current) {
-      db.from('players').update({ last_seen: new Date().toISOString() }).eq('id', myPlayerId).then(() => {});
-    }
+    // Heartbeat runs on its own steady timer now (see the heartbeat effect), not
+    // per poll tick: realtime makes the poll cadence bursty, and a steady beat keeps
+    // last_seen writes constant regardless of poll frequency (design §3d, step 3).
 
     if (gameRow?.status === 'finished') {
       const fp = (freshPlayers ?? []) as Player[];
@@ -817,6 +986,7 @@ export default function GameScreen() {
         setPlayers(fp);
         setGameOver(winner);
         if (winner.id === myPlayerId) { haptics.success(); try { winSound.seekTo(0); winSound.play(); } catch {} } else { haptics.warning(); }
+        teardownRealtime();
         stopPolling();
       }
       return;
@@ -825,6 +995,7 @@ export default function GameScreen() {
     // Game cancelled (e.g. everyone left, or too few players remained after the
     // intro timeout) — leave gracefully.
     if (gameRow?.status === 'cancelled') {
+      teardownRealtime();
       stopPolling();
       ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
       router.replace('/');
@@ -842,6 +1013,7 @@ export default function GameScreen() {
       // exit gracefully instead of lingering on the wheel forever. freshPlayers is
       // only set on a successful read, so a missing self-row means real removal.
       if (myPlayerId && !fp.find(p => p.id === myPlayerId)) {
+        teardownRealtime();
         stopPolling();
         ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
         router.replace('/');
@@ -861,6 +1033,7 @@ export default function GameScreen() {
 
       // I was evicted while backgrounded — my row is tombstoned, exit gracefully.
       if (myPlayerId && !fp.find(p => p.id === myPlayerId)) {
+        teardownRealtime();
         stopPolling();
         ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
         router.replace('/');
@@ -1111,7 +1284,8 @@ export default function GameScreen() {
     }
 
     setLoading(false);
-    startPolling();
+    // Polling is started by the dedicated poll-cadence effect once loading flips
+    // false; the realtime channel (also gated on !loading) subscribes at the same time.
   }
 
   // ── Helpers ──
@@ -1244,7 +1418,7 @@ export default function GameScreen() {
     }
     const { data: inserted } = await db
       .from('challenges')
-      .insert({ turn_id: currentTurn.id, challenger_id: myPlayerId!, interval_index: -1 })
+      .insert({ turn_id: currentTurn.id, game_id: currentTurn.game_id, challenger_id: myPlayerId!, interval_index: -1 })
       .select().single() as { data: Challenge | null };
     if (inserted) setMyChallenge(inserted);
   }
@@ -1260,7 +1434,7 @@ export default function GameScreen() {
     setMyChallenge(tempChallenge);
     const { data: inserted } = await db
       .from('challenges')
-      .insert({ turn_id: currentTurn.id, challenger_id: myPlayerId!, interval_index: -2 })
+      .insert({ turn_id: currentTurn.id, game_id: currentTurn.game_id, challenger_id: myPlayerId!, interval_index: -2 })
       .select().single() as { data: Challenge | null };
     if (inserted) setMyChallenge(inserted);
   }
@@ -1615,6 +1789,7 @@ export default function GameScreen() {
             setLocalPlayers(updatedPlayers);
             setPlayers(updatedPlayers);
             setGameOver({ ...winner, timeline: winnerNewTimeline });
+            teardownRealtime();
             stopPolling();
             succeeded = true;
             return;
@@ -1928,6 +2103,7 @@ export default function GameScreen() {
 
   async function handleLeaveConfirmed() {
     setShowLeaveDialog(false);
+    teardownRealtime();
     stopPolling();
     try {
       if (myPlayerId) await processDeparture(myPlayerId);

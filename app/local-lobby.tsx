@@ -29,6 +29,7 @@ const lcClapperboard = require('../assets/lc-clapperboard.png');
 import { useAppStore } from '@/store/useAppStore';
 import { generateGameCode } from '@/lib/game-code';
 import { supabase } from '@/lib/supabase';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import { Game, Movie, Player } from '@/lib/database.types';
 import { fetchRandomInsaneMovie } from '@/lib/tmdb-insane';
 import { CloseIcon } from '@/components/CinemaIcons';
@@ -36,6 +37,7 @@ import { useAirPlayAvailable, AirPlayButton } from 'airplay-picker';
 
 const db = supabase as unknown as { from: (t: string) => any };
 const POLL_MS = 1000;
+const REALTIME_DEBOUNCE_MS = 150;   // coalesce a burst of realtime events into one refetch
 
 export default function LocalLobbyScreen() {
   const router = useRouter();
@@ -87,6 +89,11 @@ export default function LocalLobbyScreen() {
   const isHostRef = useRef(false);
   const navigatedRef = useRef(false);
   const playerIdRef = useRef<string | null>(null);
+  // Realtime channel + debounce/guard state for the lobby poll-accelerator (§3i).
+  const channelRef = useRef<RealtimeChannel | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const realtimeRetriesRef = useRef(0);
+  const pollInFlightRef = useRef(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -114,23 +121,25 @@ export default function LocalLobbyScreen() {
 
   function stopPolling() {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    if (debounceRef.current) { clearTimeout(debounceRef.current); debounceRef.current = null; }
+    if (channelRef.current) { supabase.removeChannel(channelRef.current); channelRef.current = null; }
   }
 
-  function startPolling(gameId: string, asHost: boolean) {
-    gameIdRef.current = gameId;
-    isHostRef.current = asHost;
-    navigatedRef.current = false;
-    stopPolling();
-
-    pollRef.current = setInterval(async () => {
-      const gId = gameIdRef.current;
-      if (!gId || navigatedRef.current) return;
-
+  // One lobby refresh: fetch players + game and reconcile. Shared by the interval
+  // and the realtime channel. In-flight guarded so overlapping triggers (interval +
+  // a burst of realtime events) can't double-fetch or double-navigate; navigatedRef
+  // makes a call arriving after navigation a no-op (§3i).
+  async function pollOnce() {
+    const gId = gameIdRef.current;
+    if (!gId || navigatedRef.current || pollInFlightRef.current) return;
+    pollInFlightRef.current = true;
+    try {
       const [{ data: players }, { data: g }] = await Promise.all([
         db.from('players').select('*').eq('game_id', gId).order('created_at') as Promise<{ data: Player[] | null }>,
         db.from('games').select('*').eq('id', gId).single() as Promise<{ data: Game | null }>,
       ]);
 
+      if (navigatedRef.current) return;
       if (players) setLocalPlayers(players);
       if (!g) return;
 
@@ -186,7 +195,52 @@ export default function LocalLobbyScreen() {
         setGameJustStarted(true);
         router.replace('/game');
       }
-    }, POLL_MS);
+    } finally {
+      pollInFlightRef.current = false;
+    }
+  }
+
+  // Debounced refetch fired by realtime events — coalesces a burst into one poll.
+  function triggerRefetch() {
+    if (navigatedRef.current) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => { debounceRef.current = null; pollOnce(); }, REALTIME_DEBOUNCE_MS);
+  }
+
+  // Lobby realtime channel: player joins/leaves and the host's lobby→active flip
+  // arrive near-instantly instead of on the next 1s poll. Safe here because
+  // heartbeats haven't started yet (no storm risk, §3d/§3e). The 1s poll stays as
+  // the safety net, so a dropped/failed subscribe just falls back to today's behavior.
+  function subscribeRealtime(gameId: string) {
+    const channel = supabase
+      .channel(`lobby:${gameId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'players', filter: `game_id=eq.${gameId}` }, triggerRefetch)
+      // DELETE payloads carry only the PK under REPLICA IDENTITY DEFAULT, so a
+      // game_id filter can't match — subscribe unfiltered and let the full refetch
+      // reconcile (§3i). Extra cross-game triggers just cause a harmless refetch.
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'players' }, triggerRefetch)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'games', filter: `id=eq.${gameId}` }, triggerRefetch)
+      .subscribe((status: string) => {
+        if (navigatedRef.current) return;
+        // TIMED_OUT can hit on a reused socket (§3a); rejoin a few times before
+        // giving up — the 1s poll still covers us either way.
+        if ((status === 'TIMED_OUT' || status === 'CHANNEL_ERROR' || status === 'CLOSED') && realtimeRetriesRef.current < 3) {
+          realtimeRetriesRef.current += 1;
+          if (channelRef.current) { supabase.removeChannel(channelRef.current); channelRef.current = null; }
+          setTimeout(() => { if (!navigatedRef.current) subscribeRealtime(gameId); }, 1000 * realtimeRetriesRef.current);
+        }
+      });
+    channelRef.current = channel;
+  }
+
+  function startPolling(gameId: string, asHost: boolean) {
+    gameIdRef.current = gameId;
+    isHostRef.current = asHost;
+    navigatedRef.current = false;
+    stopPolling();
+    realtimeRetriesRef.current = 0;
+    pollRef.current = setInterval(pollOnce, POLL_MS);
+    subscribeRealtime(gameId);
   }
 
   function initials(name: string): string {
