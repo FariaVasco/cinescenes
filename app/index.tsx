@@ -28,7 +28,7 @@ const lcClapperboard    = require('@/assets/lc-clapperboard.png');
 const lcIconHow         = require('@/assets/lc-icon-how.png');
 const lcIconSettings    = require('@/assets/lc-icon-settings.png');
 const lcFriendsCinema   = require('@/assets/lc-friends-cinema.png');
-const lcPeopleHomeTV    = require('@/assets/lc-people-home-tv.png');
+const lcSoloCinema      = require('@/assets/lc-solo-cinema.png');
 const lcFriendsCardsW   = require('@/assets/lc-friends-cards-wide.jpg');
 const lcFeedback        = require('@/assets/lc-feedback.png');
 const tmdbLogo          = require('@/assets/tmdb-logo.png');
@@ -158,17 +158,18 @@ function PlayView() {
       >
         <View style={styles.playRow}>
           <ModeCard
-            key={`local-${imageKey}`}
-            label="LOCAL"
-            image={lcFriendsCinema}
-            onPress={() => router.push('/local')}
+            key={`single-${imageKey}`}
+            label="SINGLE PLAYER"
+            image={lcSoloCinema}
+            onPress={() => {}}
+            comingSoon
             style={{ width: square, height: square }}
           />
           <ModeCard
-            key={`online-${imageKey}`}
-            label="ONLINE"
-            image={lcPeopleHomeTV}
-            onPress={() => router.push('/online')}
+            key={`multiplayer-${imageKey}`}
+            label="MULTIPLAYER"
+            image={lcFriendsCinema}
+            onPress={() => router.push('/multiplayer')}
             style={{ width: square, height: square }}
           />
         </View>
@@ -186,13 +187,23 @@ function PlayView() {
   );
 }
 
-function ModeCard({ label, image, onPress, style }: { label: string; image: any; onPress: () => void; style?: any }) {
+function ModeCard({ label, image, onPress, style, comingSoon }: { label: string; image: any; onPress: () => void; style?: any; comingSoon?: boolean }) {
   return (
-    <TouchableOpacity activeOpacity={0.85} onPress={onPress} style={[styles.modeCard, style]}>
+    <TouchableOpacity
+      activeOpacity={0.85}
+      onPress={onPress}
+      disabled={comingSoon}
+      style={[styles.modeCard, style, comingSoon && styles.modeCardDisabled]}
+    >
       <Image source={image} style={styles.modeImage} />
       <View style={styles.modeLabelBand}>
         <Text style={styles.modeLabel}>{label}</Text>
       </View>
+      {comingSoon && (
+        <View style={styles.comingSoonBadge}>
+          <Text style={styles.comingSoonText}>COMING SOON</Text>
+        </View>
+      )}
     </TouchableOpacity>
   );
 }
@@ -545,6 +556,22 @@ const styles = StyleSheet.create({
     fontSize: FS.sm,
     color: C.ochre,
     letterSpacing: 2,
+  },
+  modeCardDisabled: { opacity: 0.5 },
+  comingSoonBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(20,20,30,0.85)',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  comingSoonText: {
+    color: '#fff',
+    fontFamily: Fonts.label,
+    fontSize: 10,
+    letterSpacing: 0.5,
   },
 
   // ── Settings view ──────────────────────────────────────────────

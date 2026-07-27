@@ -120,11 +120,12 @@ export default function GameScreen() {
   const [players, setLocalPlayers] = useState<Player[]>(storePlayers);
   const [currentTurn, setLocalTurn] = useState<Turn | null>(null);
   const [challenges, setLocalChallenges] = useState<Challenge[]>([]);
-  // Host = first player by created_at (matches local-lobby ordering). In private games
-  // only the host's phone plays the trailer video; public games play it on every phone.
+  // Host = first player by created_at (matches local-lobby ordering). trailer_mode
+  // 'host' = only the host's phone plays the trailer; 'all' = every phone plays it.
+  // (Independent of visibility, which now only controls public-browser discoverability.)
   // Single source of truth — effects and render branches must use these, not re-derive.
   const amHost = players.length > 0 && players[0].id === myPlayerId;
-  const showsVideo = amHost || game?.visibility === 'public';
+  const showsVideo = amHost || game?.trailer_mode === 'all';
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const [trailerEnded, setTrailerEnded] = useState(false);
   const [trailerRevealed, setTrailerRevealed] = useState(false);
@@ -586,23 +587,23 @@ export default function GameScreen() {
     const amActive = myPlayerId === currentTurn?.active_player_id;
     if (trailerEnded && !readyToPlace && amActive) {
       setReadyToPlace(true); // skip guess screen — panel lives on placement screen
-      // Private games: only the host plays the trailer. When the host is ALSO the active
-      // player, branch 3 below never fires, so we still need to write placed_interval=-1
-      // here so non-host observers exit the "is watching the trailer" overlay and start
-      // seeing the active player's timeline.
-      if (amHost && game?.visibility !== 'public' && currentTurn?.placed_interval === null) {
+      // Host-screen games (trailer_mode 'host'): only the host plays the trailer. When
+      // the host is ALSO the active player, branch 3 below never fires, so we still need
+      // to write placed_interval=-1 here so non-host observers exit the "is watching the
+      // trailer" overlay and start seeing the active player's timeline.
+      if (amHost && game?.trailer_mode === 'host' && currentTurn?.placed_interval === null) {
         db.from('turns').update({ placed_interval: -1 }).eq('id', currentTurn!.id);
       }
     } else if (!trailerEnded && !readyToPlace && amActive && !amHost
-        && game?.visibility !== 'public'
+        && game?.trailer_mode === 'host'
         && currentTurn?.placed_interval === -1) {
       // Host's trailer ended and they wrote placed_interval=-1; advance the active
       // non-host player to the placing screen without them pressing "I know it!".
       setTrailerEnded(true);
     } else if (trailerEnded && !readyToPlace && !amActive && amHost
-        && game?.visibility !== 'public'
+        && game?.trailer_mode === 'host'
         && currentTurn?.placed_interval === null) {
-      // Host's trailer ended but it's not their turn in a private game.
+      // Host's trailer ended but it's not their turn in a host-screen game.
       // Write placed_interval=-1 so the active player's poll unblocks them.
       db.from('turns').update({ placed_interval: -1 }).eq('id', currentTurn!.id);
     } else if (!loading) {
@@ -622,9 +623,9 @@ export default function GameScreen() {
     const prev = prevPlacedIntervalRef.current;
     prevPlacedIntervalRef.current = curr;
     const isActive = myPlayerId === currentTurn?.active_player_id;
-    // Only act if: host, not their turn, private game, trailer already ended on host,
+    // Only act if: host, not their turn, host-screen game, trailer already ended on host,
     // and placed_interval just went from non-null back to null (= replay request).
-    if (amHost && !isActive && game?.visibility !== 'public'
+    if (amHost && !isActive && game?.trailer_mode === 'host'
         && trailerEnded && prev !== undefined && prev !== null && curr === null) {
       setTrailerEnded(false);
       setTrailerRevealed(false);
@@ -666,13 +667,14 @@ export default function GameScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTurn?.status, trailerEnded, showsVideo]);
 
-  // Skip-trailer gate: for public games, the active player must watch at least half
-  // the safe window before "I know it!" becomes tappable.
+  // Skip-trailer gate: when everyone watches on their own phone (trailer_mode 'all'),
+  // the active player must watch at least half the safe window before "I know it!"
+  // becomes tappable. Not needed in host-screen games (only the host has the video).
   useEffect(() => {
     if (skipTimerRef.current) { clearTimeout(skipTimerRef.current); skipTimerRef.current = null; }
     if (trailerEnded) { setCanSkipTrailer(true); return; }
-    const isPublicGame = game?.visibility === 'public';
-    if (!isPublicGame) { setCanSkipTrailer(true); return; }
+    const isAllPhonesGame = game?.trailer_mode === 'all';
+    if (!isAllPhonesGame) { setCanSkipTrailer(true); return; }
     setCanSkipTrailer(false);
     const m = activeMovies.find((mv) => mv.id === currentTurn?.movie_id) ?? movieOverride;
     const safeStart = m?.safe_start ?? null;
@@ -683,7 +685,7 @@ export default function GameScreen() {
     skipTimerRef.current = setTimeout(() => setCanSkipTrailer(true), minMs);
     return () => { if (skipTimerRef.current) { clearTimeout(skipTimerRef.current); skipTimerRef.current = null; } };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trailerEnded, currentTurn?.id, game?.visibility]);
+  }, [trailerEnded, currentTurn?.id, game?.trailer_mode]);
 
   // Fetch current turn movie from DB when not in the store (insane mode movies)
   useEffect(() => {
@@ -1984,7 +1986,7 @@ export default function GameScreen() {
     </TouchableOpacity>
   ) : null;
 
-  const castFab = (amHost && game?.visibility !== 'public') ? (
+  const castFab = (amHost && game?.trailer_mode === 'host') ? (
     <TouchableOpacity style={[styles.castFab, { top: insets.top + 20, right: insets.right + 20 }]} onPress={() => setCastVisible(true)} activeOpacity={0.8}>
       <CastToTVIcon size={16} color="rgba(255,255,255,0.75)" />
     </TouchableOpacity>

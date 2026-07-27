@@ -59,6 +59,7 @@ export interface Database {
           max_players: number;
           visibility: 'public' | 'invite_only';
           trailer_platform: 'ios' | 'android' | null;
+          trailer_mode: 'all' | 'host';
           created_at: string;
         };
         Insert: {
@@ -73,6 +74,7 @@ export interface Database {
           max_players?: number;
           visibility?: 'public' | 'invite_only';
           trailer_platform?: 'ios' | 'android' | null;
+          trailer_mode?: 'all' | 'host';
           created_at?: string;
         };
         Update: Partial<Database['public']['Tables']['games']['Insert']>;

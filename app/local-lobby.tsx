@@ -99,7 +99,7 @@ export default function LocalLobbyScreen() {
   }, []);
 
   // Auto-create or auto-join based on params. If neither is provided we bounce back —
-  // this screen no longer renders a Create/Join chooser (see app/local.tsx, app/online.tsx).
+  // this screen no longer renders a Create/Join chooser (see app/multiplayer.tsx).
   useEffect(() => {
     if (startView === 'create') {
       handleCreateGame();
@@ -136,7 +136,7 @@ export default function LocalLobbyScreen() {
 
       // Recalculate trailer_platform from current player platforms
       if (isHostRef.current && players) {
-        const allDevices = g.visibility === 'public';
+        const allDevices = g.trailer_mode === 'all';
         const newPlatform: 'ios' | 'android' = allDevices
           ? (players.some(p => p.platform === 'android') ? 'android' : Platform.OS as 'ios' | 'android')
           : Platform.OS as 'ios' | 'android';
@@ -209,6 +209,9 @@ export default function LocalLobbyScreen() {
           collection_id: selectedCollectionId,
           max_players: maxPlayers,
           visibility: selectedVisibility,
+          // Public games are all-phones by definition; private games default to the
+          // host's screen and the host can flip to all-phones via the lobby toggle.
+          trailer_mode: selectedVisibility === 'public' ? 'all' : 'host',
           trailer_platform: Platform.OS as 'ios' | 'android',
         })
         .select()
@@ -304,15 +307,18 @@ export default function LocalLobbyScreen() {
     }
   }
 
+  // Flips trailer location only (host's screen <-> all phones). This is now
+  // independent of visibility (public/private discoverability) — flipping to "all
+  // phones" no longer makes a private game publicly discoverable.
   async function handleTrailerModeChange(allDevices: boolean) {
     setTrailerAllDevices(allDevices);
     if (!localGame) return;
     const newPlatform: 'ios' | 'android' = allDevices
       ? (localPlayers.some(p => p.platform === 'android') ? 'android' : Platform.OS as 'ios' | 'android')
       : Platform.OS as 'ios' | 'android';
-    const newVisibility = allDevices ? 'public' : 'invite_only';
-    await db.from('games').update({ visibility: newVisibility, trailer_platform: newPlatform }).eq('id', localGame.id);
-    setLocalGame({ ...localGame, visibility: newVisibility, trailer_platform: newPlatform });
+    const newTrailerMode: 'all' | 'host' = allDevices ? 'all' : 'host';
+    await db.from('games').update({ trailer_mode: newTrailerMode, trailer_platform: newPlatform }).eq('id', localGame.id);
+    setLocalGame({ ...localGame, trailer_mode: newTrailerMode, trailer_platform: newPlatform });
   }
 
   async function handleLeaveWaitingRoom() {

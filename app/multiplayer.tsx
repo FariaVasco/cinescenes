@@ -15,7 +15,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { C, R, FS, Fonts, SP } from '@/constants/theme';
@@ -39,14 +39,15 @@ type LobbyEntry = {
   hostName: string;
 };
 
-export default function OnlineScreen() {
+export default function MultiplayerScreen() {
   const router = useRouter();
+  const { pendingMode } = useLocalSearchParams<{ pendingMode?: string }>();
   const {
     authUser,
     setSelectedGameMode,
     setSelectedCollectionId,
-    setSelectedVisibility,
   } = useAppStore();
+  const [autoOpenMode, setAutoOpenMode] = useState<'insane' | 'collection' | null>(null);
 
   function getDefaultName(): string {
     const meta = authUser?.user_metadata ?? {};
@@ -198,7 +199,8 @@ export default function OnlineScreen() {
   }
 
   function handleModeSelected(choice: ModeChoice) {
-    setSelectedVisibility('public');
+    // Visibility (public/private) is chosen inside the mode picker now and already
+    // lives in the store from the modal's toggle — don't override it here.
     setSelectedGameMode(choice.mode);
     setSelectedCollectionId(choice.mode === 'collection' ? choice.collectionId : null);
     router.push({
@@ -207,6 +209,17 @@ export default function OnlineScreen() {
     });
   }
 
+  // If we returned from a sign-in detour with a pending mode intent, auto-open the picker.
+  useEffect(() => {
+    if (!pendingMode || !authUser) return;
+    if (pendingMode === 'insane' || pendingMode === 'collection') {
+      setAutoOpenMode(pendingMode);
+      setModePickerVisible(true);
+      router.setParams({ pendingMode: undefined });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingMode, authUser]);
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Compact header — Back left, stacked title centered */}
@@ -214,7 +227,7 @@ export default function OnlineScreen() {
         <BackButton onPress={() => router.back()} style={styles.backBtn} />
         <View style={styles.headerTitleWrap}>
           <Text style={styles.headerTitle} numberOfLines={1} adjustsFontSizeToFit>
-            ONLINE GAMES {}
+            MULTIPLAYER {}
           </Text>
         </View>
         <View style={styles.headerSpacer} />
@@ -362,6 +375,8 @@ export default function OnlineScreen() {
         visible={modePickerVisible}
         onClose={() => setModePickerVisible(false)}
         onSelected={handleModeSelected}
+        autoOpenMode={autoOpenMode}
+        returnTo="multiplayer"
       />
     </SafeAreaView>
   );

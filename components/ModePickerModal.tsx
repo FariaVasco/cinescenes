@@ -27,11 +27,13 @@ interface Props {
   onClose: () => void;
   onSelected: (choice: ModeChoice) => void;
   autoOpenMode?: 'insane' | 'collection' | null;
+  /** Route to return to after a sign-in detour (e.g. 'local', 'multiplayer'). */
+  returnTo?: string;
 }
 
-export function ModePickerModal({ visible, onClose, onSelected, autoOpenMode }: Props) {
+export function ModePickerModal({ visible, onClose, onSelected, autoOpenMode, returnTo = 'local' }: Props) {
   const router = useRouter();
-  const { authUser, isPremium, setIsPremium } = useAppStore();
+  const { authUser, isPremium, setIsPremium, selectedVisibility, setSelectedVisibility } = useAppStore();
 
   const [paywallVisible, setPaywallVisible] = useState(false);
   const [paywallPendingMode, setPaywallPendingMode] = useState<'insane' | 'collection'>('insane');
@@ -69,7 +71,7 @@ export function ModePickerModal({ visible, onClose, onSelected, autoOpenMode }: 
   }
 
   function pickInsane() {
-    if (!authUser) { onClose(); router.push('/sign-in?returnTo=local&pendingMode=insane'); return; }
+    if (!authUser) { onClose(); router.push(`/sign-in?returnTo=${returnTo}&pendingMode=insane`); return; }
     if (!isPremium) { setPaywallPendingMode('insane'); setPaywallVisible(true); return; }
     onSelected({ mode: 'insane' });
     onClose();
@@ -78,7 +80,7 @@ export function ModePickerModal({ visible, onClose, onSelected, autoOpenMode }: 
   function pickCollection() {
     if (!authUser) {
       onClose();
-      router.push('/sign-in?returnTo=local&pendingMode=collection');
+      router.push(`/sign-in?returnTo=${returnTo}&pendingMode=collection`);
       return;
     }
     if (!isPremium) {
@@ -142,6 +144,31 @@ export function ModePickerModal({ visible, onClose, onSelected, autoOpenMode }: 
             <View style={styles.card} onStartShouldSetResponder={() => true}>
               <Text style={styles.overline}>SELECT GAME MODE</Text>
               <Text style={styles.title}>Choose a Mode</Text>
+
+              {/* Public/Private is chosen here at create time and fixed for the game.
+                  It only controls discoverability (public = listed in the browser);
+                  the host still picks trailer-on-host-screen vs all-phones in the lobby. */}
+              <View style={styles.visibilityWrap}>
+                <Text style={styles.visibilityLabel}>WHO CAN JOIN</Text>
+                <View style={styles.segmented}>
+                  <TouchableOpacity
+                    style={[styles.segment, selectedVisibility === 'invite_only' && styles.segmentActive]}
+                    onPress={() => setSelectedVisibility('invite_only')}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={[styles.segmentText, selectedVisibility === 'invite_only' && styles.segmentTextActive]}>Private</Text>
+                    <Text style={[styles.segmentHint, selectedVisibility === 'invite_only' && styles.segmentHintActive]}>Invite by code</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.segment, selectedVisibility === 'public' && styles.segmentActive]}
+                    onPress={() => setSelectedVisibility('public')}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={[styles.segmentText, selectedVisibility === 'public' && styles.segmentTextActive]}>Public</Text>
+                    <Text style={[styles.segmentHint, selectedVisibility === 'public' && styles.segmentHintActive]}>Listed for anyone</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
 
               <View style={styles.row}>
                 <TouchableOpacity style={[styles.tile, styles.tileClassic]} onPress={pickClassic} activeOpacity={0.85}>
@@ -239,6 +266,24 @@ const styles = StyleSheet.create({
     gap: SP.sm,
     width: '100%',
   },
+  visibilityWrap: { width: '100%', gap: 6, alignItems: 'center' },
+  visibilityLabel: { ...T.overline, color: C.textSub, textAlign: 'center', alignSelf: 'stretch' },
+  segmented: { flexDirection: 'row', gap: SP.sm, width: '100%' },
+  segment: {
+    flex: 1,
+    backgroundColor: C.surfaceWarm,
+    borderRadius: R.md,
+    borderWidth: 2,
+    borderColor: C.ink,
+    paddingVertical: 8,
+    alignItems: 'center',
+    gap: 2,
+  },
+  segmentActive: { backgroundColor: C.ochre },
+  segmentText: { ...T.label, color: C.textPrimary },
+  segmentTextActive: { color: C.textOnOchre },
+  segmentHint: { ...T.micro, color: C.textSub },
+  segmentHintActive: { color: C.ink },
   tile: {
     flex: 1,
     backgroundColor: C.surfaceWarm,
