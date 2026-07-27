@@ -88,10 +88,14 @@ export const useAppStore = create<AppState>((set) => ({
 
   selectedGameMode: 'classic',
   selectedCollectionId: null,
-  selectedVisibility: 'invite_only',
+  selectedVisibility: 'public',
   setSelectedGameMode: (m) => set({ selectedGameMode: m }),
   setSelectedCollectionId: (id) => set({ selectedCollectionId: id }),
-  setSelectedVisibility: (v) => set({ selectedVisibility: v }),
+  setSelectedVisibility: (v) => {
+    set({ selectedVisibility: v });
+    // Remember the last create-time choice across app launches.
+    AsyncStorage.setItem('preferred_visibility', v).catch(() => {});
+  },
 
   gameId: null,
   playerId: null,
@@ -124,6 +128,9 @@ export const useAppStore = create<AppState>((set) => ({
     try {
       const raw = await AsyncStorage.getItem(SETTINGS_STORAGE_KEY);
       if (raw) set({ settings: { ...SETTINGS_DEFAULTS, ...JSON.parse(raw) } });
+      // Restore the remembered create-time visibility choice (defaults to public).
+      const vis = await AsyncStorage.getItem('preferred_visibility');
+      if (vis === 'public' || vis === 'invite_only') set({ selectedVisibility: vis });
     } catch {}
   },
 }));
