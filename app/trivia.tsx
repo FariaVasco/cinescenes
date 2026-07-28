@@ -19,19 +19,21 @@ import * as haptics from '@/lib/haptics';
 
 const db = supabase as unknown as { from: (t: string) => any };
 
-// Warm-dark palette for this cinematic screen (derived from the ligne-claire tokens).
+// Bright ligne-claire palette (matches the rest of the app): parchment + ink strokes.
 const D = {
-  bg: '#191510',
-  panel: '#2A2620',
-  panelHi: '#332E26',
-  line: 'rgba(245,197,24,0.30)',
-  lineSoft: 'rgba(255,255,255,0.10)',
-  text: C.textOnDark,
-  sub: C.textSubDark,
+  bg: C.bg,               // warm parchment
+  panel: C.surfaceWarm,   // cream cards
+  panelHi: C.surface,     // white
+  line: C.ink,            // 2px ligne-claire stroke
+  lineSoft: C.inkFaint,
+  text: C.textPrimary,    // ink
+  sub: C.textSub,
   ochre: C.ochre,
   correct: C.leaf,
   wrong: C.vermillion,
 };
+// A/B/C/D option badges each get one of the four brand colors.
+const BADGE_COLORS = [C.ochre, C.cerulean, C.vermillion, C.leaf];
 
 // Classic prize ladder; a run uses the first `total` rungs (total = # questions).
 const PRIZES = [100, 200, 300, 500, 1000, 2000, 4000, 8000, 16000, 32000, 64000, 125000, 250000, 500000, 1000000];
@@ -213,8 +215,8 @@ export default function TriviaScreen() {
                   disabled={revealed}
                   onPress={() => setSelected(i)}
                 >
-                  <View style={[st.badge, (isSel || showCorrect) && st.badgeActive, showWrong && st.badgeWrong]}>
-                    <Text style={st.badgeTxt}>{LETTERS[i]}</Text>
+                  <View style={[st.badge, { backgroundColor: BADGE_COLORS[i] }]}>
+                    <Text style={[st.badgeTxt, { color: BADGE_COLORS[i] === C.ochre ? C.ink : '#FFF' }]}>{LETTERS[i]}</Text>
                   </View>
                   <Text style={st.optionTxt} numberOfLines={2}>{opt}</Text>
                 </TouchableOpacity>
@@ -277,22 +279,26 @@ const st = StyleSheet.create({
   header: {
     flexDirection: 'row', alignItems: 'center', gap: SP.md,
     paddingHorizontal: SP.md, paddingVertical: SP.sm,
+    backgroundColor: C.surfaceHigh,
     borderBottomWidth: 2, borderBottomColor: D.line,
   },
   wordmark: { fontFamily: Fonts.display, fontSize: FS.xl, color: D.ochre, letterSpacing: 1 },
   headerMeta: { fontFamily: Fonts.label, fontSize: FS.sm, color: D.sub, letterSpacing: 1.5 },
   headerRight: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: SP.sm },
   bankedLabel: { fontFamily: Fonts.label, fontSize: FS.sm, color: D.sub, letterSpacing: 1.5 },
-  bankedVal: { fontFamily: Fonts.bodyBold, fontSize: FS.md, color: D.ochre },
-  walkBtn: { borderWidth: 2, borderColor: D.line, borderRadius: R.md, paddingHorizontal: SP.md, paddingVertical: 6, marginLeft: SP.sm },
-  walkTxt: { fontFamily: Fonts.display, fontSize: FS.base, color: D.text, letterSpacing: 1 },
+  bankedVal: { fontFamily: Fonts.bodyBold, fontSize: FS.md, color: D.text },
+  walkBtn: {
+    borderWidth: 2, borderColor: D.wrong, borderRadius: R.md, paddingHorizontal: SP.md,
+    paddingVertical: 6, marginLeft: SP.sm, backgroundColor: C.surface,
+  },
+  walkTxt: { fontFamily: Fonts.display, fontSize: FS.base, color: D.wrong, letterSpacing: 1 },
 
   body: { flex: 1, flexDirection: 'row' },
   main: { flex: 1, padding: SP.md, gap: SP.sm },
 
   // Question
   qCard: {
-    backgroundColor: D.panel, borderWidth: 2, borderColor: D.line, borderRadius: R.card,
+    backgroundColor: D.panelHi, borderWidth: 2, borderColor: D.line, borderRadius: R.card,
     paddingVertical: SP.md, paddingHorizontal: SP.lg, alignItems: 'center', gap: 6,
   },
   qContext: { fontFamily: Fonts.label, fontSize: FS.xs, color: D.sub, letterSpacing: 2, textTransform: 'uppercase' },
@@ -302,56 +308,54 @@ const st = StyleSheet.create({
   optionsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SP.sm },
   option: {
     width: '48.5%', flexDirection: 'row', alignItems: 'center', gap: SP.sm,
-    backgroundColor: D.panel, borderWidth: 2, borderColor: D.lineSoft, borderRadius: R.card,
+    backgroundColor: D.panel, borderWidth: 2, borderColor: D.line, borderRadius: R.card,
     paddingVertical: 10, paddingHorizontal: SP.md,
   },
-  optionSel: { borderColor: D.ochre, backgroundColor: D.panelHi },
-  optionCorrect: { borderColor: D.correct, backgroundColor: 'rgba(61,170,92,0.18)' },
+  optionSel: { borderColor: D.ochre, backgroundColor: 'rgba(245,197,24,0.22)' },
+  optionCorrect: { borderColor: D.correct, backgroundColor: 'rgba(61,170,92,0.22)' },
   optionWrong: { borderColor: D.wrong, backgroundColor: 'rgba(232,55,42,0.18)' },
   badge: {
-    width: 26, height: 26, borderRadius: R.full, borderWidth: 2, borderColor: D.ochre,
+    width: 26, height: 26, borderRadius: R.full, borderWidth: 2, borderColor: D.line,
     alignItems: 'center', justifyContent: 'center',
   },
-  badgeActive: { backgroundColor: D.ochre },
-  badgeWrong: { borderColor: D.wrong, backgroundColor: D.wrong },
-  badgeTxt: { fontFamily: Fonts.display, fontSize: FS.sm, color: D.ochre },
+  badgeTxt: { fontFamily: Fonts.display, fontSize: FS.sm },
   optionTxt: { flex: 1, fontFamily: Fonts.bodyBold, fontSize: FS.md, color: D.text },
 
   // Action row
   actionRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
   missNow: { fontFamily: Fonts.label, fontSize: FS.sm, color: D.sub, letterSpacing: 1 },
   finalBtn: {
-    marginLeft: 'auto', borderWidth: 2, borderColor: D.ochre, borderRadius: R.btn,
-    paddingHorizontal: SP.lg, paddingVertical: 8, backgroundColor: 'rgba(245,197,24,0.12)',
+    marginLeft: 'auto', borderWidth: 2, borderColor: D.line, borderRadius: R.btn,
+    paddingHorizontal: SP.lg, paddingVertical: 8, backgroundColor: D.ochre,
   },
-  finalBtnOff: { borderColor: D.lineSoft, backgroundColor: 'transparent' },
-  finalTxt: { fontFamily: Fonts.display, fontSize: FS.md, color: D.ochre, letterSpacing: 1 },
+  finalBtnOff: { backgroundColor: C.inkFaint, borderColor: D.lineSoft },
+  finalTxt: { fontFamily: Fonts.display, fontSize: FS.md, color: C.textOnOchre, letterSpacing: 1 },
 
   // Lifelines
   lifelines: { flexDirection: 'row', alignItems: 'center', gap: SP.sm, marginTop: 'auto' },
   lifeLabel: { fontFamily: Fonts.label, fontSize: FS.xs, color: D.sub, letterSpacing: 2, marginRight: SP.xs },
-  lifeBtn: { borderWidth: 2, borderColor: D.lineSoft, borderRadius: R.md, paddingHorizontal: SP.md, paddingVertical: 8 },
-  lifeBtnOff: { opacity: 0.5 },
+  lifeBtn: { borderWidth: 2, borderColor: D.line, borderRadius: R.md, paddingHorizontal: SP.md, paddingVertical: 8, backgroundColor: C.surface },
+  lifeBtnOff: { opacity: 0.4 },
   lifeTxt: { fontFamily: Fonts.display, fontSize: FS.base, color: D.text, letterSpacing: 1 },
 
   // Prize ladder
-  ladder: { width: 168, borderLeftWidth: 2, borderLeftColor: D.line, paddingHorizontal: SP.sm, paddingTop: SP.sm },
+  ladder: { width: 168, borderLeftWidth: 2, borderLeftColor: D.line, paddingHorizontal: SP.sm, paddingTop: SP.sm, backgroundColor: C.surfaceHigh },
   ladderTitle: { fontFamily: Fonts.label, fontSize: FS.xs, color: D.sub, letterSpacing: 2, marginBottom: SP.sm, textAlign: 'center' },
   rung: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, paddingHorizontal: SP.sm, borderRadius: R.sm, gap: SP.sm },
   rungCurrent: { backgroundColor: D.ochre },
-  rungSafe: { backgroundColor: 'rgba(245,197,24,0.10)' },
+  rungSafe: { backgroundColor: 'rgba(61,170,92,0.16)' },
   rungNum: { fontFamily: Fonts.bodyBold, fontSize: FS.sm, color: D.sub, width: 22, textAlign: 'right' },
   rungNumCur: { color: C.ink },
   rungAmt: { fontFamily: Fonts.bodyBold, fontSize: FS.base, color: D.text },
   rungAmtCur: { color: C.ink },
-  rungAmtSafe: { color: D.ochre },
-  safeTag: { marginLeft: 'auto', fontFamily: Fonts.label, fontSize: FS.micro, color: D.ochre, letterSpacing: 1 },
+  rungAmtSafe: { color: D.correct },
+  safeTag: { marginLeft: 'auto', fontFamily: Fonts.label, fontSize: FS.micro, color: D.correct, letterSpacing: 1 },
   safeTagCur: { color: C.ink },
 
   // End / misc
   endOver: { fontFamily: Fonts.display, fontSize: FS['2xl'], color: D.ochre, letterSpacing: 1 },
   endAmount: { fontFamily: Fonts.display, fontSize: FS.hero, color: D.text },
   endSub: { fontFamily: Fonts.label, fontSize: FS.sm, color: D.sub, letterSpacing: 1.5 },
-  backBtn: { borderWidth: 2, borderColor: D.line, borderRadius: R.btn, paddingHorizontal: SP.lg, paddingVertical: 8, marginTop: SP.sm },
+  backBtn: { borderWidth: 2, borderColor: D.line, borderRadius: R.btn, paddingHorizontal: SP.lg, paddingVertical: 8, marginTop: SP.sm, backgroundColor: C.surface },
   backTxt: { fontFamily: Fonts.display, fontSize: FS.md, color: D.text, letterSpacing: 1 },
 });
