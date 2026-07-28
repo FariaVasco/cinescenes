@@ -54,6 +54,21 @@ type Q = {
   movie: { title: string; year: number } | null;
 };
 
+/** Randomize option order so the correct answer isn't always in the same slot
+ * (guards against authored/LLM positional bias). Remaps correct_index. */
+function withShuffledOptions(q: Q): Q {
+  const order = q.options.map((_, i) => i);
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+  return {
+    ...q,
+    options: order.map(i => q.options[i]),
+    correct_index: order.indexOf(q.correct_index),
+  };
+}
+
 export default function TriviaScreen() {
   const router = useRouter();
   const [questions, setQuestions] = useState<Q[]>([]);
@@ -79,7 +94,7 @@ export default function TriviaScreen() {
         .order('difficulty_score', { ascending: true })
         .limit(11);
       if (error) { setError(error.message); setLoading(false); return; }
-      const qs: Q[] = (data ?? []).map((r: any) => ({
+      const qs: Q[] = (data ?? []).map((r: any) => withShuffledOptions({
         id: r.id, question: r.question, options: r.options, correct_index: r.correct_index,
         difficulty_band: r.difficulty_band, category: r.category, movie: r.movies ?? null,
       }));
