@@ -237,6 +237,45 @@ export interface Database {
         };
         Update: Partial<Database['public']['Tables']['app_config']['Insert']>;
       };
+      trivia_questions: {
+        Row: {
+          id: string;
+          movie_id: string;
+          category: string;
+          question: string;
+          options: string[];
+          correct_index: number;
+          difficulty_band: 'easy' | 'medium' | 'hard' | null;
+          difficulty_score: number | null;
+          source: string;
+          source_ref: string | null;
+          source_sentence: string | null;
+          generator_key: string | null;
+          verified: boolean;
+          times_shown: number;
+          times_correct: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          movie_id: string;
+          category: string;
+          question: string;
+          options: string[];
+          correct_index: number;
+          difficulty_band?: 'easy' | 'medium' | 'hard' | null;
+          difficulty_score?: number | null;
+          source: string;
+          source_ref?: string | null;
+          source_sentence?: string | null;
+          generator_key?: string | null;
+          verified?: boolean;
+          times_shown?: number;
+          times_correct?: number;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['trivia_questions']['Insert']>;
+      };
     };
   };
 }
@@ -248,5 +287,6 @@ export type Turn = Database['public']['Tables']['turns']['Row'];
 export type Challenge = Database['public']['Tables']['challenges']['Row'];
 export type Report = Database['public']['Tables']['reports']['Row'];
 export type Profile = Database['public']['Tables']['profiles']['Row'];
+export type TriviaQuestion = Database['public']['Tables']['trivia_questions']['Row'];
 export type Collection = Database['public']['Tables']['collections']['Row'];
 export type Feedback = Database['public']['Tables']['feedback']['Row'];
