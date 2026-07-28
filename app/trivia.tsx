@@ -464,7 +464,7 @@ const st = StyleSheet.create({
   // Options
   optionsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: SP.sm },
   option: {
-    width: '48.5%', flexDirection: 'row', alignItems: 'center', gap: SP.sm,
+    width: '48.5%', minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: SP.sm,
     backgroundColor: D.panel, borderWidth: 2, borderColor: D.line, borderRadius: R.card,
     paddingVertical: 10, paddingHorizontal: SP.md,
   },
