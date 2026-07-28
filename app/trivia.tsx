@@ -254,9 +254,20 @@ export default function TriviaScreen() {
     );
   }
 
+  // Trailer phase — full screen (no header), dark so letterbox bars are black.
+  if (phase === 'trailer' && (q.movie as any)?.youtube_id) {
+    return (
+      <View style={st.trailerScreen}>
+        <TrailerPlayer key={q.id} movie={q.movie as Movie} onEnded={() => setPhase('question')} />
+        <TouchableOpacity style={st.skipBtn} activeOpacity={0.85} onPress={() => setPhase('question')}>
+          <Text style={st.skipTxt}>Skip to question →</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   const tier = Math.floor(idx / 5) + 1;
   const missNow = safeFloorBelow(idx, total);
-  const showTrailer = phase === 'trailer' && !!(q.movie as any)?.youtube_id;
 
   return (
     <SafeAreaView style={st.screen} edges={['top', 'bottom', 'left', 'right']}>
@@ -273,14 +284,6 @@ export default function TriviaScreen() {
         </View>
       </View>
 
-      {showTrailer ? (
-        <View style={st.trailerBody}>
-          <TrailerPlayer key={q.id} movie={q.movie as Movie} onEnded={() => setPhase('question')} />
-          <TouchableOpacity style={st.skipBtn} activeOpacity={0.85} onPress={() => setPhase('question')}>
-            <Text style={st.skipTxt}>Skip to question →</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
       <View style={st.body}>
         {/* Main column */}
         <View style={st.main}>
@@ -379,7 +382,6 @@ export default function TriviaScreen() {
           </ScrollView>
         </View>
       </View>
-      )}
 
       <ConfettiBurst trigger={revealed && selected === q.correct_index} />
     </SafeAreaView>
@@ -412,8 +414,8 @@ const st = StyleSheet.create({
   body: { flex: 1, flexDirection: 'row' },
   main: { flex: 1, padding: SP.md, gap: SP.sm },
 
-  // Trailer phase
-  trailerBody: { flex: 1, backgroundColor: C.ink },
+  // Trailer phase (full screen)
+  trailerScreen: { flex: 1, backgroundColor: C.ink, alignItems: 'center', justifyContent: 'center' },
   skipBtn: {
     position: 'absolute', bottom: SP.md, right: SP.md,
     borderWidth: 2, borderColor: C.ochre, borderRadius: R.btn,
