@@ -1,4 +1,4 @@
--- Single-player "Movie Millionaire" trivia question bank.
+-- Single-player "Who wants to be a cinephile" trivia question bank.
 -- Written by the offline cinescenes-trivia-pipeline (service role); the app only reads.
 
 create table if not exists trivia_questions (

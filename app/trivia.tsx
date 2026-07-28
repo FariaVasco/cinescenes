@@ -17,7 +17,7 @@ import { supabase } from '@/lib/supabase';
 import { Movie } from '@/lib/database.types';
 import FilmCountdown from '@/components/FilmCountdown';
 import { ConfettiBurst } from '@/components/ConfettiBurst';
-import { TrailerPlayer } from '@/components/TrailerPlayer';
+import { TrailerPlayer, TrailerPlayerHandle } from '@/components/TrailerPlayer';
 import * as haptics from '@/lib/haptics';
 
 const db = supabase as unknown as { from: (t: string) => any };
@@ -121,6 +121,13 @@ export default function TriviaScreen() {
   const [secondArmed, setSecondArmed] = useState(false); // extra life active for the current question
   const [swapping, setSwapping] = useState(false);
   const [phase, setPhase] = useState<'trailer' | 'question'>('trailer'); // per-rung: watch trailer, then answer
+  // Persistent background trailer. `trailerIdx` LEADS `idx`: at Final Answer it jumps to
+  // the next question so that trailer burns off its YouTube title (muted) during the
+  // suspense+reveal window and is clean/ready by the time we show it. `trailerRevealed`
+  // gates a burn cover for when the warm window is shorter than TITLE_CARD_BURN (Q1/swap).
+  const [trailerIdx, setTrailerIdx] = useState(0);
+  const [trailerRevealed, setTrailerRevealed] = useState(false);
+  const trailerRef = useRef<TrailerPlayerHandle>(null);
 
   useFocusEffect(useCallback(() => {
     ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
@@ -157,6 +164,10 @@ export default function TriviaScreen() {
     return () => { loop.stop(); pulse.setValue(1); };
   }, [suspense]);
 
+  // Audio silence is handled by UNMOUNTING the trailer during open answering (see
+  // `renderTrailer` below) rather than pausing it — an unmounted WebView can't play sound,
+  // so Skip / answering can never leave a trailer audible behind the question UI.
+
   const total = questions.length;
   const q = questions[idx];
   const banked = idx > 0 ? PRIZES[idx - 1] : 0;
@@ -165,6 +176,10 @@ export default function TriviaScreen() {
     if (selected === null || revealed || suspense) return;
     // Suspense beat: ticking-clock tension before the reveal (like the show).
     setSuspense(true);
+    // Warm the NEXT question's trailer in the background (muted) during suspense+reveal,
+    // so its YouTube title has burned off before we show it. We commit before knowing
+    // correctness (we need the full ~5s for the burn); a wrong answer just discards it.
+    if (idx + 1 < total) { setTrailerIdx(idx + 1); setTrailerRevealed(false); }
     try { tickSound.seekTo(0); tickSound.play(); } catch {}
     tickInterval.current = setInterval(() => { try { tickSound.seekTo(0); tickSound.play(); } catch {} }, 480);
     suspenseTimer.current = setTimeout(() => {
@@ -183,12 +198,15 @@ export default function TriviaScreen() {
         setIdx(idx + 1);
         setSelected(null); setRevealed(false);
         setHidden([]); setSecondArmed(false);   // reset per-question lifeline state
-        setPhase('trailer');                     // next rung starts with its trailer
+        setPhase('trailer');                     // trailerIdx already points here, pre-warmed
       } else if (secondArmed) {
         // 2nd Chance: forgive the wrong pick — eliminate it and let them answer again.
         setSecondArmed(false);
         setHidden(h => [...h, selected!]);
         setSelected(null); setRevealed(false);
+        // We're staying on this question — discard the pre-warmed next trailer so it
+        // doesn't unmute behind the retry; it'll re-warm on the next Final Answer.
+        setTrailerIdx(idx); setTrailerRevealed(false);
       } else {
         setEnded({ won: false, amount: safeFloorBelow(idx, total) });
       }
@@ -230,6 +248,7 @@ export default function TriviaScreen() {
     const nq = withShuffledOptions(pool[Math.floor(Math.random() * pool.length)]);
     setQuestions(qs => qs.map((x, i) => (i === idx ? nq : x)));
     setSelected(null); setHidden([]); setSecondArmed(false); setPhase('trailer');
+    setTrailerIdx(idx); setTrailerRevealed(false); // remount bg onto the swapped-in trailer
     setUsed(u => ({ ...u, swap: true }));
   }
 
@@ -245,15 +264,6 @@ export default function TriviaScreen() {
       </View>
     );
   }
-  // 3-2-1 film-reel countdown before the round starts (same as the multiplayer mode),
-  // shown once questions are loaded so the first question is ready when it finishes.
-  if (countdown) {
-    return (
-      <View style={st.screen}>
-        <FilmCountdown from={3} onComplete={() => setCountdown(false)} />
-      </View>
-    );
-  }
   if (ended) {
     return (
       <View style={[st.screen, st.center]}>
@@ -261,18 +271,6 @@ export default function TriviaScreen() {
         <Text style={st.endAmount}>{money(ended.amount)}</Text>
         <Text style={st.endSub}>{ended.won ? 'Top of the ladder' : 'banked'}</Text>
         <TouchableOpacity onPress={() => router.back()} style={st.backBtn}><Text style={st.backTxt}>Done</Text></TouchableOpacity>
-      </View>
-    );
-  }
-
-  // Trailer phase — full screen (no header), dark so letterbox bars are black.
-  if (phase === 'trailer' && (q.movie as any)?.youtube_id) {
-    return (
-      <View style={st.trailerScreen}>
-        <TrailerPlayer key={q.id} movie={q.movie as Movie} onEnded={() => setPhase('question')} />
-        <TouchableOpacity style={st.skipBtn} activeOpacity={0.85} onPress={() => setPhase('question')}>
-          <Text style={st.skipTxt}>Skip to question →</Text>
-        </TouchableOpacity>
       </View>
     );
   }
@@ -287,8 +285,66 @@ export default function TriviaScreen() {
     ? `${q.movie.year ?? ''}${q.movie.director ? ` - ${q.movie.director}` : ''}`
     : '';
 
+  // Background trailer: the one currently warming/showing (leads `idx` during suspense).
+  const trailerMovie = questions[trailerIdx]?.movie ?? null;
+  const hasTrailer = !!(trailerMovie as any)?.youtube_id;
+  // Time from mount until this trailer is shown — the audio-unmute floor. Q1 warms during
+  // the ~3.6s countdown; later trailers warm across the suspense+reveal window (~5s).
+  const warmMs = countdown ? 3600 : SUSPENSE_MS + REVEAL_MS;
+  // Trailer phase renders only when there's a trailer to watch; otherwise jump to the question.
+  const showTrailer = !countdown && phase === 'trailer' && hasTrailer;
+  const showQuestion = !countdown && !showTrailer;
+  // Mount the trailer ONLY while it's warming (suspense/reveal of the previous question, or
+  // the opening countdown) or actually on-screen (trailer phase). During open answering we
+  // unmount it entirely — that's what guarantees Skip/answering leaves no audio playing.
+  const renderTrailer = hasTrailer && (phase === 'trailer' || suspense || revealed);
+
   return (
-    <SafeAreaView style={st.screen} edges={['top', 'bottom', 'left', 'right']}>
+    <View style={st.screen}>
+      {/* Trailer — plays MUTED while warming (behind the countdown or the suspense/reveal)
+          so its YouTube title burns off before it's visible; unmounted during answering. */}
+      {renderTrailer && (
+        <View style={StyleSheet.absoluteFill}>
+          <View style={st.trailerScreen}>
+            <TrailerPlayer
+              key={(trailerMovie as Movie).id}
+              ref={trailerRef}
+              movie={trailerMovie as Movie}
+              unmuteAfterMs={warmMs}
+              onRevealed={() => setTrailerRevealed(true)}
+              onEnded={() => { if (!countdown && phase === 'trailer') setPhase('question'); }}
+            />
+          </View>
+          {/* Swallow taps so YouTube never surfaces its title/chrome on touch. */}
+          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => {}} />
+        </View>
+      )}
+
+      {/* 3-2-1 film-reel countdown (Q1's trailer warms muted behind it). */}
+      {countdown && (
+        <View style={StyleSheet.absoluteFill}>
+          <FilmCountdown from={3} onComplete={() => setCountdown(false)} />
+        </View>
+      )}
+
+      {/* Trailer phase: burn cover until the title has cleared, plus Skip. */}
+      {showTrailer && (
+        <>
+          {!trailerRevealed && (
+            <View style={[st.trailerScreen, StyleSheet.absoluteFill]} pointerEvents="none">
+              <Text style={st.coverIcon}>🎬</Text>
+              <Text style={st.coverTxt}>Roll the trailer…</Text>
+            </View>
+          )}
+          <TouchableOpacity style={st.skipBtn} activeOpacity={0.85} onPress={() => setPhase('question')}>
+            <Text style={st.skipTxt}>Skip to question →</Text>
+          </TouchableOpacity>
+        </>
+      )}
+
+      {/* Question phase — opaque, so it fully hides the trailer warming the NEXT question. */}
+      {showQuestion && (
+      <SafeAreaView style={[st.screen, StyleSheet.absoluteFill]} edges={['top', 'bottom', 'left', 'right']}>
       {/* Header */}
       <View style={st.header}>
         <Text style={st.wordmark}>WHO WANTS TO BE A CINEPHILE</Text>
@@ -414,7 +470,9 @@ export default function TriviaScreen() {
       </View>
 
       <ConfettiBurst trigger={revealed && selected === q.correct_index} />
-    </SafeAreaView>
+      </SafeAreaView>
+      )}
+    </View>
   );
 }
 
@@ -446,6 +504,8 @@ const st = StyleSheet.create({
 
   // Trailer phase (full screen)
   trailerScreen: { flex: 1, backgroundColor: C.ink, alignItems: 'center', justifyContent: 'center' },
+  coverIcon: { fontSize: 44, marginBottom: SP.sm },
+  coverTxt: { fontFamily: Fonts.display, fontSize: FS.lg, color: C.ochre, letterSpacing: 1 },
   skipBtn: {
     position: 'absolute', bottom: SP.md, right: SP.md,
     borderWidth: 2, borderColor: C.ochre, borderRadius: R.btn,
