@@ -111,6 +111,7 @@ export default function TriviaScreen() {
   const [secondArmed, setSecondArmed] = useState(false); // extra life active for the current question
   const [swapping, setSwapping] = useState(false);
   const [phase, setPhase] = useState<'trailer' | 'question'>('trailer'); // per-rung: watch trailer, then answer
+  const [trailerRevealed, setTrailerRevealed] = useState(false); // burn done — safe to show the video
 
   useFocusEffect(useCallback(() => {
     ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
@@ -172,7 +173,7 @@ export default function TriviaScreen() {
         setIdx(idx + 1);
         setSelected(null); setRevealed(false);
         setHidden([]); setSecondArmed(false);   // reset per-question lifeline state
-        setPhase('trailer');                     // next rung starts with its trailer
+        setPhase('trailer'); setTrailerRevealed(false); // next rung starts with its trailer (covered)
       } else if (secondArmed) {
         // 2nd Chance: forgive the wrong pick — eliminate it and let them answer again.
         setSecondArmed(false);
@@ -218,7 +219,7 @@ export default function TriviaScreen() {
     if (pool.length === 0) return; // no same-tier spare available — don't consume the lifeline
     const nq = withShuffledOptions(pool[Math.floor(Math.random() * pool.length)]);
     setQuestions(qs => qs.map((x, i) => (i === idx ? nq : x)));
-    setSelected(null); setHidden([]); setSecondArmed(false); setPhase('trailer');
+    setSelected(null); setHidden([]); setSecondArmed(false); setPhase('trailer'); setTrailerRevealed(false);
     setUsed(u => ({ ...u, swap: true }));
   }
 
@@ -258,7 +259,21 @@ export default function TriviaScreen() {
   if (phase === 'trailer' && (q.movie as any)?.youtube_id) {
     return (
       <View style={st.trailerScreen}>
-        <TrailerPlayer key={q.id} movie={q.movie as Movie} onEnded={() => setPhase('question')} />
+        <TrailerPlayer
+          key={q.id}
+          movie={q.movie as Movie}
+          onEnded={() => setPhase('question')}
+          onRevealed={() => setTrailerRevealed(true)}
+        />
+        {/* Touch blocker — a tap otherwise summons YouTube's title bar/controls (spoils the film). */}
+        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => {}} />
+        {/* Title-card burn cover — hides YouTube's title/chrome until playback is safely underway. */}
+        {!trailerRevealed && (
+          <View style={st.trailerCover} pointerEvents="none">
+            <Text style={st.trailerCoverIcon}>🎬</Text>
+            <Text style={st.trailerCoverText}>Watch the trailer…</Text>
+          </View>
+        )}
         <TouchableOpacity style={st.skipBtn} activeOpacity={0.85} onPress={() => setPhase('question')}>
           <Text style={st.skipTxt}>Skip to question →</Text>
         </TouchableOpacity>
@@ -416,6 +431,9 @@ const st = StyleSheet.create({
 
   // Trailer phase (full screen)
   trailerScreen: { flex: 1, backgroundColor: C.ink, alignItems: 'center', justifyContent: 'center' },
+  trailerCover: { ...StyleSheet.absoluteFillObject, backgroundColor: C.ink, alignItems: 'center', justifyContent: 'center', gap: SP.sm },
+  trailerCoverIcon: { fontSize: 44 },
+  trailerCoverText: { fontFamily: Fonts.label, fontSize: FS.md, color: C.textSubDark, letterSpacing: 1.5 },
   skipBtn: {
     position: 'absolute', bottom: SP.md, right: SP.md,
     borderWidth: 2, borderColor: C.ochre, borderRadius: R.btn,
