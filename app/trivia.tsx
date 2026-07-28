@@ -14,6 +14,8 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import { C, R, FS, Fonts, SP } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
 import FilmCountdown from '@/components/FilmCountdown';
+import { ConfettiBurst } from '@/components/ConfettiBurst';
+import * as haptics from '@/lib/haptics';
 
 const db = supabase as unknown as { from: (t: string) => any };
 
@@ -112,6 +114,7 @@ export default function TriviaScreen() {
     if (selected === null || revealed) return;
     setRevealed(true);
     const correct = selected === q.correct_index;
+    if (correct) haptics.success(); else haptics.warning();
     advanceTimer.current = setTimeout(() => {
       if (!correct) {
         setEnded({ won: false, amount: safeFloorBelow(idx, total) });
@@ -259,6 +262,8 @@ export default function TriviaScreen() {
           </ScrollView>
         </View>
       </View>
+
+      <ConfettiBurst trigger={revealed && selected === q.correct_index} />
     </SafeAreaView>
   );
 }
