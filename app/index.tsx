@@ -161,8 +161,7 @@ function PlayView() {
             key={`single-${imageKey}`}
             label="SINGLE PLAYER"
             image={lcSoloCinema}
-            onPress={() => {}}
-            comingSoon
+            onPress={() => router.push('/trivia')}
             style={{ width: square, height: square }}
           />
           <ModeCard
