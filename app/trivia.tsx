@@ -6,9 +6,10 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView,
+  View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView, Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAudioPlayer } from 'expo-audio';
 import { useRouter, useFocusEffect } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { C, R, FS, Fonts, SP } from '@/constants/theme';
@@ -40,6 +41,7 @@ const PRIZES = [100, 200, 300, 500, 1000, 2000, 4000, 8000, 16000, 32000, 64000,
 const LETTERS = ['A', 'B', 'C', 'D'];
 const REVEAL_MS = 1600;
 
+const SUSPENSE_MS = 2200;
 const isSafe = (i: number, total: number) => (i + 1) % 5 === 0 || i === total - 1;
 const money = (n: number) => `$${n.toLocaleString('en-US')}`;
 /** Highest safe-rung prize strictly below rung i (what you keep on a miss). */
@@ -83,6 +85,9 @@ function mapRow(r: any): Q {
 
 export default function TriviaScreen() {
   const router = useRouter();
+  const tickSound = useAudioPlayer(require('../assets/sounds/countdown-tick.wav'));
+  const successSound = useAudioPlayer(require('../assets/sounds/win.mp3'));
+  const failSound = useAudioPlayer(require('../assets/sounds/challenge.mp3')); // placeholder — no dedicated fail sound
   const [questions, setQuestions] = useState<Q[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -91,8 +96,12 @@ export default function TriviaScreen() {
   const [idx, setIdx] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
   const [revealed, setRevealed] = useState(false);
+  const [suspense, setSuspense] = useState(false);
   const [ended, setEnded] = useState<{ won: boolean; amount: number } | null>(null);
   const advanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const suspenseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tickInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pulse = useRef(new Animated.Value(1)).current;
 
   // Lifelines (each once per game)
   const [used, setUsed] = useState({ fifty: false, swap: false, second: false });
@@ -116,19 +125,42 @@ export default function TriviaScreen() {
       setQuestions(qs);
       setLoading(false);
     })();
-    return () => { if (advanceTimer.current) clearTimeout(advanceTimer.current); };
+    return () => {
+      if (advanceTimer.current) clearTimeout(advanceTimer.current);
+      if (suspenseTimer.current) clearTimeout(suspenseTimer.current);
+      if (tickInterval.current) clearInterval(tickInterval.current);
+    };
   }, []);
+
+  // Pulse the "REVEALING…" label during the suspense beat.
+  useEffect(() => {
+    if (!suspense) return;
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(pulse, { toValue: 0.35, duration: 480, useNativeDriver: true }),
+      Animated.timing(pulse, { toValue: 1, duration: 480, useNativeDriver: true }),
+    ]));
+    loop.start();
+    return () => { loop.stop(); pulse.setValue(1); };
+  }, [suspense]);
 
   const total = questions.length;
   const q = questions[idx];
   const banked = idx > 0 ? PRIZES[idx - 1] : 0;
 
   function onFinalAnswer() {
-    if (selected === null || revealed) return;
-    setRevealed(true);
-    const correct = selected === q.correct_index;
-    if (correct) haptics.success(); else haptics.warning();
-    advanceTimer.current = setTimeout(() => {
+    if (selected === null || revealed || suspense) return;
+    // Suspense beat: ticking-clock tension before the reveal (like the show).
+    setSuspense(true);
+    try { tickSound.seekTo(0); tickSound.play(); } catch {}
+    tickInterval.current = setInterval(() => { try { tickSound.seekTo(0); tickSound.play(); } catch {} }, 480);
+    suspenseTimer.current = setTimeout(() => {
+      if (tickInterval.current) { clearInterval(tickInterval.current); tickInterval.current = null; }
+      setSuspense(false);
+      setRevealed(true);
+      const correct = selected === q.correct_index;
+      if (correct) { haptics.success(); try { successSound.seekTo(0); successSound.play(); } catch {} }
+      else { haptics.warning(); try { failSound.seekTo(0); failSound.play(); } catch {} }
+      advanceTimer.current = setTimeout(() => {
       if (correct) {
         if (idx + 1 >= total) {
           setEnded({ won: true, amount: PRIZES[Math.min(idx, PRIZES.length - 1)] });
@@ -145,7 +177,8 @@ export default function TriviaScreen() {
       } else {
         setEnded({ won: false, amount: safeFloorBelow(idx, total) });
       }
-    }, REVEAL_MS);
+      }, REVEAL_MS);
+    }, SUSPENSE_MS);
   }
 
   function onWalkAway() {
@@ -229,7 +262,7 @@ export default function TriviaScreen() {
         <View style={st.headerRight}>
           <Text style={st.bankedLabel}>BANKED </Text>
           <Text style={st.bankedVal}>{money(banked)}</Text>
-          <TouchableOpacity onPress={onWalkAway} style={st.walkBtn} disabled={revealed}>
+          <TouchableOpacity onPress={onWalkAway} style={st.walkBtn} disabled={revealed || suspense}>
             <Text style={st.walkTxt}>WALK AWAY</Text>
           </TouchableOpacity>
         </View>
@@ -261,7 +294,7 @@ export default function TriviaScreen() {
                     showWrong && st.optionWrong,
                   ]}
                   activeOpacity={0.85}
-                  disabled={revealed}
+                  disabled={revealed || suspense}
                   onPress={() => setSelected(i)}
                 >
                   <View style={[st.badge, { backgroundColor: BADGE_COLORS[i] }]}>
@@ -274,14 +307,20 @@ export default function TriviaScreen() {
           </View>
 
           <View style={st.actionRow}>
-            <Text style={st.missNow}>MISS NOW → {money(missNow)}</Text>
-            <TouchableOpacity
-              style={[st.finalBtn, (selected === null || revealed) && st.finalBtnOff]}
-              disabled={selected === null || revealed}
-              onPress={onFinalAnswer}
-            >
-              <Text style={st.finalTxt}>FINAL ANSWER</Text>
-            </TouchableOpacity>
+            {suspense ? (
+              <Animated.Text style={[st.revealing, { opacity: pulse }]}>REVEALING…</Animated.Text>
+            ) : (
+              <>
+                <Text style={st.missNow}>MISS NOW → {money(missNow)}</Text>
+                <TouchableOpacity
+                  style={[st.finalBtn, (selected === null || revealed) && st.finalBtnOff]}
+                  disabled={selected === null || revealed}
+                  onPress={onFinalAnswer}
+                >
+                  <Text style={st.finalTxt}>FINAL ANSWER</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
 
           {/* Lifelines */}
@@ -289,21 +328,21 @@ export default function TriviaScreen() {
             <Text style={st.lifeLabel}>LIFELINES</Text>
             <TouchableOpacity
               style={[st.lifeBtn, used.fifty && st.lifeBtnUsed]}
-              disabled={used.fifty || revealed}
+              disabled={used.fifty || revealed || suspense}
               onPress={useFifty}
             >
               <Text style={[st.lifeTxt, used.fifty && st.lifeTxtUsed]}>50:50</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[st.lifeBtn, used.swap && st.lifeBtnUsed]}
-              disabled={used.swap || revealed || swapping}
+              disabled={used.swap || revealed || suspense || swapping}
               onPress={useSwap}
             >
               <Text style={[st.lifeTxt, used.swap && st.lifeTxtUsed]}>{swapping ? '…' : 'SWAP'}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[st.lifeBtn, used.second && st.lifeBtnUsed, secondArmed && st.lifeBtnArmed]}
-              disabled={used.second || revealed}
+              disabled={used.second || revealed || suspense}
               onPress={armSecond}
             >
               <Text style={[st.lifeTxt, used.second && st.lifeTxtUsed]}>2ND CHANCE</Text>
@@ -390,6 +429,7 @@ const st = StyleSheet.create({
   // Action row
   actionRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
   missNow: { fontFamily: Fonts.label, fontSize: FS.sm, color: D.sub, letterSpacing: 1 },
+  revealing: { flex: 1, textAlign: 'center', fontFamily: Fonts.display, fontSize: FS.lg, color: D.ochre, letterSpacing: 2 },
   finalBtn: {
     marginLeft: 'auto', borderWidth: 2, borderColor: D.line, borderRadius: R.btn,
     paddingHorizontal: SP.lg, paddingVertical: 8, backgroundColor: D.ochre,
