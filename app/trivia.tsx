@@ -73,6 +73,14 @@ function withShuffledOptions(q: Q): Q {
   };
 }
 
+const SELECT_COLS = 'id,question,options,correct_index,difficulty_band,category,movies(title,year)';
+function mapRow(r: any): Q {
+  return {
+    id: r.id, question: r.question, options: r.options, correct_index: r.correct_index,
+    difficulty_band: r.difficulty_band, category: r.category, movie: r.movies ?? null,
+  };
+}
+
 export default function TriviaScreen() {
   const router = useRouter();
   const [questions, setQuestions] = useState<Q[]>([]);
@@ -86,6 +94,12 @@ export default function TriviaScreen() {
   const [ended, setEnded] = useState<{ won: boolean; amount: number } | null>(null);
   const advanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Lifelines (each once per game)
+  const [used, setUsed] = useState({ fifty: false, swap: false, second: false });
+  const [hidden, setHidden] = useState<number[]>([]);   // option indices removed (50/50 or 2nd-chance elimination)
+  const [secondArmed, setSecondArmed] = useState(false); // extra life active for the current question
+  const [swapping, setSwapping] = useState(false);
+
   useFocusEffect(useCallback(() => {
     ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
   }, []));
@@ -94,14 +108,11 @@ export default function TriviaScreen() {
     (async () => {
       const { data, error } = await db
         .from('trivia_questions')
-        .select('id,question,options,correct_index,difficulty_band,category,movies(title,year)')
+        .select(SELECT_COLS)
         .order('difficulty_score', { ascending: true })
         .limit(11);
       if (error) { setError(error.message); setLoading(false); return; }
-      const qs: Q[] = (data ?? []).map((r: any) => withShuffledOptions({
-        id: r.id, question: r.question, options: r.options, correct_index: r.correct_index,
-        difficulty_band: r.difficulty_band, category: r.category, movie: r.movies ?? null,
-      }));
+      const qs: Q[] = (data ?? []).map((r: any) => withShuffledOptions(mapRow(r)));
       setQuestions(qs);
       setLoading(false);
     })();
@@ -118,23 +129,60 @@ export default function TriviaScreen() {
     const correct = selected === q.correct_index;
     if (correct) haptics.success(); else haptics.warning();
     advanceTimer.current = setTimeout(() => {
-      if (!correct) {
+      if (correct) {
+        if (idx + 1 >= total) {
+          setEnded({ won: true, amount: PRIZES[Math.min(idx, PRIZES.length - 1)] });
+          return;
+        }
+        setIdx(idx + 1);
+        setSelected(null); setRevealed(false);
+        setHidden([]); setSecondArmed(false);   // reset per-question lifeline state
+      } else if (secondArmed) {
+        // 2nd Chance: forgive the wrong pick — eliminate it and let them answer again.
+        setSecondArmed(false);
+        setHidden(h => [...h, selected!]);
+        setSelected(null); setRevealed(false);
+      } else {
         setEnded({ won: false, amount: safeFloorBelow(idx, total) });
-        return;
       }
-      if (idx + 1 >= total) {
-        setEnded({ won: true, amount: PRIZES[Math.min(idx, PRIZES.length - 1)] });
-        return;
-      }
-      setIdx(idx + 1);
-      setSelected(null);
-      setRevealed(false);
     }, REVEAL_MS);
   }
 
   function onWalkAway() {
     if (revealed) return;
     setEnded({ won: false, amount: banked });
+  }
+
+  // ── Lifelines ──────────────────────────────────────────────
+  function useFifty() {
+    if (used.fifty || revealed) return;
+    const wrongs = q.options.map((_, i) => i).filter(i => i !== q.correct_index && !hidden.includes(i));
+    const toHide = [...wrongs].sort(() => Math.random() - 0.5).slice(0, 2);
+    setHidden(h => [...h, ...toHide]);
+    setUsed(u => ({ ...u, fifty: true }));
+    if (selected !== null && toHide.includes(selected)) setSelected(null);
+  }
+
+  function armSecond() {
+    // Pre-commitment: arming consumes it (once per game); a wrong first pick is then forgiven.
+    if (used.second || revealed) return;
+    setSecondArmed(true);
+    setUsed(u => ({ ...u, second: true }));
+  }
+
+  async function useSwap() {
+    if (used.swap || revealed || swapping) return;
+    setSwapping(true);
+    const usedIds = new Set(questions.map(x => x.id));
+    const { data } = await db.from('trivia_questions').select(SELECT_COLS)
+      .eq('difficulty_band', q.difficulty_band).limit(30);
+    const pool = ((data ?? []) as any[]).map(mapRow).filter((x: Q) => !usedIds.has(x.id));
+    setSwapping(false);
+    if (pool.length === 0) return; // no same-tier spare available — don't consume the lifeline
+    const nq = withShuffledOptions(pool[Math.floor(Math.random() * pool.length)]);
+    setQuestions(qs => qs.map((x, i) => (i === idx ? nq : x)));
+    setSelected(null); setHidden([]); setSecondArmed(false);
+    setUsed(u => ({ ...u, swap: true }));
   }
 
   // ── States ──────────────────────────────────────────────
@@ -199,6 +247,7 @@ export default function TriviaScreen() {
 
           <View style={st.optionsGrid}>
             {q.options.map((opt, i) => {
+              if (hidden.includes(i)) return <View key={i} style={[st.option, st.optionHidden]} />;
               const isSel = selected === i;
               const showCorrect = revealed && i === q.correct_index;
               const showWrong = revealed && isSel && i !== q.correct_index;
@@ -235,14 +284,30 @@ export default function TriviaScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Lifelines — rendered; wired in the next step */}
+          {/* Lifelines */}
           <View style={st.lifelines}>
             <Text style={st.lifeLabel}>LIFELINES</Text>
-            {[['50:50'], ['SWAP'], ['2ND CHANCE']].map(([l]) => (
-              <View key={l} style={[st.lifeBtn, st.lifeBtnOff]}>
-                <Text style={st.lifeTxt}>{l}</Text>
-              </View>
-            ))}
+            <TouchableOpacity
+              style={[st.lifeBtn, used.fifty && st.lifeBtnUsed]}
+              disabled={used.fifty || revealed}
+              onPress={useFifty}
+            >
+              <Text style={[st.lifeTxt, used.fifty && st.lifeTxtUsed]}>50:50</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[st.lifeBtn, used.swap && st.lifeBtnUsed]}
+              disabled={used.swap || revealed || swapping}
+              onPress={useSwap}
+            >
+              <Text style={[st.lifeTxt, used.swap && st.lifeTxtUsed]}>{swapping ? '…' : 'SWAP'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[st.lifeBtn, used.second && st.lifeBtnUsed, secondArmed && st.lifeBtnArmed]}
+              disabled={used.second || revealed}
+              onPress={armSecond}
+            >
+              <Text style={[st.lifeTxt, used.second && st.lifeTxtUsed]}>2ND CHANCE</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -314,6 +379,7 @@ const st = StyleSheet.create({
   optionSel: { borderColor: D.ochre, backgroundColor: 'rgba(245,197,24,0.22)' },
   optionCorrect: { borderColor: D.correct, backgroundColor: 'rgba(61,170,92,0.22)' },
   optionWrong: { borderColor: D.wrong, backgroundColor: 'rgba(232,55,42,0.18)' },
+  optionHidden: { opacity: 0.12 },
   badge: {
     width: 26, height: 26, borderRadius: R.full, borderWidth: 2, borderColor: D.line,
     alignItems: 'center', justifyContent: 'center',
@@ -336,7 +402,10 @@ const st = StyleSheet.create({
   lifeLabel: { fontFamily: Fonts.label, fontSize: FS.xs, color: D.sub, letterSpacing: 2, marginRight: SP.xs },
   lifeBtn: { borderWidth: 2, borderColor: D.line, borderRadius: R.md, paddingHorizontal: SP.md, paddingVertical: 8, backgroundColor: C.surface },
   lifeBtnOff: { opacity: 0.4 },
+  lifeBtnUsed: { opacity: 0.4 },
+  lifeBtnArmed: { borderColor: D.correct, backgroundColor: 'rgba(61,170,92,0.22)' },
   lifeTxt: { fontFamily: Fonts.display, fontSize: FS.base, color: D.text, letterSpacing: 1 },
+  lifeTxtUsed: { textDecorationLine: 'line-through' },
 
   // Prize ladder
   ladder: { width: 168, borderLeftWidth: 2, borderLeftColor: D.line, paddingHorizontal: SP.sm, paddingTop: SP.sm, backgroundColor: C.surfaceHigh },
