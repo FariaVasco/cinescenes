@@ -1,5 +1,5 @@
 /**
- * Movie Millionaire — single-player trivia (Phase B, core loop).
+ * Who wants to be a cinephile — single-player trivia (Phase B, core loop).
  * Landscape. Reads pre-generated questions from `trivia_questions`.
  * Core loop only: question -> select -> final answer -> reveal -> advance / lose /
  * walk away. Lifelines are rendered but wired in a later step; trailer intro later.
@@ -111,7 +111,6 @@ export default function TriviaScreen() {
   const [secondArmed, setSecondArmed] = useState(false); // extra life active for the current question
   const [swapping, setSwapping] = useState(false);
   const [phase, setPhase] = useState<'trailer' | 'question'>('trailer'); // per-rung: watch trailer, then answer
-  const [trailerRevealed, setTrailerRevealed] = useState(false); // burn done — safe to show the video
 
   useFocusEffect(useCallback(() => {
     ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
@@ -173,7 +172,7 @@ export default function TriviaScreen() {
         setIdx(idx + 1);
         setSelected(null); setRevealed(false);
         setHidden([]); setSecondArmed(false);   // reset per-question lifeline state
-        setPhase('trailer'); setTrailerRevealed(false); // next rung starts with its trailer (covered)
+        setPhase('trailer');                     // next rung starts with its trailer
       } else if (secondArmed) {
         // 2nd Chance: forgive the wrong pick — eliminate it and let them answer again.
         setSecondArmed(false);
@@ -219,7 +218,7 @@ export default function TriviaScreen() {
     if (pool.length === 0) return; // no same-tier spare available — don't consume the lifeline
     const nq = withShuffledOptions(pool[Math.floor(Math.random() * pool.length)]);
     setQuestions(qs => qs.map((x, i) => (i === idx ? nq : x)));
-    setSelected(null); setHidden([]); setSecondArmed(false); setPhase('trailer'); setTrailerRevealed(false);
+    setSelected(null); setHidden([]); setSecondArmed(false); setPhase('trailer');
     setUsed(u => ({ ...u, swap: true }));
   }
 
@@ -259,21 +258,7 @@ export default function TriviaScreen() {
   if (phase === 'trailer' && (q.movie as any)?.youtube_id) {
     return (
       <View style={st.trailerScreen}>
-        <TrailerPlayer
-          key={q.id}
-          movie={q.movie as Movie}
-          onEnded={() => setPhase('question')}
-          onRevealed={() => setTrailerRevealed(true)}
-        />
-        {/* Touch blocker — a tap otherwise summons YouTube's title bar/controls (spoils the film). */}
-        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => {}} />
-        {/* Title-card burn cover — hides YouTube's title/chrome until playback is safely underway. */}
-        {!trailerRevealed && (
-          <View style={st.trailerCover} pointerEvents="none">
-            <Text style={st.trailerCoverIcon}>🎬</Text>
-            <Text style={st.trailerCoverText}>Watch the trailer…</Text>
-          </View>
-        )}
+        <TrailerPlayer key={q.id} movie={q.movie as Movie} onEnded={() => setPhase('question')} />
         <TouchableOpacity style={st.skipBtn} activeOpacity={0.85} onPress={() => setPhase('question')}>
           <Text style={st.skipTxt}>Skip to question →</Text>
         </TouchableOpacity>
@@ -288,7 +273,7 @@ export default function TriviaScreen() {
     <SafeAreaView style={st.screen} edges={['top', 'bottom', 'left', 'right']}>
       {/* Header */}
       <View style={st.header}>
-        <Text style={st.wordmark}>MOVIE MILLIONAIRE</Text>
+        <Text style={st.wordmark}>WHO WANTS TO BE A CINEPHILE</Text>
         <Text style={st.headerMeta}>Q {idx + 1}/{total} · TIER {tier}</Text>
         <View style={st.headerRight}>
           <Text style={st.bankedLabel}>BANKED </Text>
@@ -412,14 +397,14 @@ const st = StyleSheet.create({
   header: {
     flexDirection: 'row', alignItems: 'center', gap: SP.md,
     paddingHorizontal: SP.md, paddingVertical: SP.sm,
-    backgroundColor: C.surfaceHigh,
-    borderBottomWidth: 2, borderBottomColor: D.line,
+    backgroundColor: C.ink,                         // dark title banner — gold reads on it
+    borderBottomWidth: 2, borderBottomColor: 'rgba(245,197,24,0.35)',
   },
   wordmark: { fontFamily: Fonts.display, fontSize: FS.xl, color: D.ochre, letterSpacing: 1 },
-  headerMeta: { fontFamily: Fonts.label, fontSize: FS.sm, color: D.sub, letterSpacing: 1.5 },
+  headerMeta: { fontFamily: Fonts.label, fontSize: FS.sm, color: C.textSubDark, letterSpacing: 1.5 },
   headerRight: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: SP.sm },
-  bankedLabel: { fontFamily: Fonts.label, fontSize: FS.sm, color: D.sub, letterSpacing: 1.5 },
-  bankedVal: { fontFamily: Fonts.bodyBold, fontSize: FS.md, color: D.text },
+  bankedLabel: { fontFamily: Fonts.label, fontSize: FS.sm, color: C.textSubDark, letterSpacing: 1.5 },
+  bankedVal: { fontFamily: Fonts.bodyBold, fontSize: FS.md, color: D.ochre },
   walkBtn: {
     borderWidth: 2, borderColor: D.wrong, borderRadius: R.md, paddingHorizontal: SP.md,
     paddingVertical: 6, marginLeft: SP.sm, backgroundColor: C.surface,
@@ -431,9 +416,6 @@ const st = StyleSheet.create({
 
   // Trailer phase (full screen)
   trailerScreen: { flex: 1, backgroundColor: C.ink, alignItems: 'center', justifyContent: 'center' },
-  trailerCover: { ...StyleSheet.absoluteFillObject, backgroundColor: C.ink, alignItems: 'center', justifyContent: 'center', gap: SP.sm },
-  trailerCoverIcon: { fontSize: 44 },
-  trailerCoverText: { fontFamily: Fonts.label, fontSize: FS.md, color: C.textSubDark, letterSpacing: 1.5 },
   skipBtn: {
     position: 'absolute', bottom: SP.md, right: SP.md,
     borderWidth: 2, borderColor: C.ochre, borderRadius: R.btn,
