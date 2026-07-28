@@ -13,6 +13,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { C, R, FS, Fonts, SP } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
+import FilmCountdown from '@/components/FilmCountdown';
 
 const db = supabase as unknown as { from: (t: string) => any };
 
@@ -59,6 +60,7 @@ export default function TriviaScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [countdown, setCountdown] = useState(true);
   const [idx, setIdx] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
   const [revealed, setRevealed] = useState(false);
@@ -124,6 +126,15 @@ export default function TriviaScreen() {
       <View style={[st.screen, st.center]}>
         <Text style={st.msg}>{error ? `Error: ${error}` : 'No questions available yet.'}</Text>
         <TouchableOpacity onPress={() => router.back()} style={st.backBtn}><Text style={st.backTxt}>Back</Text></TouchableOpacity>
+      </View>
+    );
+  }
+  // 3-2-1 film-reel countdown before the round starts (same as the multiplayer mode),
+  // shown once questions are loaded so the first question is ready when it finishes.
+  if (countdown) {
+    return (
+      <View style={st.screen}>
+        <FilmCountdown from={3} onComplete={() => setCountdown(false)} />
       </View>
     );
   }
