@@ -14,8 +14,10 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { C, R, FS, Fonts, SP } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
+import { Movie } from '@/lib/database.types';
 import FilmCountdown from '@/components/FilmCountdown';
 import { ConfettiBurst } from '@/components/ConfettiBurst';
+import { TrailerPlayer } from '@/components/TrailerPlayer';
 import * as haptics from '@/lib/haptics';
 
 const db = supabase as unknown as { from: (t: string) => any };
@@ -57,7 +59,7 @@ type Q = {
   correct_index: number;
   difficulty_band: string | null;
   category: string;
-  movie: { title: string; year: number } | null;
+  movie: Movie | null;
 };
 
 /** Randomize option order so the correct answer isn't always in the same slot
@@ -75,7 +77,7 @@ function withShuffledOptions(q: Q): Q {
   };
 }
 
-const SELECT_COLS = 'id,question,options,correct_index,difficulty_band,category,movies(title,year)';
+const SELECT_COLS = 'id,question,options,correct_index,difficulty_band,category,movies(*)';
 function mapRow(r: any): Q {
   return {
     id: r.id, question: r.question, options: r.options, correct_index: r.correct_index,
@@ -108,6 +110,7 @@ export default function TriviaScreen() {
   const [hidden, setHidden] = useState<number[]>([]);   // option indices removed (50/50 or 2nd-chance elimination)
   const [secondArmed, setSecondArmed] = useState(false); // extra life active for the current question
   const [swapping, setSwapping] = useState(false);
+  const [phase, setPhase] = useState<'trailer' | 'question'>('trailer'); // per-rung: watch trailer, then answer
 
   useFocusEffect(useCallback(() => {
     ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
@@ -169,6 +172,7 @@ export default function TriviaScreen() {
         setIdx(idx + 1);
         setSelected(null); setRevealed(false);
         setHidden([]); setSecondArmed(false);   // reset per-question lifeline state
+        setPhase('trailer');                     // next rung starts with its trailer
       } else if (secondArmed) {
         // 2nd Chance: forgive the wrong pick — eliminate it and let them answer again.
         setSecondArmed(false);
@@ -214,7 +218,7 @@ export default function TriviaScreen() {
     if (pool.length === 0) return; // no same-tier spare available — don't consume the lifeline
     const nq = withShuffledOptions(pool[Math.floor(Math.random() * pool.length)]);
     setQuestions(qs => qs.map((x, i) => (i === idx ? nq : x)));
-    setSelected(null); setHidden([]); setSecondArmed(false);
+    setSelected(null); setHidden([]); setSecondArmed(false); setPhase('trailer');
     setUsed(u => ({ ...u, swap: true }));
   }
 
@@ -252,6 +256,7 @@ export default function TriviaScreen() {
 
   const tier = Math.floor(idx / 5) + 1;
   const missNow = safeFloorBelow(idx, total);
+  const showTrailer = phase === 'trailer' && !!(q.movie as any)?.youtube_id;
 
   return (
     <SafeAreaView style={st.screen} edges={['top', 'bottom', 'left', 'right']}>
@@ -268,13 +273,19 @@ export default function TriviaScreen() {
         </View>
       </View>
 
+      {showTrailer ? (
+        <View style={st.trailerBody}>
+          <TrailerPlayer key={q.id} movie={q.movie as Movie} onEnded={() => setPhase('question')} />
+          <TouchableOpacity style={st.skipBtn} activeOpacity={0.85} onPress={() => setPhase('question')}>
+            <Text style={st.skipTxt}>Skip to question →</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
       <View style={st.body}>
         {/* Main column */}
         <View style={st.main}>
           <View style={st.qCard}>
-            <Text style={st.qContext}>
-              {(q.movie?.title ?? '').toUpperCase()} · FOR {money(PRIZES[idx])}
-            </Text>
+            <Text style={st.qContext}>FOR {money(PRIZES[idx])}</Text>
             <Text style={st.qText}>{q.question}</Text>
           </View>
 
@@ -368,6 +379,7 @@ export default function TriviaScreen() {
           </ScrollView>
         </View>
       </View>
+      )}
 
       <ConfettiBurst trigger={revealed && selected === q.correct_index} />
     </SafeAreaView>
@@ -399,6 +411,15 @@ const st = StyleSheet.create({
 
   body: { flex: 1, flexDirection: 'row' },
   main: { flex: 1, padding: SP.md, gap: SP.sm },
+
+  // Trailer phase
+  trailerBody: { flex: 1, backgroundColor: C.ink },
+  skipBtn: {
+    position: 'absolute', bottom: SP.md, right: SP.md,
+    borderWidth: 2, borderColor: C.ochre, borderRadius: R.btn,
+    backgroundColor: 'rgba(26,26,26,0.65)', paddingHorizontal: SP.lg, paddingVertical: 10,
+  },
+  skipTxt: { fontFamily: Fonts.display, fontSize: FS.md, color: C.ochre, letterSpacing: 1 },
 
   // Question
   qCard: {
