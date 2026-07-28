@@ -141,8 +141,18 @@ export default function TriviaScreen() {
         .limit(200);
       if (error) { setError(error.message); setLoading(false); return; }
       const all: Q[] = (data ?? []).map((r: any) => withShuffledOptions(mapRow(r)));
+      // At most one question per movie in a run — a film never repeats within a game (the
+      // bank may hold several questions per movie; we pick one at random each play).
+      const seenMovies = new Set<string>();
+      const uniqueByMovie: Q[] = [];
+      for (const item of shuffleArr(all)) {
+        const key = item.movie?.id ?? item.id;
+        if (seenMovies.has(key)) continue;
+        seenMovies.add(key);
+        uniqueByMovie.push(item);
+      }
       // Random subset each play (replay variety), ordered easy -> hard for the ladder.
-      const run = shuffleArr(all).slice(0, RUN_LEN).sort((a, b) => (a.difficulty_score ?? 0.5) - (b.difficulty_score ?? 0.5));
+      const run = uniqueByMovie.slice(0, RUN_LEN).sort((a, b) => (a.difficulty_score ?? 0.5) - (b.difficulty_score ?? 0.5));
       setQuestions(run);
       setLoading(false);
     })();
@@ -240,9 +250,13 @@ export default function TriviaScreen() {
     if (used.swap || revealed || swapping) return;
     setSwapping(true);
     const usedIds = new Set(questions.map(x => x.id));
+    // Exclude every movie already in the run, so a swap can't bring in a second question
+    // about a film that's already appeared this game.
+    const usedMovies = new Set(questions.map(x => x.movie?.id).filter(Boolean) as string[]);
     const { data } = await db.from('trivia_questions').select(SELECT_COLS)
       .eq('difficulty_band', q.difficulty_band).limit(30);
-    const pool = ((data ?? []) as any[]).map(mapRow).filter((x: Q) => !usedIds.has(x.id));
+    const pool = ((data ?? []) as any[]).map(mapRow)
+      .filter((x: Q) => !usedIds.has(x.id) && !usedMovies.has(x.movie?.id ?? ''));
     setSwapping(false);
     if (pool.length === 0) return; // no same-tier spare available — don't consume the lifeline
     const nq = withShuffledOptions(pool[Math.floor(Math.random() * pool.length)]);
@@ -275,8 +289,6 @@ export default function TriviaScreen() {
     );
   }
 
-  const tier = Math.floor(idx / 5) + 1;
-  const missNow = safeFloorBelow(idx, total);
   const answeredCorrect = revealed && selected === q.correct_index;
   // Reveal the film when the round concludes (correct, or a final wrong) — but NOT
   // when 2nd Chance is forgiving a wrong pick (the round continues).
@@ -311,6 +323,7 @@ export default function TriviaScreen() {
               ref={trailerRef}
               movie={trailerMovie as Movie}
               unmuteAfterMs={warmMs}
+              warmLeadMs={warmMs}
               onRevealed={() => setTrailerRevealed(true)}
               onEnded={() => { if (!countdown && phase === 'trailer') setPhase('question'); }}
             />
@@ -332,7 +345,7 @@ export default function TriviaScreen() {
         <>
           {!trailerRevealed && (
             <View style={[st.trailerScreen, StyleSheet.absoluteFill]} pointerEvents="none">
-              <Text style={st.coverIcon}>🎬</Text>
+              <Image source={lcClapperboard} style={st.coverImg} />
               <Text style={st.coverTxt}>Roll the trailer…</Text>
             </View>
           )}
@@ -348,7 +361,6 @@ export default function TriviaScreen() {
       {/* Header */}
       <View style={st.header}>
         <Text style={st.wordmark}>WHO WANTS TO BE A CINEPHILE</Text>
-        <Text style={st.headerMeta}>Q {idx + 1}/{total} · TIER {tier}</Text>
         <View style={st.headerRight}>
           <Text style={st.bankedLabel}>BANKED </Text>
           <Text style={st.bankedVal}>{money(banked)}</Text>
@@ -362,8 +374,7 @@ export default function TriviaScreen() {
         {/* Main column */}
         <View style={st.main}>
           <View style={st.qCard}>
-            <Text style={st.qContext}>FOR {money(PRIZES[idx])}</Text>
-            <Text style={st.qText}>{q.question}</Text>
+            <Text style={st.qText} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.7}>{q.question}</Text>
           </View>
 
           <View style={st.optionsGrid}>
@@ -411,7 +422,6 @@ export default function TriviaScreen() {
               )
             ) : (
               <>
-                <Text style={st.missNow}>MISS NOW → {money(missNow)}</Text>
                 <TouchableOpacity
                   style={[st.finalBtn, (selected === null || revealed) && st.finalBtnOff]}
                   disabled={selected === null || revealed}
@@ -500,11 +510,11 @@ const st = StyleSheet.create({
   walkTxt: { fontFamily: Fonts.display, fontSize: FS.base, color: D.wrong, letterSpacing: 1 },
 
   body: { flex: 1, flexDirection: 'row' },
-  main: { flex: 1, padding: SP.md, gap: SP.sm },
+  main: { flex: 1, paddingHorizontal: SP.md, paddingVertical: SP.sm, gap: SP.sm },
 
   // Trailer phase (full screen)
   trailerScreen: { flex: 1, backgroundColor: C.ink, alignItems: 'center', justifyContent: 'center' },
-  coverIcon: { fontSize: 44, marginBottom: SP.sm },
+  coverImg: { width: 104, height: 104, resizeMode: 'contain', marginBottom: SP.md },
   coverTxt: { fontFamily: Fonts.display, fontSize: FS.lg, color: C.ochre, letterSpacing: 1 },
   skipBtn: {
     position: 'absolute', bottom: SP.md, right: SP.md,
@@ -516,7 +526,9 @@ const st = StyleSheet.create({
   // Question
   qCard: {
     backgroundColor: D.panelHi, borderWidth: 2, borderColor: D.line, borderRadius: R.card,
-    paddingVertical: SP.md, paddingHorizontal: SP.lg, alignItems: 'center', gap: 6,
+    paddingVertical: SP.sm, paddingHorizontal: SP.lg, alignItems: 'center', justifyContent: 'center', gap: 6,
+    minHeight: 88,   // keep the card its full size after dropping the "FOR $X" label
+    flexShrink: 1,   // yield height on tall questions so the column never overflows/clips
   },
   qContext: { fontFamily: Fonts.label, fontSize: FS.xs, color: D.sub, letterSpacing: 2, textTransform: 'uppercase' },
   qText: { fontFamily: Fonts.display, fontSize: FS.xl, color: D.text, letterSpacing: 0.5, textAlign: 'center' },
@@ -524,9 +536,9 @@ const st = StyleSheet.create({
   // Options
   optionsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: SP.sm },
   option: {
-    width: '48.5%', minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: SP.sm,
+    width: '48.5%', minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: SP.sm,
     backgroundColor: D.panel, borderWidth: 2, borderColor: D.line, borderRadius: R.card,
-    paddingVertical: 10, paddingHorizontal: SP.md,
+    paddingVertical: 8, paddingHorizontal: SP.md,
   },
   optionSel: { borderColor: D.ochre, backgroundColor: 'rgba(245,197,24,0.22)' },
   optionCorrect: { borderColor: D.correct, backgroundColor: 'rgba(61,170,92,0.22)' },
@@ -540,7 +552,13 @@ const st = StyleSheet.create({
   optionTxt: { flex: 1, fontFamily: Fonts.bodyBold, fontSize: FS.md, color: D.text },
 
   // Action row
-  actionRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
+  // Stable height (~ the movie-reveal box) so the lifelines don't jump between the
+  // answering state (MISS NOW / FINAL ANSWER) and the reveal state. Natural top-down flow
+  // then keeps the lifelines in a consistent upper position with free space beneath them.
+  // Reserve the movie-reveal box's height (icon + "THE FILM WAS…" + year/director) up front,
+  // so the row is already this tall while answering — the lifelines below never shift when
+  // the reveal appears. qCard's flexShrink absorbs the reserved space on tall questions.
+  actionRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2, minHeight: 80 },
   missNow: { fontFamily: Fonts.label, fontSize: FS.sm, color: D.sub, letterSpacing: 1 },
   revealing: { flex: 1, textAlign: 'center', fontFamily: Fonts.display, fontSize: FS.lg, color: D.ochre, letterSpacing: 2 },
   revealBox: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2, paddingHorizontal: SP.sm },
@@ -556,7 +574,7 @@ const st = StyleSheet.create({
   finalTxt: { fontFamily: Fonts.display, fontSize: FS.md, color: C.textOnOchre, letterSpacing: 1 },
 
   // Lifelines
-  lifelines: { flexDirection: 'row', alignItems: 'center', gap: SP.sm, marginTop: 'auto' },
+  lifelines: { flexDirection: 'row', alignItems: 'center', gap: SP.sm },
   lifeLabel: { fontFamily: Fonts.label, fontSize: FS.xs, color: D.sub, letterSpacing: 2, marginRight: SP.xs },
   lifeBtn: { borderWidth: 2, borderColor: D.line, borderRadius: R.md, paddingHorizontal: SP.md, paddingVertical: 8, backgroundColor: C.surface },
   lifeBtnOff: { opacity: 0.4 },

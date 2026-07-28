@@ -21,6 +21,12 @@ interface TrailerPlayerProps {
   // absolute timestamp so the WebView fires at the right wall-clock moment.
   unmuteAfterMs?: number;
   onPlaying?: () => void;
+  // Pre-roll warm-up: begin playback this many ms BEFORE safe_start. Lets a caller start
+  // the player off-screen to burn YouTube's title card on the throwaway lead-in, so the
+  // playhead reaches safe_start exactly when the trailer is revealed — the viewer then
+  // gets the full [safe_start, safe_end] window with no title-reintroducing seek.
+  // No effect on dynamic-window (unscanned) movies. Defaults to 0 (unchanged behaviour).
+  warmLeadMs?: number;
 }
 
 export const TITLE_CARD_BURN = 4000; // ms after video starts playing before revealing the content
@@ -95,7 +101,7 @@ true;
 // ── TrailerPlayer ─────────────────────────────────────────────────────────────
 
 export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>(
-  function TrailerPlayer({ movie, onEnded, onRevealed, onWindowCalculated, unmuteAfterMs, onPlaying }, ref) {
+  function TrailerPlayer({ movie, onEnded, onRevealed, onWindowCalculated, unmuteAfterMs, onPlaying, warmLeadMs }, ref) {
     const { width, height } = useWindowDimensions();
 
     const ratio    = 16 / 9;
@@ -143,7 +149,13 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
     // Falls back to a 10s minimum so we don't shave a too-short window to nothing.
     const END_TRIM_SEC = 2;
     const safeEnd      = useDynamicWindow ? rawSafeEnd : Math.max(rawSafeEnd - END_TRIM_SEC, safeStart + 10);
-    const duration     = useDynamicWindow ? 40_000 : Math.max(safeEnd - safeStart, 10) * 1000;
+    // Pre-roll lead-in (scanned windows only): start `warmLeadMs` before safe_start so the
+    // title burns off-screen and the playhead reaches safe_start when the trailer is shown.
+    const leadSec  = warmLeadMs && !useDynamicWindow ? warmLeadMs / 1000 : 0;
+    const playStart = Math.max(0, safeStart - leadSec);
+    // Duration spans the ACTUAL playback (playStart→safeEnd) so the wall-clock backstop
+    // timer doesn't cut the window short when a lead-in is used.
+    const duration = useDynamicWindow ? 40_000 : Math.max(safeEnd - playStart, 10) * 1000;
 
     // Injection captured at mount so Date.now() reflects the actual mount time.
     // End-mute uses video-time (seconds), aligned ~0.5s before our active end-trigger
@@ -273,7 +285,7 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
         skipEndTimerOnReady.current = false;
         setEndOverlay(false);
         setPlaying(false);
-        const replayStart = useDynamicWindow ? dynStartRef.current : safeStart;
+        const replayStart = useDynamicWindow ? dynStartRef.current : playStart;
         setTimeout(() => {
           playerRef.current?.seekTo(replayStart, true);
           setPlaying(true);
@@ -308,7 +320,7 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
         }
       } else {
         seekToTimeRef.current = Date.now();
-        playerRef.current?.seekTo(safeStart, true);
+        playerRef.current?.seekTo(playStart, true);
       }
     }
 
@@ -343,7 +355,7 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
             videoId={movie.youtube_id!}
             play={playing}
             initialPlayerParams={{
-              start: safeStart,
+              start: playStart,
               end: safeEnd,
               mute: true,
               controls: false,
