@@ -6,7 +6,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView, Animated,
+  View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView, Animated, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAudioPlayer } from 'expo-audio';
@@ -21,6 +21,13 @@ import { TrailerPlayer } from '@/components/TrailerPlayer';
 import * as haptics from '@/lib/haptics';
 
 const db = supabase as unknown as { from: (t: string) => any };
+const lcClapperboard = require('../assets/lc-clapperboard.png');
+
+function shuffleArr<T>(a: T[]): T[] {
+  const r = [...a];
+  for (let i = r.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [r[i], r[j]] = [r[j], r[i]]; }
+  return r;
+}
 
 // Bright ligne-claire palette (matches the rest of the app): parchment + ink strokes.
 const D = {
@@ -42,6 +49,7 @@ const BADGE_COLORS = [C.ochre, C.cerulean, C.vermillion, C.leaf];
 const PRIZES = [100, 200, 300, 500, 1000, 2000, 4000, 8000, 16000, 32000, 64000, 125000, 250000, 500000, 1000000];
 const LETTERS = ['A', 'B', 'C', 'D'];
 const REVEAL_MS = 2800; // longer so the movie-reveal is readable
+const RUN_LEN = 10;     // questions per run (random subset of the bank)
 
 const SUSPENSE_MS = 2200;
 const isSafe = (i: number, total: number) => (i + 1) % 5 === 0 || i === total - 1;
@@ -58,6 +66,7 @@ type Q = {
   options: string[];
   correct_index: number;
   difficulty_band: string | null;
+  difficulty_score: number | null;
   category: string;
   movie: Movie | null;
 };
@@ -77,11 +86,12 @@ function withShuffledOptions(q: Q): Q {
   };
 }
 
-const SELECT_COLS = 'id,question,options,correct_index,difficulty_band,category,movies(*)';
+const SELECT_COLS = 'id,question,options,correct_index,difficulty_band,difficulty_score,category,movies(*)';
 function mapRow(r: any): Q {
   return {
     id: r.id, question: r.question, options: r.options, correct_index: r.correct_index,
-    difficulty_band: r.difficulty_band, category: r.category, movie: r.movies ?? null,
+    difficulty_band: r.difficulty_band, difficulty_score: r.difficulty_score ?? null,
+    category: r.category, movie: r.movies ?? null,
   };
 }
 
@@ -121,11 +131,12 @@ export default function TriviaScreen() {
       const { data, error } = await db
         .from('trivia_questions')
         .select(SELECT_COLS)
-        .order('difficulty_score', { ascending: true })
-        .limit(11);
+        .limit(200);
       if (error) { setError(error.message); setLoading(false); return; }
-      const qs: Q[] = (data ?? []).map((r: any) => withShuffledOptions(mapRow(r)));
-      setQuestions(qs);
+      const all: Q[] = (data ?? []).map((r: any) => withShuffledOptions(mapRow(r)));
+      // Random subset each play (replay variety), ordered easy -> hard for the ladder.
+      const run = shuffleArr(all).slice(0, RUN_LEN).sort((a, b) => (a.difficulty_score ?? 0.5) - (b.difficulty_score ?? 0.5));
+      setQuestions(run);
       setLoading(false);
     })();
     return () => {
@@ -273,7 +284,7 @@ export default function TriviaScreen() {
   // when 2nd Chance is forgiving a wrong pick (the round continues).
   const showMovieReveal = revealed && (answeredCorrect || !secondArmed);
   const revealSub = q.movie
-    ? `${q.movie.year ?? ''}${q.movie.director ? ` · dir. ${q.movie.director}` : ''}`
+    ? `${q.movie.year ?? ''}${q.movie.director ? ` - ${q.movie.director}` : ''}`
     : '';
 
   return (
@@ -303,7 +314,9 @@ export default function TriviaScreen() {
             {q.options.map((opt, i) => {
               if (hidden.includes(i)) return <View key={i} style={[st.option, st.optionHidden]} />;
               const isSel = selected === i;
-              const showCorrect = revealed && i === q.correct_index;
+              // Only reveal the correct option when the round concludes — never during a
+              // 2nd-Chance forgiven wrong (that would show the answer before the retry).
+              const showCorrect = showMovieReveal && i === q.correct_index;
               const showWrong = revealed && isSel && i !== q.correct_index;
               return (
                 <TouchableOpacity
@@ -333,7 +346,8 @@ export default function TriviaScreen() {
             ) : revealed ? (
               showMovieReveal ? (
                 <View style={st.revealBox}>
-                  <Text style={st.revealTitle} numberOfLines={2}>🎬 THE FILM WAS {(q.movie?.title ?? '').toUpperCase()}</Text>
+                  <Image source={lcClapperboard} style={st.revealIcon} />
+                  <Text style={st.revealTitle} numberOfLines={2}>THE FILM WAS {(q.movie?.title ?? '').toUpperCase()}</Text>
                   {!!revealSub && <Text style={st.revealSub}>{revealSub}</Text>}
                 </View>
               ) : (
@@ -470,6 +484,7 @@ const st = StyleSheet.create({
   missNow: { fontFamily: Fonts.label, fontSize: FS.sm, color: D.sub, letterSpacing: 1 },
   revealing: { flex: 1, textAlign: 'center', fontFamily: Fonts.display, fontSize: FS.lg, color: D.ochre, letterSpacing: 2 },
   revealBox: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2, paddingHorizontal: SP.sm },
+  revealIcon: { width: 26, height: 26, resizeMode: 'contain', marginBottom: 2 },
   revealTitle: { fontFamily: Fonts.display, fontSize: FS.md, color: D.text, letterSpacing: 0.5, textAlign: 'center' },
   revealSub: { fontFamily: Fonts.label, fontSize: FS.sm, color: D.sub, letterSpacing: 1, textAlign: 'center' },
   retryHint: { flex: 1, textAlign: 'center', fontFamily: Fonts.display, fontSize: FS.md, color: D.wrong, letterSpacing: 1 },
