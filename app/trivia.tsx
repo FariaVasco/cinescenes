@@ -41,7 +41,7 @@ const BADGE_COLORS = [C.ochre, C.cerulean, C.vermillion, C.leaf];
 // Classic prize ladder; a run uses the first `total` rungs (total = # questions).
 const PRIZES = [100, 200, 300, 500, 1000, 2000, 4000, 8000, 16000, 32000, 64000, 125000, 250000, 500000, 1000000];
 const LETTERS = ['A', 'B', 'C', 'D'];
-const REVEAL_MS = 1600;
+const REVEAL_MS = 2800; // longer so the movie-reveal is readable
 
 const SUSPENSE_MS = 2200;
 const isSafe = (i: number, total: number) => (i + 1) % 5 === 0 || i === total - 1;
@@ -268,6 +268,13 @@ export default function TriviaScreen() {
 
   const tier = Math.floor(idx / 5) + 1;
   const missNow = safeFloorBelow(idx, total);
+  const answeredCorrect = revealed && selected === q.correct_index;
+  // Reveal the film when the round concludes (correct, or a final wrong) — but NOT
+  // when 2nd Chance is forgiving a wrong pick (the round continues).
+  const showMovieReveal = revealed && (answeredCorrect || !secondArmed);
+  const revealSub = q.movie
+    ? `${q.movie.year ?? ''}${q.movie.director ? ` · dir. ${q.movie.director}` : ''}`
+    : '';
 
   return (
     <SafeAreaView style={st.screen} edges={['top', 'bottom', 'left', 'right']}>
@@ -323,6 +330,15 @@ export default function TriviaScreen() {
           <View style={st.actionRow}>
             {suspense ? (
               <Animated.Text style={[st.revealing, { opacity: pulse }]}>REVEALING…</Animated.Text>
+            ) : revealed ? (
+              showMovieReveal ? (
+                <View style={st.revealBox}>
+                  <Text style={st.revealTitle} numberOfLines={2}>🎬 THE FILM WAS {(q.movie?.title ?? '').toUpperCase()}</Text>
+                  {!!revealSub && <Text style={st.revealSub}>{revealSub}</Text>}
+                </View>
+              ) : (
+                <Text style={st.retryHint}>SECOND CHANCE — PICK AGAIN</Text>
+              )
             ) : (
               <>
                 <Text style={st.missNow}>MISS NOW → {money(missNow)}</Text>
@@ -453,6 +469,10 @@ const st = StyleSheet.create({
   actionRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
   missNow: { fontFamily: Fonts.label, fontSize: FS.sm, color: D.sub, letterSpacing: 1 },
   revealing: { flex: 1, textAlign: 'center', fontFamily: Fonts.display, fontSize: FS.lg, color: D.ochre, letterSpacing: 2 },
+  revealBox: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2, paddingHorizontal: SP.sm },
+  revealTitle: { fontFamily: Fonts.display, fontSize: FS.md, color: D.text, letterSpacing: 0.5, textAlign: 'center' },
+  revealSub: { fontFamily: Fonts.label, fontSize: FS.sm, color: D.sub, letterSpacing: 1, textAlign: 'center' },
+  retryHint: { flex: 1, textAlign: 'center', fontFamily: Fonts.display, fontSize: FS.md, color: D.wrong, letterSpacing: 1 },
   finalBtn: {
     marginLeft: 'auto', borderWidth: 2, borderColor: D.line, borderRadius: R.btn,
     paddingHorizontal: SP.lg, paddingVertical: 8, backgroundColor: D.ochre,
