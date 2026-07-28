@@ -432,7 +432,7 @@ const st = StyleSheet.create({
   qText: { fontFamily: Fonts.display, fontSize: FS.xl, color: D.text, letterSpacing: 0.5, textAlign: 'center' },
 
   // Options
-  optionsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SP.sm },
+  optionsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: SP.sm },
   option: {
     width: '48.5%', flexDirection: 'row', alignItems: 'center', gap: SP.sm,
     backgroundColor: D.panel, borderWidth: 2, borderColor: D.line, borderRadius: R.card,
