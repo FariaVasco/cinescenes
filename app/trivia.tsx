@@ -154,8 +154,30 @@ export default function TriviaScreen() {
         seenMovies.add(key);
         uniqueByMovie.push(item);
       }
-      // Random subset each play (replay variety), ordered easy -> hard for the ladder.
-      const run = uniqueByMovie.slice(0, RUN_LEN).sort((a, b) => (a.difficulty_score ?? 0.5) - (b.difficulty_score ?? 0.5));
+      // Round-robin across categories (not a random slice) so a run doesn't cluster
+      // same-topic questions — e.g. several literal "Who directed this film?" questions
+      // in one run, since that single-category generator now makes up ~20% of the bank.
+      // Once a smaller category's bucket runs dry, remaining slots fall back to whatever
+      // categories still have supply — this maximizes diversity given what's available
+      // rather than leaving slots unfilled.
+      const byCategory = new Map<string, Q[]>();
+      for (const item of uniqueByMovie) {
+        const key = item.category ?? 'production';
+        const bucket = byCategory.get(key) ?? [];
+        bucket.push(item);
+        byCategory.set(key, bucket);
+      }
+      const categoryOrder = shuffleArr([...byCategory.keys()]);
+      const picked: Q[] = [];
+      while (picked.length < RUN_LEN && categoryOrder.some(c => (byCategory.get(c) ?? []).length)) {
+        for (const c of categoryOrder) {
+          if (picked.length >= RUN_LEN) break;
+          const bucket = byCategory.get(c);
+          if (bucket?.length) picked.push(bucket.shift()!);
+        }
+      }
+      // Ordered easy -> hard for the ladder.
+      const run = picked.sort((a, b) => (a.difficulty_score ?? 0.5) - (b.difficulty_score ?? 0.5));
       setQuestions(run);
       setLoading(false);
     })();
