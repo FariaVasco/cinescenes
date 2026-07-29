@@ -20,7 +20,8 @@ const lcSpotlight     = require('@/assets/lc-spotlight.png');
 const lcTrophy        = require('@/assets/lc-trophy.png');
 const lcSpinningWheel = require('@/assets/lc-spinning-wheel.png');
 
-export const RULES_STEPS = [
+// Multiplayer (timeline) game.
+export const MULTIPLAYER_STEPS = [
   {
     icon: lcClapperboard,
     title: 'Draw a Card',
@@ -77,18 +78,85 @@ export const RULES_STEPS = [
   },
 ];
 
+// Single-player trivia ("Who Wants to Be a Cinephile").
+export const SINGLE_PLAYER_STEPS = [
+  {
+    icon: lcPopcorn,
+    title: 'Watch the Trailer',
+    body: 'A trailer plays with no title, year or director. Work out the film — tap "Skip to question" whenever you\'re ready.',
+    accent: C.cerulean,
+  },
+  {
+    icon: lcLightning,
+    title: 'Answer the Question',
+    body: 'Four options, one correct — about that film\'s casting, production, awards or behind-the-scenes trivia.',
+    accent: C.vermillion,
+  },
+  {
+    icon: lcCoin,
+    title: 'Climb the Ladder',
+    body: 'Each correct answer moves you up the prize ladder, from $100 all the way to $1,000,000.',
+    accent: C.ochre,
+  },
+  {
+    icon: lcSpotlight,
+    title: 'Final Answer',
+    body: 'Lock in your pick. Get it right and you bank the prize and climb; get it wrong and the game ends.',
+    accent: C.cerulean,
+  },
+  {
+    icon: lcTrophy,
+    title: 'Safe Rungs',
+    body: 'Pass a rung marked SAFE and that amount is guaranteed — even if you miss further up the ladder.',
+    accent: C.leaf,
+  },
+  {
+    icon: lcSpinningWheel,
+    title: 'Lifelines',
+    body: '50:50 drops two wrong answers. Swap trades the question. 2nd Chance forgives one wrong pick (arm it before you answer). One use each per game.',
+    accent: C.vermillion,
+  },
+  {
+    icon: lcHourglass,
+    title: 'Walk Away',
+    body: 'Not sure you want to risk it? Walk away any time and keep everything you\'ve banked.',
+    accent: C.ochre,
+  },
+  {
+    icon: lcClapperboard,
+    title: 'One Film per Game',
+    body: 'Every question is a different movie — no film ever shows up twice in the same game.',
+    accent: C.cerulean,
+  },
+];
+
+export type RulesMode = 'multiplayer' | 'single';
+
 type Props = {
   /** If provided, the final slide shows a primary CTA that calls this. */
   onComplete?: () => void;
   /** Label for the final-slide CTA. Defaults to "Let's Play". */
   completeLabel?: string;
+  /** Which mode's rules to show first. Defaults to multiplayer. */
+  mode?: RulesMode;
 };
 
-export function RulesCarousel({ onComplete, completeLabel = "Let's Play" }: Props) {
+export function RulesCarousel({ onComplete, completeLabel = "Let's Play", mode: initialMode = 'multiplayer' }: Props) {
+  const [mode, setMode] = useState<RulesMode>(initialMode);
   const [page, setPage] = useState(0);
   const [width, setWidth] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
+
+  const steps = mode === 'single' ? SINGLE_PLAYER_STEPS : MULTIPLAYER_STEPS;
+
+  function switchMode(m: RulesMode) {
+    if (m === mode) return;
+    setMode(m);
+    setPage(0);
+    scrollRef.current?.scrollTo({ x: 0, animated: false });
+    scrollX.setValue(0);
+  }
 
   function handleScroll(e: any) {
     if (!width) return;
@@ -102,13 +170,26 @@ export function RulesCarousel({ onComplete, completeLabel = "Let's Play" }: Prop
     setPage(index);
   }
 
-  const isLast = page === RULES_STEPS.length - 1;
+  const isLast = page === steps.length - 1;
 
   return (
     <View
       style={styles.wrap}
       onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
     >
+      <View style={styles.modeToggle}>
+        {([['single', 'SINGLE PLAYER'], ['multiplayer', 'MULTIPLAYER']] as const).map(([m, label]) => (
+          <TouchableOpacity
+            key={m}
+            onPress={() => switchMode(m)}
+            style={[styles.modeBtn, mode === m && styles.modeBtnActive]}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.modeTxt, mode === m && styles.modeTxtActive]}>{label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
       <ScrollView
         ref={scrollRef}
         horizontal
@@ -121,7 +202,7 @@ export function RulesCarousel({ onComplete, completeLabel = "Let's Play" }: Prop
         scrollEventThrottle={16}
         style={styles.pager}
       >
-        {RULES_STEPS.map((step, i) => (
+        {steps.map((step, i) => (
           <View key={i} style={[styles.slide, { width }]}>
             <View style={styles.card}>
               <View style={styles.cardLeft}>
@@ -155,7 +236,7 @@ export function RulesCarousel({ onComplete, completeLabel = "Let's Play" }: Prop
         </CinemaButton>
 
         <View style={styles.dots}>
-          {RULES_STEPS.map((_, i) => {
+          {steps.map((_, i) => {
             const inputRange = [(i - 1) * width, i * width, (i + 1) * width];
             const dotWidth = width
               ? scrollX.interpolate({ inputRange, outputRange: [7, 22, 7], extrapolate: 'clamp' })
@@ -193,6 +274,27 @@ export function RulesCarousel({ onComplete, completeLabel = "Let's Play" }: Prop
 
 const styles = StyleSheet.create({
   wrap: { flex: 1 },
+
+  // Segmented mode switcher (Single Player · Multiplayer)
+  modeToggle: {
+    flexDirection: 'row',
+    alignSelf: 'center',
+    gap: SP.xs,
+    marginTop: SP.sm,
+    backgroundColor: C.surfaceWarm,
+    borderWidth: 2,
+    borderColor: C.ink,
+    borderRadius: R.full,
+    padding: 3,
+  },
+  modeBtn: {
+    paddingHorizontal: SP.md,
+    paddingVertical: 6,
+    borderRadius: R.full,
+  },
+  modeBtnActive: { backgroundColor: C.ochre },
+  modeTxt: { fontFamily: Fonts.display, fontSize: FS.sm, color: C.textSub, letterSpacing: 1 },
+  modeTxtActive: { color: C.ink },
 
   pager: { flex: 1 },
 
