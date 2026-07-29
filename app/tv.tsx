@@ -61,7 +61,7 @@ function TVScreenCore({ gameId, onExit }: { gameId: string; onExit?: () => void 
       setMovie(movieCacheRef.current.get(movieId)!);
       return;
     }
-    const { data } = await db.from('movies').select('*').eq('id', movieId).single();
+    const { data } = await db.from('movies').select('*').eq('id', movieId).in('scan_status', ['validated', 'unvalidated']).single();
     if (data) { movieCacheRef.current.set(movieId, data as Movie); setMovie(data as Movie); }
     else setMovie(null);
   }

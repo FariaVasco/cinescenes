@@ -142,7 +142,7 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
     // True when this movie has no scanned safe window (typical for fresh insane-mode TMDb
     // pulls), so we fall back to the dynamic midpoint ±15s heuristic. Independent of game
     // mode — an insane-mode game can still hit this branch off a previously-scanned movie.
-    const useDynamicWindow = movie.safe_start === null;
+    const useDynamicWindow = movie.safe_start === null || movie.safe_start < 0;
     const safeStart  = movie.safe_start ?? 0;
     const rawSafeEnd = movie.safe_end ?? (useDynamicWindow ? 99999 : 60);
     // Cut a couple of seconds off the safe window to stop cleanly before the video ends.
@@ -249,14 +249,18 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
 
     // The single authority on "playback is really happening": notifies the game
     // and starts the title-card burn from THIS moment. Nothing else reveals.
+    // The burn must last at least `leadSec` — playback started at playStart =
+    // safeStart - leadSec, so revealing any sooner than leadSec after confirmed
+    // playback would show the video before it reaches safeStart (spoiler leak).
     function markPlaying() {
       if (videoPlayingRef.current) return;
       videoPlayingRef.current = true;
       stopPlaybackProbe();
-      log(`[CS] playback confirmed    t=${ms()}  → burn ${TITLE_CARD_BURN}ms`);
+      const burnMs = Math.max(TITLE_CARD_BURN, leadSec * 1000);
+      log(`[CS] playback confirmed    t=${ms()}  → burn ${burnMs}ms`);
       onPlaying?.();
       if (fallbackRef.current) clearTimeout(fallbackRef.current);
-      fallbackRef.current = setTimeout(() => doReveal(), TITLE_CARD_BURN);
+      fallbackRef.current = setTimeout(() => doReveal(), burnMs);
     }
 
     useImperativeHandle(ref, () => ({

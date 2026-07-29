@@ -49,7 +49,7 @@ const BADGE_COLORS = [C.ochre, C.cerulean, C.vermillion, C.leaf];
 const PRIZES = [100, 200, 300, 500, 1000, 2000, 4000, 8000, 16000, 32000, 64000, 125000, 250000, 500000, 1000000];
 const LETTERS = ['A', 'B', 'C', 'D'];
 const REVEAL_MS = 2800; // longer so the movie-reveal is readable
-const RUN_LEN = 10;     // questions per run (random subset of the bank)
+const RUN_LEN = 15;     // questions per run (random subset of the bank) — full $100 → $1,000,000 ladder
 
 const SUSPENSE_MS = 2200;
 const isSafe = (i: number, total: number) => (i + 1) % 5 === 0 || i === total - 1;
@@ -128,6 +128,9 @@ export default function TriviaScreen() {
   const [trailerIdx, setTrailerIdx] = useState(0);
   const [trailerRevealed, setTrailerRevealed] = useState(false);
   const trailerRef = useRef<TrailerPlayerHandle>(null);
+  const ladderRef = useRef<ScrollView>(null);
+  const [ladderViewportH, setLadderViewportH] = useState(0);
+  const [ladderContentH, setLadderContentH] = useState(0);
 
   useFocusEffect(useCallback(() => {
     ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
@@ -173,6 +176,27 @@ export default function TriviaScreen() {
     loop.start();
     return () => { loop.stop(); pulse.setValue(1); };
   }, [suspense]);
+
+  // Keep the current rung in view as the player climbs. The scroll list holds every rung
+  // except the pinned top prize, ordered highest -> lowest; the current rung's index in it
+  // is (total-2 - idx). We center it in the visible viewport, clamping the scroll offset to
+  // the content's real bounds — near either end of the ladder that clamp is what stops us
+  // scrolling past the edge, so the highlight naturally drifts off-center there instead of
+  // (as before) the current rung ending up entirely outside the unbounded ScrollView.
+  // Not animated: the ladder only exists while the question screen is mounted (it unmounts
+  // during the trailer, where `idx` actually advances), so this only ever runs right as the
+  // screen appears — an animated scroll there just reads as an unwanted jump, never a climb.
+  useEffect(() => {
+    const total = questions.length;
+    if (!ladderViewportH || !ladderContentH || total < 2) return;
+    const rowH = ladderContentH / (total - 1);
+    const listPos = (total - 2) - idx;
+    const itemTop = listPos * rowH;
+    const maxOffset = Math.max(0, ladderContentH - ladderViewportH);
+    const centered = itemTop - (ladderViewportH - rowH) / 2;
+    const offset = Math.min(Math.max(centered, 0), maxOffset);
+    ladderRef.current?.scrollTo({ y: offset, animated: false });
+  }, [idx, questions.length, ladderViewportH, ladderContentH]);
 
   // Audio silence is handled by UNMOUNTING the trailer during open answering (see
   // `renderTrailer` below) rather than pausing it — an unmounted WebView can't play sound,
@@ -310,6 +334,21 @@ export default function TriviaScreen() {
   // the opening countdown) or actually on-screen (trailer phase). During open answering we
   // unmount it entirely — that's what guarantees Skip/answering leaves no audio playing.
   const renderTrailer = hasTrailer && (phase === 'trailer' || suspense || revealed);
+
+  // One prize-ladder rung. `pinned` marks the always-visible top prize (fixed header).
+  const renderRung = (i: number, pinned = false) => {
+    const current = i === idx;
+    const top = i === total - 1;
+    const safe = isSafe(i, total) && !top;
+    return (
+      <View key={i} style={[st.rung, pinned && st.rungPinned, current && st.rungCurrent, safe && !current && st.rungSafe, top && !current && st.rungTop]}>
+        <Text style={[st.rungNum, current && st.rungNumCur]}>{i + 1}</Text>
+        <Text style={[st.rungAmt, current && st.rungAmtCur, safe && !current && st.rungAmtSafe, top && !current && st.rungAmtTop]}>{money(PRIZES[i])}</Text>
+        {safe && <Text style={[st.safeTag, current && st.safeTagCur]}>SAFE</Text>}
+        {top && <Text style={[st.safeTag, current && st.safeTagCur, top && !current && st.safeTagTop]}>JACKPOT</Text>}
+      </View>
+    );
+  };
 
   return (
     <View style={st.screen}>
@@ -460,21 +499,19 @@ export default function TriviaScreen() {
           </View>
         </View>
 
-        {/* Prize ladder */}
+        {/* Prize ladder — top prize pinned as a fixed header; the rest scrolls and
+            follows the current rung as the player climbs. */}
         <View style={st.ladder}>
           <Text style={st.ladderTitle}>PRIZE LADDER</Text>
-          <ScrollView showsVerticalScrollIndicator={false}>
-            {Array.from({ length: total }, (_, i) => total - 1 - i).map((i) => {
-              const current = i === idx;
-              const safe = isSafe(i, total);
-              return (
-                <View key={i} style={[st.rung, current && st.rungCurrent, safe && !current && st.rungSafe]}>
-                  <Text style={[st.rungNum, current && st.rungNumCur]}>{i + 1}</Text>
-                  <Text style={[st.rungAmt, current && st.rungAmtCur, safe && !current && st.rungAmtSafe]}>{money(PRIZES[i])}</Text>
-                  {safe && <Text style={[st.safeTag, current && st.safeTagCur]}>SAFE</Text>}
-                </View>
-              );
-            })}
+          {renderRung(total - 1, true)}
+          <ScrollView
+            ref={ladderRef}
+            style={st.ladderScroll}
+            showsVerticalScrollIndicator={false}
+            onLayout={(e) => setLadderViewportH(e.nativeEvent.layout.height)}
+            onContentSizeChange={(_, h) => setLadderContentH(h)}
+          >
+            {Array.from({ length: total - 1 }, (_, i) => total - 2 - i).map((i) => renderRung(i))}
           </ScrollView>
         </View>
       </View>
@@ -585,17 +622,22 @@ const st = StyleSheet.create({
 
   // Prize ladder
   ladder: { width: 168, borderLeftWidth: 2, borderLeftColor: D.line, paddingHorizontal: SP.sm, paddingTop: SP.sm, backgroundColor: C.surfaceHigh },
+  ladderScroll: { flex: 1 },
   ladderTitle: { fontFamily: Fonts.label, fontSize: FS.xs, color: D.sub, letterSpacing: 2, marginBottom: SP.sm, textAlign: 'center' },
   rung: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, paddingHorizontal: SP.sm, borderRadius: R.sm, gap: SP.sm },
+  rungPinned: { borderBottomWidth: 2, borderBottomColor: D.lineSoft, borderRadius: 0, marginBottom: 4, paddingBottom: 8 },
   rungCurrent: { backgroundColor: D.ochre },
   rungSafe: { backgroundColor: 'rgba(61,170,92,0.16)' },
+  rungTop: { backgroundColor: 'rgba(245,197,24,0.32)' },
   rungNum: { fontFamily: Fonts.bodyBold, fontSize: FS.sm, color: D.sub, width: 22, textAlign: 'right' },
   rungNumCur: { color: C.ink },
   rungAmt: { fontFamily: Fonts.bodyBold, fontSize: FS.base, color: D.text },
   rungAmtCur: { color: C.ink },
   rungAmtSafe: { color: D.correct },
+  rungAmtTop: { color: C.textOnOchre },
   safeTag: { marginLeft: 'auto', fontFamily: Fonts.label, fontSize: FS.micro, color: D.correct, letterSpacing: 1 },
   safeTagCur: { color: C.ink },
+  safeTagTop: { color: C.textOnOchre },
 
   // End / misc
   endOver: { fontFamily: Fonts.display, fontSize: FS['2xl'], color: D.ochre, letterSpacing: 1 },

@@ -701,9 +701,9 @@ export default function GameScreen() {
     const m = activeMovies.find((mv) => mv.id === currentTurn?.movie_id) ?? movieOverride;
     const safeStart = m?.safe_start ?? null;
     const safeEnd = m?.safe_end ?? null;
-    const minMs = (safeStart !== null && safeEnd !== null)
+    const minMs = (safeStart !== null && safeEnd !== null && safeStart >= 0 && safeEnd >= 0)
       ? ((safeEnd - safeStart) / 2) * 1000
-      : 15_000; // insane mode default (safe_start is null)
+      : 15_000; // insane mode default (safe_start is null or an unusable-scan sentinel)
     skipTimerRef.current = setTimeout(() => setCanSkipTrailer(true), minMs);
     return () => { if (skipTimerRef.current) { clearTimeout(skipTimerRef.current); skipTimerRef.current = null; } };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -718,7 +718,7 @@ export default function GameScreen() {
       setMovieOverride(insaneMoviesCacheRef.current.get(id)!);
       return;
     }
-    db.from('movies').select('*').eq('id', id).single()
+    db.from('movies').select('*').eq('id', id).in('scan_status', ['validated', 'unvalidated']).single()
       .then(({ data }: { data: Movie | null }) => {
         if (data) {
           insaneMoviesCacheRef.current.set(id, data);
@@ -1094,7 +1094,7 @@ export default function GameScreen() {
           ].map(t => t.movie_id))];
           const missingIds = allWonIds.filter(id => !activeMovies.find(m => m.id === id));
           if (missingIds.length > 0) {
-            const { data: missing } = await db.from('movies').select('*').in('id', missingIds) as { data: Movie[] | null };
+            const { data: missing } = await db.from('movies').select('*').in('id', missingIds).in('scan_status', ['validated', 'unvalidated']) as { data: Movie[] | null };
             if (missing?.length) setActiveMovies([...activeMovies, ...missing]);
           }
           const nextActivePairs = wonTurnsToPairs(activeWonTurns ?? []);
@@ -1281,7 +1281,7 @@ export default function GameScreen() {
     const allWonIds = [...new Set([...(myWonTurns ?? []), ...(activeWonTurns ?? [])].map(t => t.movie_id))];
     const missingIds = allWonIds.filter(id => !activeMovies.find(m => m.id === id));
     if (missingIds.length > 0) {
-      const { data: missing } = await db.from('movies').select('*').in('id', missingIds) as { data: Movie[] | null };
+      const { data: missing } = await db.from('movies').select('*').in('id', missingIds).in('scan_status', ['validated', 'unvalidated']) as { data: Movie[] | null };
       if (missing?.length) setActiveMovies([...activeMovies, ...missing]);
     }
 
@@ -1688,7 +1688,7 @@ export default function GameScreen() {
       const [movieResult, freshPlayersResult, existingNextResult, pastTurnsResult] = await Promise.all([
         movieFromCache
           ? Promise.resolve({ data: movieFromCache })
-          : db.from('movies').select('*').eq('id', ct.movie_id).single(),
+          : db.from('movies').select('*').eq('id', ct.movie_id).in('scan_status', ['validated', 'unvalidated']).single(),
         db.from('players').select('*').eq('game_id', g.id).is('left_at', null).order('created_at') as Promise<{ data: Player[] | null }>,
         db.from('turns').select('id').eq('game_id', g.id).neq('status', 'complete').gt('created_at', ct.created_at).limit(1) as Promise<{ data: { id: string }[] | null }>,
         g.game_mode !== 'insane'
