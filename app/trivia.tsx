@@ -131,10 +131,31 @@ export default function TriviaScreen() {
   const ladderRef = useRef<ScrollView>(null);
   const [ladderViewportH, setLadderViewportH] = useState(0);
   const [ladderContentH, setLadderContentH] = useState(0);
+  // The question card, options, action row and lifelines were sized with fixed pixel
+  // values tuned on an iPhone — on an Android device with less available landscape
+  // height, the same fixed sizes don't all fit, and since nothing below the question
+  // card could shrink, the lifelines row (and even Final Answer) got pushed off-screen
+  // with no way to reach them. Measure the actual available height and scale every
+  // fixed size down together so everything always fits, floored at 62% so text/tap
+  // targets never get illegibly small; a ScrollView around the column is the backstop
+  // for any device tight enough that even the floor doesn't fit.
+  const [mainH, setMainH] = useState(0);
+  const DESIGN_MAIN_H = 380;
+  const scale = Math.max(0.62, mainH ? Math.min(1, mainH / DESIGN_MAIN_H) : 1);
+  const sc = (px: number) => Math.round(px * scale);
 
   useFocusEffect(useCallback(() => {
     ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
   }, []));
+
+  // Re-assert the lock at the countdown -> gameplay transition too — a single lock
+  // on focus can silently fail to hold (OS flakiness resuming from background, a
+  // rotation animation racing the first mount), leaving TrailerPlayer's
+  // useWindowDimensions()-based sizing computed against a stale portrait window for
+  // the rest of the session. Mirrors game.tsx re-locking at its loading/intro transitions.
+  useEffect(() => {
+    if (!countdown) ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+  }, [countdown]);
 
   useEffect(() => {
     (async () => {
@@ -160,21 +181,47 @@ export default function TriviaScreen() {
       // Once a smaller category's bucket runs dry, remaining slots fall back to whatever
       // categories still have supply — this maximizes diversity given what's available
       // rather than leaving slots unfilled.
-      const byCategory = new Map<string, Q[]>();
-      for (const item of uniqueByMovie) {
-        const key = item.category ?? 'production';
-        const bucket = byCategory.get(key) ?? [];
-        bucket.push(item);
-        byCategory.set(key, bucket);
-      }
-      const categoryOrder = shuffleArr([...byCategory.keys()]);
-      const picked: Q[] = [];
-      while (picked.length < RUN_LEN && categoryOrder.some(c => (byCategory.get(c) ?? []).length)) {
-        for (const c of categoryOrder) {
-          if (picked.length >= RUN_LEN) break;
-          const bucket = byCategory.get(c);
-          if (bucket?.length) picked.push(bucket.shift()!);
+      function pickByCategory(pool: Q[], n: number): Q[] {
+        const byCategory = new Map<string, Q[]>();
+        for (const item of pool) {
+          const key = item.category ?? 'production';
+          const bucket = byCategory.get(key) ?? [];
+          bucket.push(item);
+          byCategory.set(key, bucket);
         }
+        const categoryOrder = shuffleArr([...byCategory.keys()]);
+        const out: Q[] = [];
+        while (out.length < n && categoryOrder.some(c => (byCategory.get(c) ?? []).length)) {
+          for (const c of categoryOrder) {
+            if (out.length >= n) break;
+            const bucket = byCategory.get(c);
+            if (bucket?.length) out.push(bucket.shift()!);
+          }
+        }
+        return out;
+      }
+      // Stratify by difficulty band FIRST, then round-robin categories within each band.
+      // Category diversity alone can't guarantee an actual easy start — a random draw
+      // could land mostly medium/hard "production" questions and few/no true-easy ones,
+      // so the ladder's early rungs end up harder than intended even though the final
+      // sort is correct for whatever got picked. Explicitly reserving slots per band
+      // fixes that at the source.
+      const BAND_ORDER = ['easy', 'medium', 'hard'] as const;
+      const TARGET_PER_BAND = Math.floor(RUN_LEN / BAND_ORDER.length);
+      const byBand = new Map<string, Q[]>();
+      for (const item of uniqueByMovie) {
+        const key = item.difficulty_band ?? 'medium';
+        const bucket = byBand.get(key) ?? [];
+        bucket.push(item);
+        byBand.set(key, bucket);
+      }
+      const picked: Q[] = [];
+      for (const band of BAND_ORDER) picked.push(...pickByCategory(byBand.get(band) ?? [], TARGET_PER_BAND));
+      // A band short on supply shouldn't shrink the run — top up from whatever's left.
+      if (picked.length < RUN_LEN) {
+        const pickedIds = new Set(picked.map(p => p.id));
+        const leftover = uniqueByMovie.filter(item => !pickedIds.has(item.id));
+        picked.push(...pickByCategory(leftover, RUN_LEN - picked.length));
       }
       // Ordered easy -> hard for the ladder.
       const run = picked.sort((a, b) => (a.difficulty_score ?? 0.5) - (b.difficulty_score ?? 0.5));
@@ -378,7 +425,7 @@ export default function TriviaScreen() {
           so its YouTube title burns off before it's visible; unmounted during answering. */}
       {renderTrailer && (
         <View style={StyleSheet.absoluteFill}>
-          <View style={st.trailerScreen}>
+          <View style={st.trailerVideoWrap}>
             <TrailerPlayer
               key={(trailerMovie as Movie).id}
               ref={trailerRef}
@@ -432,15 +479,18 @@ export default function TriviaScreen() {
       </View>
 
       <View style={st.body}>
-        {/* Main column */}
-        <View style={st.main}>
-          <View style={st.qCard}>
-            <Text style={st.qText} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.7}>{q.question}</Text>
+        {/* Main column — onLayout measures the UNSCALED available height (this View's
+            own size comes from flex:1 in the parent row, independent of `scale`, so
+            measuring it can't feed back into itself / thrash). */}
+        <View style={st.main} onLayout={(e) => setMainH(e.nativeEvent.layout.height)}>
+          <ScrollView contentContainerStyle={{ flexGrow: 1, gap: sc(SP.sm) }} showsVerticalScrollIndicator={false}>
+          <View style={[st.qCard, { minHeight: sc(88), paddingVertical: sc(SP.sm), paddingHorizontal: sc(SP.lg), gap: sc(6) }]}>
+            <Text style={[st.qText, { fontSize: sc(FS.xl) }]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.7}>{q.question}</Text>
           </View>
 
-          <View style={st.optionsGrid}>
+          <View style={[st.optionsGrid, { rowGap: sc(SP.sm) }]}>
             {q.options.map((opt, i) => {
-              if (hidden.includes(i)) return <View key={i} style={[st.option, st.optionHidden]} />;
+              if (hidden.includes(i)) return <View key={i} style={[st.option, st.optionHidden, { minHeight: sc(44) }]} />;
               const isSel = selected === i;
               // Only reveal the correct option when the round concludes — never during a
               // 2nd-Chance forgiven wrong (that would show the answer before the retry).
@@ -451,6 +501,7 @@ export default function TriviaScreen() {
                   key={i}
                   style={[
                     st.option,
+                    { minHeight: sc(44), gap: sc(SP.sm), paddingVertical: sc(8), paddingHorizontal: sc(SP.md) },
                     isSel && !revealed && st.optionSel,
                     showCorrect && st.optionCorrect,
                     showWrong && st.optionWrong,
@@ -459,66 +510,67 @@ export default function TriviaScreen() {
                   disabled={revealed || suspense}
                   onPress={() => setSelected(i)}
                 >
-                  <View style={[st.badge, { backgroundColor: BADGE_COLORS[i] }]}>
-                    <Text style={[st.badgeTxt, { color: BADGE_COLORS[i] === C.ochre ? C.ink : '#FFF' }]}>{LETTERS[i]}</Text>
+                  <View style={[st.badge, { width: sc(26), height: sc(26), backgroundColor: BADGE_COLORS[i] }]}>
+                    <Text style={[st.badgeTxt, { fontSize: sc(FS.sm), color: BADGE_COLORS[i] === C.ochre ? C.ink : '#FFF' }]}>{LETTERS[i]}</Text>
                   </View>
-                  <Text style={st.optionTxt} numberOfLines={2}>{opt}</Text>
+                  <Text style={[st.optionTxt, { fontSize: sc(FS.md) }]} numberOfLines={2}>{opt}</Text>
                 </TouchableOpacity>
               );
             })}
           </View>
 
-          <View style={st.actionRow}>
+          <View style={[st.actionRow, { minHeight: sc(80) }]}>
             {suspense ? (
-              <Animated.Text style={[st.revealing, { opacity: pulse }]}>REVEALING…</Animated.Text>
+              <Animated.Text style={[st.revealing, { fontSize: sc(FS.lg), opacity: pulse }]}>REVEALING…</Animated.Text>
             ) : revealed ? (
               showMovieReveal ? (
                 <View style={st.revealBox}>
-                  <Image source={lcClapperboard} style={st.revealIcon} />
-                  <Text style={st.revealTitle} numberOfLines={2}>THE FILM WAS {(q.movie?.title ?? '').toUpperCase()}</Text>
-                  {!!revealSub && <Text style={st.revealSub}>{revealSub}</Text>}
+                  <Image source={lcClapperboard} style={[st.revealIcon, { width: sc(26), height: sc(26) }]} />
+                  <Text style={[st.revealTitle, { fontSize: sc(FS.md) }]} numberOfLines={2}>THE FILM WAS {(q.movie?.title ?? '').toUpperCase()}</Text>
+                  {!!revealSub && <Text style={[st.revealSub, { fontSize: sc(FS.sm) }]}>{revealSub}</Text>}
                 </View>
               ) : (
-                <Text style={st.retryHint}>SECOND CHANCE — PICK AGAIN</Text>
+                <Text style={[st.retryHint, { fontSize: sc(FS.md) }]}>SECOND CHANCE — PICK AGAIN</Text>
               )
             ) : (
               <>
                 <TouchableOpacity
-                  style={[st.finalBtn, (selected === null || revealed) && st.finalBtnOff]}
+                  style={[st.finalBtn, { paddingHorizontal: sc(SP.lg), paddingVertical: sc(8) }, (selected === null || revealed) && st.finalBtnOff]}
                   disabled={selected === null || revealed}
                   onPress={onFinalAnswer}
                 >
-                  <Text style={st.finalTxt}>FINAL ANSWER</Text>
+                  <Text style={[st.finalTxt, { fontSize: sc(FS.md) }]}>FINAL ANSWER</Text>
                 </TouchableOpacity>
               </>
             )}
           </View>
 
           {/* Lifelines */}
-          <View style={st.lifelines}>
-            <Text style={st.lifeLabel}>LIFELINES</Text>
+          <View style={[st.lifelines, { gap: sc(SP.sm) }]}>
+            <Text style={[st.lifeLabel, { fontSize: sc(FS.xs) }]}>LIFELINES</Text>
             <TouchableOpacity
-              style={[st.lifeBtn, used.fifty && st.lifeBtnUsed]}
+              style={[st.lifeBtn, { paddingHorizontal: sc(SP.md), paddingVertical: sc(8) }, used.fifty && st.lifeBtnUsed]}
               disabled={used.fifty || revealed || suspense}
               onPress={useFifty}
             >
-              <Text style={[st.lifeTxt, used.fifty && st.lifeTxtUsed]}>50:50</Text>
+              <Text style={[st.lifeTxt, { fontSize: sc(FS.base) }, used.fifty && st.lifeTxtUsed]}>50:50</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[st.lifeBtn, used.swap && st.lifeBtnUsed]}
+              style={[st.lifeBtn, { paddingHorizontal: sc(SP.md), paddingVertical: sc(8) }, used.swap && st.lifeBtnUsed]}
               disabled={used.swap || revealed || suspense || swapping}
               onPress={useSwap}
             >
-              <Text style={[st.lifeTxt, used.swap && st.lifeTxtUsed]}>{swapping ? '…' : 'SWAP'}</Text>
+              <Text style={[st.lifeTxt, { fontSize: sc(FS.base) }, used.swap && st.lifeTxtUsed]}>{swapping ? '…' : 'SWAP'}</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[st.lifeBtn, used.second && st.lifeBtnUsed, secondArmed && st.lifeBtnArmed]}
+              style={[st.lifeBtn, { paddingHorizontal: sc(SP.md), paddingVertical: sc(8) }, used.second && st.lifeBtnUsed, secondArmed && st.lifeBtnArmed]}
               disabled={used.second || revealed || suspense}
               onPress={armSecond}
             >
-              <Text style={[st.lifeTxt, used.second && st.lifeTxtUsed]}>2ND CHANCE</Text>
+              <Text style={[st.lifeTxt, { fontSize: sc(FS.base) }, used.second && st.lifeTxtUsed]}>2ND CHANCE</Text>
             </TouchableOpacity>
           </View>
+          </ScrollView>
         </View>
 
         {/* Prize ladder — top prize pinned as a fixed header; the rest scrolls and
@@ -561,7 +613,7 @@ const st = StyleSheet.create({
   headerMeta: { fontFamily: Fonts.label, fontSize: FS.sm, color: C.textSubDark, letterSpacing: 1.5 },
   headerRight: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: SP.sm },
   bankedLabel: { fontFamily: Fonts.label, fontSize: FS.sm, color: C.textSubDark, letterSpacing: 1.5 },
-  bankedVal: { fontFamily: Fonts.bodyBold, fontSize: FS.md, color: D.ochre },
+  bankedVal: { fontFamily: Fonts.numeric, fontSize: FS.md, color: D.ochre },
   walkBtn: {
     borderWidth: 2, borderColor: D.wrong, borderRadius: R.md, paddingHorizontal: SP.md,
     paddingVertical: 6, marginLeft: SP.sm, backgroundColor: C.surface,
@@ -569,10 +621,18 @@ const st = StyleSheet.create({
   walkTxt: { fontFamily: Fonts.display, fontSize: FS.base, color: D.wrong, letterSpacing: 1 },
 
   body: { flex: 1, flexDirection: 'row' },
-  main: { flex: 1, paddingHorizontal: SP.md, paddingVertical: SP.sm, gap: SP.sm },
+  // `gap` lives on the ScrollView's contentContainerStyle now (scaled) — `main` itself
+  // wraps a single child (that ScrollView), so a gap here would be a no-op anyway.
+  main: { flex: 1, paddingHorizontal: SP.md, paddingVertical: SP.sm },
 
   // Trailer phase (full screen)
   trailerScreen: { flex: 1, backgroundColor: C.ink, alignItems: 'center', justifyContent: 'center' },
+  // TrailerPlayer paints its own pillarbox bars in true black and needs to STRETCH to
+  // fill the screen width to do it seamlessly (default alignItems: 'stretch', matching
+  // game.tsx's wrapper) — `trailerScreen`'s centered/ink-colored layout is for the
+  // "Roll the trailer…" cover only; reusing it here shrink-wrapped the video's own
+  // black box to its pillarboxed width, leaving a visible #1A1A1A seam around it.
+  trailerVideoWrap: { flex: 1, backgroundColor: '#000' },
   coverImg: { width: 104, height: 104, resizeMode: 'contain', marginBottom: SP.md },
   coverTxt: { fontFamily: Fonts.display, fontSize: FS.lg, color: C.ochre, letterSpacing: 1 },
   skipBtn: {
@@ -607,7 +667,7 @@ const st = StyleSheet.create({
     width: 26, height: 26, borderRadius: R.full, borderWidth: 2, borderColor: D.line,
     alignItems: 'center', justifyContent: 'center',
   },
-  badgeTxt: { fontFamily: Fonts.display, fontSize: FS.sm },
+  badgeTxt: { fontFamily: Fonts.numeric, fontSize: FS.sm },
   optionTxt: { flex: 1, fontFamily: Fonts.bodyBold, fontSize: FS.md, color: D.text },
 
   // Action row
