@@ -755,17 +755,17 @@ const st = StyleSheet.create({
     borderRadius: 4, borderWidth: 1.5, borderColor: '#3A3327', backgroundColor: '#1A1712',
   },
   rungCurrent: {
-    borderColor: D.ochre, shadowColor: D.ochre, shadowOpacity: 0.55, shadowRadius: 8,
-    shadowOffset: { width: 0, height: 0 }, elevation: 6,
+    backgroundColor: D.ochre, borderColor: D.ochre, shadowColor: D.ochre, shadowOpacity: 0.55,
+    shadowRadius: 8, shadowOffset: { width: 0, height: 0 }, elevation: 6,
   },
   rungSafe: { borderColor: 'rgba(61,170,92,0.55)' },
   rungNum: { fontFamily: Fonts.numeric, fontSize: FS.xs, color: '#6E6553', width: 18, textAlign: 'right' },
-  rungNumCur: { color: D.ochre },
+  rungNumCur: { color: C.textOnOchre },
   rungAmt: { fontFamily: Fonts.numeric, fontSize: FS.base, color: '#E9E2D2' },
-  rungAmtCur: { color: D.ochre },
+  rungAmtCur: { color: C.textOnOchre },
   rungAmtSafe: { color: '#8FE0AC' },
   safeTag: { marginLeft: 'auto', fontFamily: Fonts.label, fontSize: FS.micro, color: '#8FE0AC', letterSpacing: 1 },
-  safeTagCur: { color: D.ochre },
+  safeTagCur: { color: C.textOnOchre },
   // Jackpot gets its own stacked (not row) layout — tag above amount — so
   // "$1,000,000" never has to share a line with a tag and clip.
   jackpotFrame: {
