@@ -4,7 +4,7 @@
 create table if not exists trivia_questions (
   id               uuid primary key default gen_random_uuid(),
   movie_id         uuid not null references movies (id) on delete cascade,
-  category         text not null,          -- director|genre|awards|production|...
+  category         text not null,          -- director|genre|awards|production|quote|...
   question         text not null,
   options          text[] not null,        -- exactly 4 (enforced below)
   correct_index    int  not null check (correct_index between 0 and 3),

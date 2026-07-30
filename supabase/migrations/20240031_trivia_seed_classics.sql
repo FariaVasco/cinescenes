@@ -23,7 +23,7 @@ from (values
 
   -- ── The Empire Strikes Back (1980) ────────────────────────────────────────
   ('The Empire Strikes Back', 1980,
-   'production', 'To keep its big twist secret, the cast were often given a fake line of dialogue. What was it?',
+   'quote', 'To keep its big twist secret, the cast were often given a fake line of dialogue. What was it?',
    array['"Obi-Wan killed your father."','"The Emperor is your master."','"You will never win."','"Your sister still lives."'], 'hard', 0.82),
   ('The Empire Strikes Back', 1980,
    'production', 'This installment had a new director, who had earlier been the first film''s director''s teacher at which university?',
@@ -31,7 +31,7 @@ from (values
 
   -- ── Alien (1979) ──────────────────────────────────────────────────────────
   ('Alien', 1979,
-   'production', 'What is this film''s famous tagline?',
+   'quote', 'What is this film''s famous tagline?',
    array['"In space, no one can hear you scream."','"Be afraid. Be very afraid."','"We are not alone."','"Just when you thought it was safe."'], 'easy', 0.25),
   ('Alien', 1979,
    'production', 'The creature was designed by which surrealist artist?',
@@ -60,7 +60,7 @@ from (values
    'production', 'This film was based on a novel by which author, who publicly disliked the adaptation?',
    array['Stephen King','Dean Koontz','Peter Straub','Clive Barker'], 'easy', 0.35),
   ('The Shining', 1980,
-   'production', 'Which chilling line did the lead actor improvise, borrowing from a TV show''s intro?',
+   'quote', 'Which chilling line did the lead actor improvise, borrowing from a TV show''s intro?',
    array['"Here''s Johnny!"','"Redrum."','"All work and no play."','"Come play with us."'], 'medium', 0.5),
 
   -- ── Rocky (1976) ──────────────────────────────────────────────────────────
@@ -76,7 +76,7 @@ from (values
    'production', 'This film''s notoriously troubled shoot was chronicled in which making-of documentary?',
    array['Hearts of Darkness','Burden of Dreams','Lost in La Mancha','The Kid Stays in the Picture'], 'hard', 0.8),
   ('Apocalypse Now', 1979,
-   'production', 'A character famously declares he loves the smell of what "in the morning"?',
+   'quote', 'A character famously declares he loves the smell of what "in the morning"?',
    array['Napalm','Gunpowder','Victory','Rain'], 'easy', 0.3),
 
   -- ── Ghostbusters (1984) ───────────────────────────────────────────────────
@@ -94,7 +94,7 @@ from (values
 
   -- ── Taxi Driver (1976) ────────────────────────────────────────────────────
   ('Taxi Driver', 1976,
-   'production', 'Which line did the lead actor improvise while facing a mirror?',
+   'quote', 'Which line did the lead actor improvise while facing a mirror?',
    array['"You talkin'' to me?"','"Are you looking at me?"','"What do you want?"','"Who''s there?"'], 'easy', 0.35),
   ('Taxi Driver', 1976,
    'production', 'This film''s haunting score was the final work of which composer, who died just after finishing it?',
@@ -117,17 +117,17 @@ from (values
 
   -- ── Airplane! (1980) ──────────────────────────────────────────────────────
   ('Airplane!', 1980,
-   'production', 'To the line "Surely you can''t be serious," the reply is: "I am serious — and don''t call me ___."',
+   'quote', 'To the line "Surely you can''t be serious," the reply is: "I am serious — and don''t call me ___."',
    array['Shirley','Sir','Roger','Ted'], 'easy', 0.35),
 
   -- ── Superman (1978) ───────────────────────────────────────────────────────
   ('Superman', 1978,
-   'production', 'The film''s poster promised: "You''ll believe a man can ___."',
+   'quote', 'The film''s poster promised: "You''ll believe a man can ___."',
    array['fly','change the world','live forever','save us all'], 'easy', 0.3),
 
   -- ── Scarface (1983) ───────────────────────────────────────────────────────
   ('Scarface', 1983,
-   'production', 'The lead character delivers the line: "Say hello to my little ___."',
+   'quote', 'The lead character delivers the line: "Say hello to my little ___."',
    array['friend','brother','gun','world'], 'easy', 0.25),
   ('Scarface', 1983,
    'production', 'Which director-screenwriter, later known for war and gangster films, wrote this screenplay?',
