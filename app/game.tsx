@@ -2683,8 +2683,13 @@ export default function GameScreen() {
             {/* Two-phase bottom indicator:
                 Phase 1 — video-playing devices show a loading label while YouTube loads.
                 Phase 2 — once 'playing' fires (or immediately for non-video devices), show
-                           the accurate countdown keyed to TITLE_CARD_BURN. */}
-            <View style={{ position: 'absolute', bottom: PULL_TAB_H + 8, left: 0, right: 0, alignItems: 'center' }}>
+                           the accurate countdown keyed to TITLE_CARD_BURN.
+                Fixed height (not auto-sized) so both phases anchor at the same screen
+                position — with `bottom` fixed and auto height, the taller "Choosing a
+                movie…" block (label + reserved stall row) pushed its own top edge higher
+                than TrailerCountdown's shorter single row, reaching up into the timeline
+                above it. The two phases never show at once, so sharing one fixed slot is safe. */}
+            <View style={{ position: 'absolute', bottom: PULL_TAB_H + 8, left: 0, right: 0, height: TRAILER_INDICATOR_H, alignItems: 'center' }}>
               {showsVideo && !videoStarted ? (
                 // "Choosing a movie…" stays anchored on top; the stall info fades
                 // into a PRE-RESERVED slot below it (fixed height, single row), so
@@ -3174,6 +3179,9 @@ function PlayerChips({ players, myId, topInset, rightInset, hasCastFab }: { play
 }
 
 const PULL_TAB_H = 44;
+// Fixed height for the "Choosing a movie…" / TrailerCountdown indicator slot — tall
+// enough for the choosing-phase's label + reserved stall row (its taller content).
+const TRAILER_INDICATOR_H = 76;
 
 function MyTimelinePanel({ timeline, cards, bottomInset, screenHeight }: {
   timeline: number[];
