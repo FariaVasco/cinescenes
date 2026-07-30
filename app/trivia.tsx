@@ -8,7 +8,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView, Animated, Image,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAudioPlayer } from 'expo-audio';
 import { useRouter, useFocusEffect } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
@@ -48,6 +48,11 @@ const BADGE_COLORS = [C.ochre, C.cerulean, C.vermillion, C.leaf];
 // Classic prize ladder; a run uses the first `total` rungs (total = # questions).
 const PRIZES = [100, 200, 300, 500, 1000, 2000, 4000, 8000, 16000, 32000, 64000, 125000, 250000, 500000, 1000000];
 const LETTERS = ['A', 'B', 'C', 'D'];
+// Sprocket-hole rail down each side of the prize ladder — generously overshoots any
+// real device height (40 ran out partway down on a tall Android screen, making the
+// filmstrip look like it stopped arbitrarily); `ladder`'s overflow:hidden clips
+// whatever's unused, so overshooting here is free.
+const SPROCKET_DOTS = Array.from({ length: 120 });
 const REVEAL_MS = 2800; // longer so the movie-reveal is readable
 const RUN_LEN = 15;     // questions per run (random subset of the bank) — full $100 → $1,000,000 ladder
 
@@ -140,6 +145,13 @@ export default function TriviaScreen() {
   // targets never get illegibly small; a ScrollView around the column is the backstop
   // for any device tight enough that even the floor doesn't fit.
   const [mainH, setMainH] = useState(0);
+  // `main` and `ladder` are both cross-axis STRETCHED to `body`'s height, which is
+  // itself inset from the true screen bottom by the safe-area margin — invisible on
+  // `main`'s parchment side since it matches the screen's own background there, but
+  // visible as a sand-colored strip under the dark ladder. A stretched (not
+  // explicitly-sized) box's cross-axis size is "container size minus its own margin",
+  // so a negative bottom margin here grows it past that edge by exactly the real inset.
+  const insets = useSafeAreaInsets();
   const DESIGN_MAIN_H = 380;
   const scale = Math.max(0.62, mainH ? Math.min(1, mainH / DESIGN_MAIN_H) : 1);
   const sc = (px: number) => Math.round(px * scale);
@@ -404,17 +416,26 @@ export default function TriviaScreen() {
   // unmount it entirely — that's what guarantees Skip/answering leaves no audio playing.
   const renderTrailer = hasTrailer && (phase === 'trailer' || suspense || revealed);
 
-  // One prize-ladder rung. `pinned` marks the always-visible top prize (fixed header).
+  // One prize-ladder rung. `pinned` marks the always-visible top prize (fixed header) —
+  // it gets its own stacked layout (tag above amount) rather than the num/amount/tag
+  // row every other rung uses, since "$1,000,000" alongside a rung number AND a
+  // "JACKPOT" tag doesn't fit this sidebar's width in one line without clipping.
   const renderRung = (i: number, pinned = false) => {
     const current = i === idx;
-    const top = i === total - 1;
-    const safe = isSafe(i, total) && !top;
+    if (pinned) {
+      return (
+        <View key={i} style={[st.rung, st.jackpotFrame, current && st.rungCurrent]}>
+          <Text style={[st.jackpotTag, current && st.rungAmtCur]}>★ JACKPOT ★</Text>
+          <Text style={[st.jackpotAmt, current && st.rungAmtCur]}>{money(PRIZES[i])}</Text>
+        </View>
+      );
+    }
+    const safe = isSafe(i, total);
     return (
-      <View key={i} style={[st.rung, pinned && st.rungPinned, current && st.rungCurrent, safe && !current && st.rungSafe, top && !current && st.rungTop]}>
+      <View key={i} style={[st.rung, current && st.rungCurrent, safe && !current && st.rungSafe]}>
         <Text style={[st.rungNum, current && st.rungNumCur]}>{i + 1}</Text>
-        <Text style={[st.rungAmt, current && st.rungAmtCur, safe && !current && st.rungAmtSafe, top && !current && st.rungAmtTop]}>{money(PRIZES[i])}</Text>
+        <Text style={[st.rungAmt, current && st.rungAmtCur, safe && !current && st.rungAmtSafe]}>{money(PRIZES[i])}</Text>
         {safe && <Text style={[st.safeTag, current && st.safeTagCur]}>SAFE</Text>}
-        {top && <Text style={[st.safeTag, current && st.safeTagCur, top && !current && st.safeTagTop]}>JACKPOT</Text>}
       </View>
     );
   };
@@ -575,18 +596,34 @@ export default function TriviaScreen() {
 
         {/* Prize ladder — top prize pinned as a fixed header; the rest scrolls and
             follows the current rung as the player climbs. */}
-        <View style={st.ladder}>
-          <Text style={st.ladderTitle}>PRIZE LADDER</Text>
-          {renderRung(total - 1, true)}
-          <ScrollView
-            ref={ladderRef}
-            style={st.ladderScroll}
-            showsVerticalScrollIndicator={false}
-            onLayout={(e) => setLadderViewportH(e.nativeEvent.layout.height)}
-            onContentSizeChange={(_, h) => setLadderContentH(h)}
-          >
-            {Array.from({ length: total - 1 }, (_, i) => total - 2 - i).map((i) => renderRung(i))}
-          </ScrollView>
+        <View style={[st.ladder, { marginBottom: -insets.bottom }]}>
+          <View style={[st.sprocketRail, { left: 0 }]} pointerEvents="none">
+            {SPROCKET_DOTS.map((_, i) => <View key={i} style={st.sprocketDot} />)}
+          </View>
+          <View style={[st.sprocketRail, { right: 0 }]} pointerEvents="none">
+            {SPROCKET_DOTS.map((_, i) => <View key={i} style={st.sprocketDot} />)}
+          </View>
+          <View style={st.ladderContent}>
+            <Text style={st.ladderTitle}>PRIZE LADDER</Text>
+            {renderRung(total - 1, true)}
+            <ScrollView
+              ref={ladderRef}
+              style={st.ladderScroll}
+              // When the 14 rungs' combined height is shorter than the viewport (a
+              // taller/roomier screen), a ScrollView's content sits at the top by
+              // default — leaving dead space below rung 1 instead of it landing at
+              // the screen's true bottom edge. flex-end anchors it to the bottom
+              // instead, so any leftover room collects up near the jackpot/title
+              // instead. Has no effect once content is actually taller than the
+              // viewport (the normal, scrollable case).
+              contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}
+              showsVerticalScrollIndicator={false}
+              onLayout={(e) => setLadderViewportH(e.nativeEvent.layout.height)}
+              onContentSizeChange={(_, h) => setLadderContentH(h)}
+            >
+              {Array.from({ length: total - 1 }, (_, i) => total - 2 - i).map((i) => renderRung(i))}
+            </ScrollView>
+          </View>
         </View>
       </View>
 
@@ -702,24 +739,42 @@ const st = StyleSheet.create({
   lifeTxt: { fontFamily: Fonts.display, fontSize: FS.base, color: D.text, letterSpacing: 1 },
   lifeTxtUsed: { textDecorationLine: 'line-through' },
 
-  // Prize ladder
-  ladder: { width: 168, borderLeftWidth: 2, borderLeftColor: D.line, paddingHorizontal: SP.sm, paddingTop: SP.sm, backgroundColor: C.surfaceHigh },
+  // Prize ladder — "Reel Track": a dark filmstrip running down the sidebar, sprocket
+  // holes down both edges, each prize its own frame. The current rung reads as lit
+  // from within (colored border + shadow glow) rather than a solid fill, since we
+  // don't have a gradient library in this build (would need a new native build to
+  // add one) — the glow gets the same "lit up" feeling with plain View/shadow styles.
+  ladder: { width: 168, borderLeftWidth: 2, borderLeftColor: D.line, backgroundColor: '#0F0D0A', overflow: 'hidden', position: 'relative' },
+  ladderContent: { flex: 1, paddingHorizontal: 14, paddingTop: SP.sm },
+  sprocketRail: { position: 'absolute', top: 0, bottom: 0, width: 10, alignItems: 'center', paddingTop: 6, gap: 6 },
+  sprocketDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: '#2A251D' },
   ladderScroll: { flex: 1 },
-  ladderTitle: { fontFamily: Fonts.label, fontSize: FS.xs, color: D.sub, letterSpacing: 2, marginBottom: SP.sm, textAlign: 'center' },
-  rung: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, paddingHorizontal: SP.sm, borderRadius: R.sm, gap: SP.sm },
-  rungPinned: { borderBottomWidth: 2, borderBottomColor: D.lineSoft, borderRadius: 0, marginBottom: 4, paddingBottom: 8 },
-  rungCurrent: { backgroundColor: D.ochre },
-  rungSafe: { backgroundColor: 'rgba(61,170,92,0.16)' },
-  rungTop: { backgroundColor: 'rgba(245,197,24,0.32)' },
-  rungNum: { fontFamily: Fonts.bodyBold, fontSize: FS.sm, color: D.sub, width: 22, textAlign: 'right' },
-  rungNumCur: { color: C.ink },
-  rungAmt: { fontFamily: Fonts.bodyBold, fontSize: FS.base, color: D.text },
-  rungAmtCur: { color: C.ink },
-  rungAmtSafe: { color: D.correct },
-  rungAmtTop: { color: C.textOnOchre },
-  safeTag: { marginLeft: 'auto', fontFamily: Fonts.label, fontSize: FS.micro, color: D.correct, letterSpacing: 1 },
-  safeTagCur: { color: C.ink },
-  safeTagTop: { color: C.textOnOchre },
+  ladderTitle: { fontFamily: Fonts.label, fontSize: FS.xs, color: '#B8AC96', letterSpacing: 2, marginBottom: SP.sm, textAlign: 'center' },
+  rung: {
+    flexDirection: 'row', alignItems: 'center', paddingVertical: 6, paddingHorizontal: SP.sm, gap: SP.sm,
+    borderRadius: 4, borderWidth: 1.5, borderColor: '#3A3327', backgroundColor: '#1A1712',
+  },
+  rungCurrent: {
+    borderColor: D.ochre, shadowColor: D.ochre, shadowOpacity: 0.55, shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 }, elevation: 6,
+  },
+  rungSafe: { borderColor: 'rgba(61,170,92,0.55)' },
+  rungNum: { fontFamily: Fonts.numeric, fontSize: FS.xs, color: '#6E6553', width: 18, textAlign: 'right' },
+  rungNumCur: { color: D.ochre },
+  rungAmt: { fontFamily: Fonts.numeric, fontSize: FS.base, color: '#E9E2D2' },
+  rungAmtCur: { color: D.ochre },
+  rungAmtSafe: { color: '#8FE0AC' },
+  safeTag: { marginLeft: 'auto', fontFamily: Fonts.label, fontSize: FS.micro, color: '#8FE0AC', letterSpacing: 1 },
+  safeTagCur: { color: D.ochre },
+  // Jackpot gets its own stacked (not row) layout — tag above amount — so
+  // "$1,000,000" never has to share a line with a tag and clip.
+  jackpotFrame: {
+    flexDirection: 'column', alignItems: 'center', gap: 3, paddingVertical: 10, marginBottom: 10,
+    borderColor: 'rgba(245,197,24,0.6)', backgroundColor: '#241F10',
+    shadowColor: D.ochre, shadowOpacity: 0.4, shadowRadius: 10, shadowOffset: { width: 0, height: 0 }, elevation: 5,
+  },
+  jackpotTag: { fontFamily: Fonts.label, fontSize: FS.xs, letterSpacing: 2, color: D.ochre },
+  jackpotAmt: { fontFamily: Fonts.numeric, fontSize: FS.lg, color: D.ochre },
 
   // End / misc
   endOver: { fontFamily: Fonts.display, fontSize: FS['2xl'], color: D.ochre, letterSpacing: 1 },
