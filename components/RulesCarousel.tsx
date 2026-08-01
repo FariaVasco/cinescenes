@@ -43,7 +43,7 @@ export const MULTIPLAYER_STEPS = [
   {
     icon: lcCoin,
     title: 'Earn Coins',
-    body: 'Everyone starts with 2 coins. Correctly name the movie and its director before the reveal and earn a coin. You can use them to challenge other players\' guesses',
+    body: 'Everyone starts with 3 coins. Correctly name the movie and its director before the reveal and earn a coin. You can use them to challenge other players\' guesses',
     accent: C.ochre,
   },
   {

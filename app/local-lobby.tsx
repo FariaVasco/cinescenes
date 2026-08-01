@@ -487,7 +487,7 @@ export default function LocalLobbyScreen() {
       const [, , phantomResult] = await Promise.all([
         db.from('games').update({ status: 'active' }).eq('id', localGame.id),
         Promise.all(localPlayers.map((p, i) =>
-          db.from('players').update({ timeline: [startingMovies[i].year], coins: 5 }).eq('id', p.id)
+          db.from('players').update({ timeline: [startingMovies[i].year], coins: 3 }).eq('id', p.id)
         )),
         db.from('turns').insert(phantomRows),
       ]);

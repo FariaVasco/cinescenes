@@ -187,37 +187,44 @@ export default function TriviaScreen() {
         seenMovies.add(key);
         uniqueByMovie.push(item);
       }
-      // Round-robin across categories (not a random slice) so a run doesn't cluster
-      // same-topic questions — e.g. several literal "Who directed this film?" questions
-      // in one run, since that single-category generator now makes up ~20% of the bank.
-      // Once a smaller category's bucket runs dry, remaining slots fall back to whatever
-      // categories still have supply — this maximizes diversity given what's available
-      // rather than leaving slots unfilled.
-      function pickByCategory(pool: Q[], n: number): Q[] {
-        const byCategory = new Map<string, Q[]>();
-        for (const item of pool) {
-          const key = item.category ?? 'production';
-          const bucket = byCategory.get(key) ?? [];
-          bucket.push(item);
-          byCategory.set(key, bucket);
-        }
-        const categoryOrder = shuffleArr([...byCategory.keys()]);
+      // Greedily pick the `n` most "needed" items from `pool` — at each step, the one
+      // currently least represented across BOTH category and decade so far — so a
+      // band's slots spread across topics and eras instead of clustering (e.g. all
+      // "production" questions from 1980s movies). Doesn't require an exact even split
+      // (often impossible with 5 slots against 5 categories AND 6 decades at once);
+      // it just always prefers whatever's most under-represented given what's on offer.
+      // `pool` is pre-shuffled by the caller, so ties (several equally-needed items)
+      // resolve to a random one rather than always the same array position.
+      const decadeOf = (year: number | undefined) => year ? Math.floor(year / 10) * 10 : 0;
+      function pickDiverse(pool: Q[], n: number): Q[] {
+        const remaining = [...pool];
+        const catCount = new Map<string, number>();
+        const decCount = new Map<number, number>();
         const out: Q[] = [];
-        while (out.length < n && categoryOrder.some(c => (byCategory.get(c) ?? []).length)) {
-          for (const c of categoryOrder) {
-            if (out.length >= n) break;
-            const bucket = byCategory.get(c);
-            if (bucket?.length) out.push(bucket.shift()!);
+        while (out.length < n && remaining.length) {
+          let bestIdx = 0;
+          let bestScore = Infinity;
+          for (let i = 0; i < remaining.length; i++) {
+            const cat = remaining[i].category ?? 'production';
+            const dec = decadeOf(remaining[i].movie?.year);
+            const score = (catCount.get(cat) ?? 0) + (decCount.get(dec) ?? 0);
+            if (score < bestScore) { bestScore = score; bestIdx = i; }
           }
+          const [item] = remaining.splice(bestIdx, 1);
+          out.push(item);
+          const cat = item.category ?? 'production';
+          const dec = decadeOf(item.movie?.year);
+          catCount.set(cat, (catCount.get(cat) ?? 0) + 1);
+          decCount.set(dec, (decCount.get(dec) ?? 0) + 1);
         }
         return out;
       }
-      // Stratify by difficulty band FIRST, then round-robin categories within each band.
-      // Category diversity alone can't guarantee an actual easy start — a random draw
-      // could land mostly medium/hard "production" questions and few/no true-easy ones,
-      // so the ladder's early rungs end up harder than intended even though the final
-      // sort is correct for whatever got picked. Explicitly reserving slots per band
-      // fixes that at the source.
+      // Stratify by difficulty band FIRST, then spread category+decade within each band.
+      // Category/decade diversity alone can't guarantee an actual easy start — a random
+      // draw could land mostly medium/hard "production" questions and few/no true-easy
+      // ones, so the ladder's early rungs end up harder than intended even though the
+      // final sort is correct for whatever got picked. Explicitly reserving slots per
+      // band fixes that at the source.
       const BAND_ORDER = ['easy', 'medium', 'hard'] as const;
       const TARGET_PER_BAND = Math.floor(RUN_LEN / BAND_ORDER.length);
       const byBand = new Map<string, Q[]>();
@@ -228,12 +235,12 @@ export default function TriviaScreen() {
         byBand.set(key, bucket);
       }
       const picked: Q[] = [];
-      for (const band of BAND_ORDER) picked.push(...pickByCategory(byBand.get(band) ?? [], TARGET_PER_BAND));
+      for (const band of BAND_ORDER) picked.push(...pickDiverse(byBand.get(band) ?? [], TARGET_PER_BAND));
       // A band short on supply shouldn't shrink the run — top up from whatever's left.
       if (picked.length < RUN_LEN) {
         const pickedIds = new Set(picked.map(p => p.id));
         const leftover = uniqueByMovie.filter(item => !pickedIds.has(item.id));
-        picked.push(...pickByCategory(leftover, RUN_LEN - picked.length));
+        picked.push(...pickDiverse(leftover, RUN_LEN - picked.length));
       }
       // Ordered easy -> hard for the ladder.
       const run = picked.sort((a, b) => (a.difficulty_score ?? 0.5) - (b.difficulty_score ?? 0.5));
@@ -487,24 +494,12 @@ export default function TriviaScreen() {
       {/* Question phase — opaque, so it fully hides the trailer warming the NEXT question. */}
       {showQuestion && (
       <SafeAreaView style={[st.screen, StyleSheet.absoluteFill]} edges={['top', 'bottom', 'left', 'right']}>
-      {/* Header */}
-      <View style={st.header}>
-        <Text style={st.wordmark}>WHO WANTS TO BE A CINEPHILE</Text>
-        <View style={st.headerRight}>
-          <Text style={st.bankedLabel}>BANKED </Text>
-          <Text style={st.bankedVal}>{money(banked)}</Text>
-          <TouchableOpacity onPress={onWalkAway} style={st.walkBtn} disabled={revealed || suspense}>
-            <Text style={st.walkTxt}>WALK AWAY</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
       <View style={st.body}>
         {/* Main column — onLayout measures the UNSCALED available height (this View's
             own size comes from flex:1 in the parent row, independent of `scale`, so
             measuring it can't feed back into itself / thrash). */}
         <View style={st.main} onLayout={(e) => setMainH(e.nativeEvent.layout.height)}>
-          <ScrollView contentContainerStyle={{ flexGrow: 1, gap: sc(SP.sm) }} showsVerticalScrollIndicator={false}>
+          <ScrollView contentContainerStyle={{ flexGrow: 1, gap: sc(SP.sm), paddingTop: sc(SP.lg) }} showsVerticalScrollIndicator={false}>
           <View style={[st.qCard, { minHeight: sc(88), paddingVertical: sc(SP.sm), paddingHorizontal: sc(SP.lg), gap: sc(6) }]}>
             <Text style={[st.qText, { fontSize: sc(FS.xl) }]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.7}>{q.question}</Text>
           </View>
@@ -554,15 +549,22 @@ export default function TriviaScreen() {
                 <Text style={[st.retryHint, { fontSize: sc(FS.md) }]}>SECOND CHANCE — PICK AGAIN</Text>
               )
             ) : (
-              <>
+              <View style={[st.decisionRow, { gap: sc(SP.sm) }]}>
                 <TouchableOpacity
-                  style={[st.finalBtn, { paddingHorizontal: sc(SP.lg), paddingVertical: sc(8) }, (selected === null || revealed) && st.finalBtnOff]}
+                  style={[st.walkBtn2, { paddingVertical: sc(8) }]}
+                  disabled={revealed || suspense}
+                  onPress={onWalkAway}
+                >
+                  <Text style={[st.walkTxt2, { fontSize: sc(FS.md) }]}>WALK AWAY</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[st.finalBtn, { paddingVertical: sc(8) }, (selected === null || revealed) && st.finalBtnOff]}
                   disabled={selected === null || revealed}
                   onPress={onFinalAnswer}
                 >
                   <Text style={[st.finalTxt, { fontSize: sc(FS.md) }]}>FINAL ANSWER</Text>
                 </TouchableOpacity>
-              </>
+              </View>
             )}
           </View>
 
@@ -639,24 +641,6 @@ const st = StyleSheet.create({
   center: { alignItems: 'center', justifyContent: 'center', gap: SP.md },
   msg: { fontFamily: Fonts.body, color: D.text, fontSize: FS.md },
 
-  // Header
-  header: {
-    flexDirection: 'row', alignItems: 'center', gap: SP.md,
-    paddingHorizontal: SP.md, paddingVertical: SP.sm,
-    backgroundColor: C.ink,                         // dark title banner — gold reads on it
-    borderBottomWidth: 2, borderBottomColor: 'rgba(245,197,24,0.35)',
-  },
-  wordmark: { fontFamily: Fonts.display, fontSize: FS.xl, color: D.ochre, letterSpacing: 1 },
-  headerMeta: { fontFamily: Fonts.label, fontSize: FS.sm, color: C.textSubDark, letterSpacing: 1.5 },
-  headerRight: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: SP.sm },
-  bankedLabel: { fontFamily: Fonts.label, fontSize: FS.sm, color: C.textSubDark, letterSpacing: 1.5 },
-  bankedVal: { fontFamily: Fonts.numeric, fontSize: FS.md, color: D.ochre },
-  walkBtn: {
-    borderWidth: 2, borderColor: D.wrong, borderRadius: R.md, paddingHorizontal: SP.md,
-    paddingVertical: 6, marginLeft: SP.sm, backgroundColor: C.surface,
-  },
-  walkTxt: { fontFamily: Fonts.display, fontSize: FS.base, color: D.wrong, letterSpacing: 1 },
-
   body: { flex: 1, flexDirection: 'row' },
   // `gap` lives on the ScrollView's contentContainerStyle now (scaled) — `main` itself
   // wraps a single child (that ScrollView), so a gap here would be a no-op anyway.
@@ -722,9 +706,17 @@ const st = StyleSheet.create({
   revealTitle: { fontFamily: Fonts.display, fontSize: FS.md, color: D.text, letterSpacing: 0.5, textAlign: 'center' },
   revealSub: { fontFamily: Fonts.label, fontSize: FS.sm, color: D.sub, letterSpacing: 1, textAlign: 'center' },
   retryHint: { flex: 1, textAlign: 'center', fontFamily: Fonts.display, fontSize: FS.md, color: D.wrong, letterSpacing: 1 },
+  // Walk Away / Final Answer sit side by side as one binary decision — equal width so
+  // neither reads as the "default" choice.
+  decisionRow: { flex: 1, flexDirection: 'row' },
+  walkBtn2: {
+    flex: 1, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2, borderColor: D.wrong, borderRadius: R.btn, backgroundColor: C.surface,
+  },
+  walkTxt2: { fontFamily: Fonts.display, color: D.wrong, letterSpacing: 1 },
   finalBtn: {
-    marginLeft: 'auto', borderWidth: 2, borderColor: D.line, borderRadius: R.btn,
-    paddingHorizontal: SP.lg, paddingVertical: 8, backgroundColor: D.ochre,
+    flex: 1, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2, borderColor: D.line, borderRadius: R.btn, backgroundColor: D.ochre,
   },
   finalBtnOff: { backgroundColor: C.inkFaint, borderColor: D.lineSoft },
   finalTxt: { fontFamily: Fonts.display, fontSize: FS.md, color: C.textOnOchre, letterSpacing: 1 },
