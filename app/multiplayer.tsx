@@ -80,8 +80,14 @@ export default function MultiplayerScreen() {
   }, [keyboardMode]);
   // 8pt safety margin: measured heights land a hair optimistic (rounding, borders),
   // which showed as a sliver of card under the keyboard's top edge.
-  const fitHeight = keyboardMode && rightColH > 0
-    ? Math.max(80, rightColH - keyboardHeight - 8)
+  // Outside keyboard mode, still constrain the column to rightColH (the left panel's
+  // measured height) — without an explicit height here, the ScrollView's content
+  // container has no bounded size for its flex:1 children (createCard/inviteCard) to
+  // divide, so they render at natural content size and overflow into a scroll instead
+  // of matching the left panel's height. This was previously iOS/keyboard-only, which
+  // is why it went unnoticed there but showed up as a forced scroll on Android.
+  const fitHeight = rightColH > 0
+    ? (keyboardMode ? Math.max(80, rightColH - keyboardHeight - 8) : rightColH)
     : undefined;
   // Tall columns get the spacious invite-card layout (header top, full-width
   // input, JOIN below); short ones keep the compact side-by-side row.

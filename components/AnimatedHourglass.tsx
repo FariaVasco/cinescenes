@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import Svg, { Path, Rect, Circle, Defs, ClipPath, G, Line } from 'react-native-svg';
-import { Fonts } from '@/constants/theme';
+import { C, Fonts } from '@/constants/theme';
 import * as haptics from '@/lib/haptics';
 
 const VERMILLION = '#E8372A';
@@ -294,6 +294,8 @@ export function TrailerCountdown({ durationMs, onExpire }: TrailerCountdownProps
 
 const cdStyles = StyleSheet.create({
   wrap:   { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  label:  { fontFamily: Fonts.body, fontSize: 12, color: '#999', letterSpacing: 0.3, textAlign: 'right', lineHeight: 17 },
+  // Sits against the parchment countdown-overlay background (C.bg) — #999 read too light
+  // there; textSub is the same tone the rest of the app uses for secondary text on that bg.
+  label:  { fontFamily: Fonts.body, fontSize: 12, color: C.textSub, letterSpacing: 0.3, textAlign: 'right', lineHeight: 17 },
   number: { fontFamily: Fonts.display, fontSize: 44, color: OCHRE, lineHeight: 50 },
 });

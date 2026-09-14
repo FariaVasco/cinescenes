@@ -111,6 +111,14 @@ export default function GameScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const timelinePaddingBottom = Math.max(80, 78 + insets.top - insets.bottom);
+  // The countdown overlay's "Choosing a movie…" / TrailerCountdown indicator sits in its
+  // own absolutely-positioned strip above the "My Timeline" pull tab (bottom: PULL_TAB_H+8,
+  // height TRAILER_INDICATOR_H) — but `timelinePaddingBottom` above was never sized to
+  // account for that strip, only for a generic bottom margin. On devices where insets.bottom
+  // is small (many Android phones in landscape — iOS's is usually larger, which happened to
+  // mask this), the timeline's centered content had less reserved clearance than the strip
+  // actually needs, so it rendered into it. Reserve the strip's real height here instead.
+  const countdownTimelinePaddingBottom = insets.bottom + PULL_TAB_H + 8 + TRAILER_INDICATOR_H + 12;
   const {
     game,
     activeMovies,
@@ -2660,7 +2668,7 @@ export default function GameScreen() {
         pointerEvents={(countdownDone && trailerRevealed) ? 'none' : 'auto'}>
           <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
             <View style={styles.gameArea}>
-              <View style={[styles.timelineAreaFull, { paddingBottom: timelinePaddingBottom }]}>
+              <View style={[styles.timelineAreaFull, { paddingBottom: countdownTimelinePaddingBottom }]}>
                 <Text style={[styles.drawingTurnLabel, { color: activePlayerColor }]}>
                   {amActive ? 'Your turn' : `${activePlayer?.display_name}'s timeline`}
                 </Text>
@@ -2891,7 +2899,9 @@ export default function GameScreen() {
                   <Text style={styles.challengeBtnText}>
                     {hasCoins ? '⚡  Challenge' : 'No coins'}
                   </Text>
-                  <Text style={[styles.challengeBtnSub, !hasCoins && { opacity: 0 }]}>1 coin</Text>
+                  <Text style={[styles.challengeBtnSub, !hasCoins && { opacity: 0 }]} numberOfLines={1}>
+                    1 coin · you have {myPlayerObj?.coins ?? 0}
+                  </Text>
                 </TouchableOpacity>
               ) : (
                 <View style={[styles.challengeBtn, styles.challengeBtnDisabled]}>
