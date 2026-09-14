@@ -2517,7 +2517,6 @@ export default function GameScreen() {
             key={`${currentTurn.id}-${trailerKey}`}
             ref={trailerRef}
             movie={movie}
-            unmuteAfterMs={remainingPreview + 500}
             onEnded={() => { setTrailerEnded(true); setUserPaused(false); }}
             onRevealed={() => setTrailerRevealed(true)}
             onPlaying={() => setVideoStarted(true)}

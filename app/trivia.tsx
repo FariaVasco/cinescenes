@@ -458,7 +458,6 @@ export default function TriviaScreen() {
               key={(trailerMovie as Movie).id}
               ref={trailerRef}
               movie={trailerMovie as Movie}
-              unmuteAfterMs={warmMs}
               warmLeadMs={warmMs}
               onRevealed={() => setTrailerRevealed(true)}
               onEnded={() => { if (!countdown && phase === 'trailer') setPhase('question'); }}

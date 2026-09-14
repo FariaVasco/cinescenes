@@ -17,9 +17,6 @@ interface TrailerPlayerProps {
   onEnded?: () => void;
   onRevealed?: () => void;
   onWindowCalculated?: (start: number, end: number) => void;
-  // Duration from mount until audio unmutes. Baked into the injection as an
-  // absolute timestamp so the WebView fires at the right wall-clock moment.
-  unmuteAfterMs?: number;
   onPlaying?: () => void;
   // Pre-roll warm-up: begin playback this many ms BEFORE safe_start. Lets a caller start
   // the player off-screen to burn YouTube's title card on the throwaway lead-in, so the
@@ -31,11 +28,7 @@ interface TrailerPlayerProps {
 
 export const TITLE_CARD_BURN = 4000; // ms after video starts playing before revealing the content
 
-function makeYouTubeInject(unmuteAtMs: number | null, endMuteAtVideoSec: number | null) {
-  const unmuteDelayExpr = unmuteAtMs != null
-    ? `Math.max(0, ${unmuteAtMs} - Date.now())`
-    : '300';
-
+function makeYouTubeInject(burnMs: number, endMuteAtVideoSec: number | null) {
   return `
 if (!window.ReactNativeWebView) { window.ReactNativeWebView = { postMessage: function() {} }; }
 (function() {
@@ -49,7 +42,15 @@ if (!window.ReactNativeWebView) { window.ReactNativeWebView = { postMessage: fun
   var muted = false;
   var unmuted = false;
   var endMuted = false;
-  var playerReadyAt = 0;
+  // Confirm REAL playback (playhead advancing) before starting the unmute clock —
+  // mirrors TrailerPlayer's own startPlaybackProbe/markPlaying on the RN side, rather
+  // than anchoring to "window.player exists" (which can be seconds before frames
+  // actually roll on a slow connection). Both sides target the same burnMs duration,
+  // computed independently instead of communicated across the RN<->WebView bridge —
+  // that bridge (the 'mute' prop / postMessage) was tried before and found unreliable
+  // under load, so this never depends on it.
+  var lastTime = null;
+  var playbackConfirmedAt = 0;
 
   setInterval(function() {
     var skip = document.querySelector(
@@ -61,23 +62,9 @@ if (!window.ReactNativeWebView) { window.ReactNativeWebView = { postMessage: fun
 
     if (!window.player) return;
 
-    if (!playerReadyAt) {
-      playerReadyAt = Date.now();
-    }
-
     if (!muted && typeof window.player.mute === 'function') {
       window.player.mute();
       muted = true;
-    }
-
-    if (!unmuted && Date.now() - playerReadyAt >= ${TITLE_CARD_BURN}) {
-      unmuted = true;
-      setTimeout(function() {
-        if (typeof window.player.unMute === 'function') {
-          window.player.unMute();
-          window.player.setVolume(100);
-        }
-      }, ${unmuteDelayExpr});
     }
 
     ${endMuteAtVideoSec != null ? `
@@ -93,6 +80,26 @@ if (!window.ReactNativeWebView) { window.ReactNativeWebView = { postMessage: fun
       } catch (e) {}
     }` : ''}
   }, 100);
+
+  setInterval(function() {
+    if (unmuted || !window.player || typeof window.player.getCurrentTime !== 'function') return;
+    try {
+      var t = window.player.getCurrentTime();
+      if (typeof t !== 'number') return;
+      if (!playbackConfirmedAt && lastTime != null) {
+        var delta = t - lastTime;
+        if (delta > 0.2 && delta < 2) playbackConfirmedAt = Date.now();
+      }
+      lastTime = t;
+      if (playbackConfirmedAt && Date.now() - playbackConfirmedAt >= ${burnMs}) {
+        unmuted = true;
+        if (typeof window.player.unMute === 'function') {
+          window.player.unMute();
+          window.player.setVolume(100);
+        }
+      }
+    } catch (e) {}
+  }, 500);
 })();
 true;
 `;
@@ -101,7 +108,7 @@ true;
 // ── TrailerPlayer ─────────────────────────────────────────────────────────────
 
 export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>(
-  function TrailerPlayer({ movie, onEnded, onRevealed, onWindowCalculated, unmuteAfterMs, onPlaying, warmLeadMs }, ref) {
+  function TrailerPlayer({ movie, onEnded, onRevealed, onWindowCalculated, onPlaying, warmLeadMs }, ref) {
     const { width, height } = useWindowDimensions();
 
     const ratio    = 16 / 9;
@@ -157,16 +164,18 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
     // timer doesn't cut the window short when a lead-in is used.
     const duration = useDynamicWindow ? 40_000 : Math.max(safeEnd - playStart, 10) * 1000;
 
-    // Injection captured at mount so Date.now() reflects the actual mount time.
-    // End-mute uses video-time (seconds), aligned ~0.5s before our active end-trigger
-    // so audio fades out just before the screen switches.
-    const [youtubeInject] = useState(() => {
-      const now = Date.now();
-      return makeYouTubeInject(
-        unmuteAfterMs != null ? now + unmuteAfterMs : null,
-        useDynamicWindow ? null : safeEnd - 0.8,
-      );
-    });
+    // Reveal delay after CONFIRMED playback (probe/'playing' event) — must be at least
+    // leadSec so a pre-roll lead-in never reveals before the playhead reaches safeStart
+    // (spoiler leak). Shared by markPlaying()'s RN-side timer and the injected script's
+    // independent unmute timer, so both target the same duration off the same signal.
+    const burnMs = Math.max(TITLE_CARD_BURN, leadSec * 1000);
+
+    // Injected once at mount. End-mute uses video-time (seconds), aligned ~0.5s before
+    // our active end-trigger so audio fades out just before the screen switches.
+    const [youtubeInject] = useState(() => makeYouTubeInject(
+      burnMs,
+      useDynamicWindow ? null : safeEnd - 0.8,
+    ));
 
     useEffect(() => {
     }, []);
@@ -256,7 +265,6 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
       if (videoPlayingRef.current) return;
       videoPlayingRef.current = true;
       stopPlaybackProbe();
-      const burnMs = Math.max(TITLE_CARD_BURN, leadSec * 1000);
       log(`[CS] playback confirmed    t=${ms()}  → burn ${burnMs}ms`);
       onPlaying?.();
       if (fallbackRef.current) clearTimeout(fallbackRef.current);
