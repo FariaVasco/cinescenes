@@ -45,7 +45,10 @@ export async function llmExtractGuess(
       body: JSON.stringify({ transcript }),
     });
 
-    if (!res.ok) return empty;
+    if (!res.ok) {
+      Sentry.captureMessage(`llm-parse ${res.status}: ${(await res.text()).slice(0, 300)}`, 'error');
+      return empty;
+    }
 
     const data = await res.json();
     return {

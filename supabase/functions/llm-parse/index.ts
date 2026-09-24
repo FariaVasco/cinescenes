@@ -1,4 +1,6 @@
 const GROQ_KEY = Deno.env.get('GROQ_API_KEY');
+// Overridable via secret so a Groq model retirement doesn't need a redeploy.
+const MODEL = Deno.env.get('GROQ_PARSE_MODEL') ?? 'openai/gpt-oss-20b';
 
 Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') {
@@ -30,8 +32,10 @@ Deno.serve(async (req: Request) => {
       Authorization: `Bearer ${GROQ_KEY}`,
     },
     body: JSON.stringify({
-      model: 'llama-3.1-8b-instant',
-      max_tokens: 30,
+      model: MODEL,
+      // gpt-oss is a reasoning model: its reasoning tokens count toward max_tokens.
+      reasoning_effort: 'low',
+      max_tokens: 300,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: `Sentence: "${transcript}"` },
