@@ -127,9 +127,9 @@ export default function TriviaScreen() {
   const [swapping, setSwapping] = useState(false);
   const [phase, setPhase] = useState<'trailer' | 'question'>('trailer'); // per-rung: watch trailer, then answer
   // Persistent background trailer. `trailerIdx` LEADS `idx`: at Final Answer it jumps to
-  // the next question so that trailer burns off its YouTube title (muted) during the
-  // suspense+reveal window and is clean/ready by the time we show it. `trailerRevealed`
-  // gates a burn cover for when the warm window is shorter than TITLE_CARD_BURN (Q1/swap).
+  // the next question so that trailer loads (muted) during the suspense+reveal window and
+  // is ready by the time we show it. `trailerRevealed` gates the trailer's reveal for when
+  // the warm window is shorter than TITLE_CARD_BURN (Q1/swap).
   const [trailerIdx, setTrailerIdx] = useState(0);
   const [trailerRevealed, setTrailerRevealed] = useState(false);
   const trailerRef = useRef<TrailerPlayerHandle>(null);
@@ -298,9 +298,8 @@ export default function TriviaScreen() {
     if (selected === null || revealed || suspense) return;
     // Suspense beat: ticking-clock tension before the reveal (like the show).
     setSuspense(true);
-    // Warm the NEXT question's trailer in the background (muted) during suspense+reveal,
-    // so its YouTube title has burned off before we show it. We commit before knowing
-    // correctness (we need the full ~5s for the burn); a wrong answer just discards it.
+    // Warm the NEXT question's trailer in the background (muted) during suspense+reveal.
+    // We commit before knowing correctness; a wrong answer just discards it.
     if (idx + 1 < total) { setTrailerIdx(idx + 1); setTrailerRevealed(false); }
     try { tickSound.seekTo(0); tickSound.play(); } catch {}
     tickInterval.current = setInterval(() => { try { tickSound.seekTo(0); tickSound.play(); } catch {} }, 480);
@@ -475,7 +474,7 @@ export default function TriviaScreen() {
         </View>
       )}
 
-      {/* Trailer phase: burn cover until the title has cleared, plus Skip. */}
+      {/* Trailer phase, plus Skip. */}
       {showTrailer && (
         <>
           {!trailerRevealed && (
@@ -490,7 +489,6 @@ export default function TriviaScreen() {
         </>
       )}
 
-      {/* Question phase — opaque, so it fully hides the trailer warming the NEXT question. */}
       {showQuestion && (
       <SafeAreaView style={[st.screen, StyleSheet.absoluteFill]} edges={['top', 'bottom', 'left', 'right']}>
       <View style={st.body}>

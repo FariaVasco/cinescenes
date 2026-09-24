@@ -156,9 +156,6 @@ export default function GameScreen() {
   const [trailerRevealed, setTrailerRevealed] = useState(false);
   const [countdownDone, setCountdownDone] = useState(false);
   const [videoStarted, setVideoStarted] = useState(false);
-  // Milliseconds this device has been waiting for trailer playback to start.
-  // Drives the slow-connection message (~10s) and Retry button (~15s) shown
-  // while the cover is down — the cover itself only lifts on real playback.
   const [canSkipTrailer, setCanSkipTrailer] = useState(true);
   const skipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [readyToPlace, setReadyToPlace] = useState(false);
@@ -666,7 +663,7 @@ export default function GameScreen() {
   }, [currentTurn?.placed_interval]);
 
   // When the app returns from background during trailer playback the WebView freezes.
-  // Force-remount the player so it loads fresh — the title burn hides the restart.
+  // Force-remount the player so it loads fresh.
   // Only fires on devices that actually render the WebView (host, or any player in a
   // public game). Non-host players in private games have no WebView to unfreeze, and
   // resetting their state would hide the "I know it!" button that gates their placement.
@@ -2689,7 +2686,7 @@ export default function GameScreen() {
                 pull tab (measured — see measureCountdownGap):
                 Phase 1 — video-playing devices show a loading label while YouTube loads.
                 Phase 2 — once 'playing' fires (or immediately for non-video devices), show
-                           the accurate countdown keyed to TITLE_CARD_BURN. */}
+                           the countdown. */}
             {(() => {
               const indicatorBottom = insets.bottom + (myTimeline.length > 0 ? PULL_TAB_VISIBLE_H : 0) + 4;
               return (

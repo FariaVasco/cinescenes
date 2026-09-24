@@ -18,11 +18,10 @@ interface TrailerPlayerProps {
   onRevealed?: () => void;
   onWindowCalculated?: (start: number, end: number) => void;
   onPlaying?: () => void;
-  // Pre-roll warm-up: begin playback this many ms BEFORE safe_start. Lets a caller start
-  // the player off-screen to burn YouTube's title card on the throwaway lead-in, so the
-  // playhead reaches safe_start exactly when the trailer is revealed — the viewer then
-  // gets the full [safe_start, safe_end] window with no title-reintroducing seek.
-  // No effect on dynamic-window (unscanned) movies. Defaults to 0 (unchanged behaviour).
+  // Pre-roll warm-up: begin playback this many ms BEFORE safe_start, so the playhead
+  // reaches safe_start exactly when the trailer is revealed and the viewer gets the full
+  // [safe_start, safe_end] window. No effect on dynamic-window (unscanned) movies.
+  // Defaults to 0.
   warmLeadMs?: number;
 }
 
@@ -137,8 +136,7 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
     // Playback probe: watches the playhead advance to detect REAL playback,
     // covering both a missed 'playing' state event and slow networks where
     // 'ready' fires long before frames actually roll. The reveal is gated
-    // exclusively on confirmed playback — a non-playing player shows the
-    // video title (cued thumbnail / title overlay), which spoils the game.
+    // exclusively on confirmed playback.
     const probeRef         = useRef<ReturnType<typeof setInterval> | null>(null);
     const probeLastTimeRef = useRef<number | null>(null);
 
@@ -157,7 +155,7 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
     const END_TRIM_SEC = 2;
     const safeEnd      = useDynamicWindow ? rawSafeEnd : Math.max(rawSafeEnd - END_TRIM_SEC, safeStart + 10);
     // Pre-roll lead-in (scanned windows only): start `warmLeadMs` before safe_start so the
-    // title burns off-screen and the playhead reaches safe_start when the trailer is shown.
+    // playhead reaches safe_start when the trailer is shown.
     const leadSec  = warmLeadMs && !useDynamicWindow ? warmLeadMs / 1000 : 0;
     const playStart = Math.max(0, safeStart - leadSec);
     // Duration spans the ACTUAL playback (playStart→safeEnd) so the wall-clock backstop
@@ -165,9 +163,9 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
     const duration = useDynamicWindow ? 40_000 : Math.max(safeEnd - playStart, 10) * 1000;
 
     // Reveal delay after CONFIRMED playback (probe/'playing' event) — must be at least
-    // leadSec so a pre-roll lead-in never reveals before the playhead reaches safeStart
-    // (spoiler leak). Shared by markPlaying()'s RN-side timer and the injected script's
-    // independent unmute timer, so both target the same duration off the same signal.
+    // leadSec so a pre-roll lead-in never reveals before the playhead reaches safeStart.
+    // Shared by markPlaying()'s RN-side timer and the injected script's independent
+    // unmute timer, so both target the same duration off the same signal.
     const burnMs = Math.max(TITLE_CARD_BURN, leadSec * 1000);
 
     // Injected once at mount. End-mute uses video-time (seconds), aligned ~0.5s before
@@ -257,10 +255,10 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
     }
 
     // The single authority on "playback is really happening": notifies the game
-    // and starts the title-card burn from THIS moment. Nothing else reveals.
-    // The burn must last at least `leadSec` — playback started at playStart =
-    // safeStart - leadSec, so revealing any sooner than leadSec after confirmed
-    // playback would show the video before it reaches safeStart (spoiler leak).
+    // and starts the reveal delay from THIS moment. Nothing else reveals.
+    // The delay must last at least `leadSec` — playback started at playStart =
+    // safeStart - leadSec, so revealing any sooner would show the video before
+    // it reaches safeStart.
     function markPlaying() {
       if (videoPlayingRef.current) return;
       videoPlayingRef.current = true;
@@ -302,7 +300,7 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
           playerRef.current?.seekTo(replayStart, true);
           setPlaying(true);
           // Same invariant as first play: the probe (or 'playing' event)
-          // confirms playback, then the burn reveals — never a blind timer.
+          // confirms playback before the reveal — never a blind timer.
           startPlaybackProbe();
         }, 300);
       },
@@ -311,8 +309,7 @@ export const TrailerPlayer = forwardRef<TrailerPlayerHandle, TrailerPlayerProps>
     async function handleYouTubeReady() {
       // Ready ≠ playing: the player frame is loaded, but on a slow connection
       // frames may not roll for many seconds yet. Start the playhead probe —
-      // markPlaying (via probe or 'playing' event) is the only reveal trigger,
-      // so the cover can never lift onto a non-playing player.
+      // markPlaying (via probe or 'playing' event) is the only reveal trigger.
       startPlaybackProbe();
       if (useDynamicWindow) {
         skipEndTimerOnReady.current = true;

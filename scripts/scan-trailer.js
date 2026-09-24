@@ -38,7 +38,7 @@ const FRAMES_FPS         = 0.66;  // 1 frame every ~1.5s — balance between cov
 const MAX_CLIP_S         = 60;    // max safe window length (seconds)
 const MIN_CLIP_S         = 30;    // minimum useful window
 const BUFFER_S           = 2;     // seconds of padding around flagged segments
-const TAIL_BLOCK_S       = 15;    // always block the final N seconds — title card reliably appears here
+const TAIL_BLOCK_S       = 15;    // always block the final N seconds
 const VISION_MODEL       = 'meta-llama/llama-4-scout-17b-16e-instruct';
 const ENV_FILE           = path.join(__dirname, '../.env');
 
