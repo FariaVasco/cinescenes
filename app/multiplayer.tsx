@@ -92,6 +92,11 @@ export default function MultiplayerScreen() {
   // Tall columns get the spacious invite-card layout (header top, full-width
   // input, JOIN below); short ones keep the compact side-by-side row.
   const roomy = rightColH >= 260;
+  // The invite card always takes its natural height (so it can never be clipped) and the
+  // create card fills the rest; when that leftover is short, lay the create card out as a
+  // single row (icon beside title) so the column still ends flush with the public-games panel.
+  const [inviteH, setInviteH] = useState(0);
+  const createRow = inviteH > 0 && fitHeight !== undefined && fitHeight - inviteH - SP.sm < 76;
   // Shrink only as a last resort — k stays 1 while the compact layout fits.
   const k = fitHeight !== undefined && compactH > 0
     ? Math.max(0.5, Math.min(1, fitHeight / compactH))
@@ -333,16 +338,19 @@ export default function MultiplayerScreen() {
               }}
             >
             <TouchableOpacity
-              style={[styles.createCard, keyboardMode && styles.createCardCompact, !nameReady && styles.btnDisabled]}
+              style={[styles.createCard, createRow && styles.createCardRow, keyboardMode && styles.createCardCompact, !nameReady && styles.btnDisabled]}
               onPress={handleCreatePress}
               disabled={!nameReady}
               activeOpacity={0.85}
             >
-              <Image source={lcClapperboard} style={[styles.createIcon, shrink && shrink.createIcon]} />
-              <Text style={[styles.createTitle, shrink && shrink.createTitle]}>CREATE NEW GAME</Text>
+              <Image source={lcClapperboard} style={[styles.createIcon, createRow && styles.createIconRow, shrink && shrink.createIcon]} />
+              <Text style={[styles.createTitle, createRow && styles.createTitleRow, shrink && shrink.createTitle]}>CREATE NEW GAME</Text>
             </TouchableOpacity>
 
-            <View style={[styles.inviteCard, roomy && styles.inviteCardRoomy]}>
+            <View
+              style={[styles.inviteCard, roomy && styles.inviteCardRoomy]}
+              onLayout={(e) => setInviteH(Math.round(e.nativeEvent.layout.height))}
+            >
               <View style={styles.inviteHeader}>
                 <Image source={lcMovieTicket} style={[styles.inviteIcon, shrink && shrink.inviteIcon]} />
                 <Text style={[styles.inviteHeading, shrink && shrink.inviteHeading]}>HAVE A CODE?</Text>
@@ -565,18 +573,23 @@ const styles = StyleSheet.create({
     flex: 0,
     paddingVertical: 8,
   },
+  createCardRow: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingVertical: 8,
+  },
   createIcon: { width: 36, height: 36, resizeMode: 'contain' },
+  createIconRow: { width: 28, height: 28 },
   createTitle: {
     fontFamily: Fonts.display,
     fontSize: FS.md, color: C.ink, letterSpacing: 0.8,
     textAlign: 'center',
     marginTop: -4,
   },
+  createTitleRow: { marginTop: 0 },
 
-  // Invite-code card — same flex as the create card so the column splits evenly
-  // on tall screens; on tight screens both compress toward their content.
+  // Invite-code card — natural height; the create card above absorbs the leftover space.
   inviteCard: {
-    flex: 1,
     backgroundColor: C.surfaceWarm,
     borderRadius: R.card,
     borderWidth: 2,
@@ -608,7 +621,6 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   inviteRowRoomy: {
-    flex: 1,
     flexDirection: 'column',
     justifyContent: 'center',
     alignItems: 'stretch',

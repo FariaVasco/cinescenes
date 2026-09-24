@@ -111,14 +111,23 @@ export default function GameScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const timelinePaddingBottom = Math.max(80, 78 + insets.top - insets.bottom);
-  // The countdown overlay's "Choosing a movie…" / TrailerCountdown indicator sits in its
-  // own absolutely-positioned strip above the "My Timeline" pull tab (bottom: PULL_TAB_H+8,
-  // height TRAILER_INDICATOR_H) — but `timelinePaddingBottom` above was never sized to
-  // account for that strip, only for a generic bottom margin. On devices where insets.bottom
-  // is small (many Android phones in landscape — iOS's is usually larger, which happened to
-  // mask this), the timeline's centered content had less reserved clearance than the strip
-  // actually needs, so it rendered into it. Reserve the strip's real height here instead.
-  const countdownTimelinePaddingBottom = insets.bottom + PULL_TAB_H + 8 + TRAILER_INDICATOR_H + 12;
+  // The countdown overlay keeps the timeline exactly where the placing phase puts it (so
+  // nothing jumps when it fades out); the "Choosing a movie…" / countdown indicator is
+  // instead fitted into the measured gap between the timeline's bottom and the pull tab.
+  const countdownRootRef = useRef<View>(null);
+  const countdownTimelineRef = useRef<View>(null);
+  const [countdownGap, setCountdownGap] = useState<{ top: number } | null>(null);
+  function measureCountdownGap() {
+    const root = countdownRootRef.current;
+    const tl = countdownTimelineRef.current;
+    if (!root || !tl) return;
+    root.measureInWindow((_rx, rootY) => {
+      tl.measureInWindow((_tx, tlY, _tw, tlH) => {
+        const top = Math.round(tlY + tlH - rootY);
+        setCountdownGap((prev) => (prev?.top === top ? prev : { top }));
+      });
+    });
+  }
   const {
     game,
     activeMovies,
@@ -150,7 +159,6 @@ export default function GameScreen() {
   // Milliseconds this device has been waiting for trailer playback to start.
   // Drives the slow-connection message (~10s) and Retry button (~15s) shown
   // while the cover is down — the cover itself only lifts on real playback.
-  const [trailerStallMs, setTrailerStallMs] = useState(0);
   const [canSkipTrailer, setCanSkipTrailer] = useState(true);
   const skipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [readyToPlace, setReadyToPlace] = useState(false);
@@ -601,17 +609,6 @@ export default function GameScreen() {
     return () => clearInterval(id);
   }, [showIntro, amHost, players, myPlayerId]);
 
-  // Track how long this device has been waiting for the trailer to actually
-  // start playing (resets per turn and per Retry remount).
-  useEffect(() => {
-    if (!showsVideo || videoStarted) {
-      setTrailerStallMs(0);
-      return;
-    }
-    const startedAt = Date.now();
-    const id = setInterval(() => setTrailerStallMs(Date.now() - startedAt), 1000);
-    return () => clearInterval(id);
-  }, [showsVideo, videoStarted, currentTurn?.id, trailerKey]);
 
   // Trailer-end / placement-screen sync (private games): drives the active player
   // past the guess screen and coordinates the placed_interval=-1 handshake between
@@ -2663,15 +2660,16 @@ export default function GameScreen() {
       </Animated.View>
 
       {/* Countdown overlay — fades out when both gates open; always in tree so TrailerCountdown starts on mount */}
-      <Animated.View style={[StyleSheet.absoluteFillObject, { backgroundColor: C.bg, opacity: countdownFadeAnim }]}
+      <Animated.View ref={countdownRootRef} onLayout={measureCountdownGap}
+        style={[StyleSheet.absoluteFillObject, { backgroundColor: C.bg, opacity: countdownFadeAnim }]}
         pointerEvents={(countdownDone && trailerRevealed) ? 'none' : 'auto'}>
           <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
             <View style={styles.gameArea}>
-              <View style={[styles.timelineAreaFull, { paddingBottom: countdownTimelinePaddingBottom }]}>
+              <View style={[styles.timelineAreaFull, { paddingBottom: timelinePaddingBottom }]}>
                 <Text style={[styles.drawingTurnLabel, { color: activePlayerColor }]}>
                   {amActive ? 'Your turn' : `${activePlayer?.display_name}'s timeline`}
                 </Text>
-                <View style={{ minHeight: 148 }}>
+                <View ref={countdownTimelineRef} collapsable={false} onLayout={measureCountdownGap} style={{ minHeight: 148 }}>
                   {movie && (
                     <Timeline
                       timeline={drawingTimeline}
@@ -2687,50 +2685,35 @@ export default function GameScreen() {
                 </View>
               </View>
             </View>
-            {/* Two-phase bottom indicator:
+            {/* Two-phase bottom indicator, fitted into the gap between the timeline and the
+                pull tab (measured — see measureCountdownGap):
                 Phase 1 — video-playing devices show a loading label while YouTube loads.
                 Phase 2 — once 'playing' fires (or immediately for non-video devices), show
-                           the accurate countdown keyed to TITLE_CARD_BURN.
-                Fixed height (not auto-sized) so both phases anchor at the same screen
-                position — with `bottom` fixed and auto height, the taller "Choosing a
-                movie…" block (label + reserved stall row) pushed its own top edge higher
-                than TrailerCountdown's shorter single row, reaching up into the timeline
-                above it. The two phases never show at once, so sharing one fixed slot is safe. */}
-            <View style={{ position: 'absolute', bottom: PULL_TAB_H + 8, left: 0, right: 0, height: TRAILER_INDICATOR_H, alignItems: 'center' }}>
-              {showsVideo && !videoStarted ? (
-                // "Choosing a movie…" stays anchored on top; the stall info fades
-                // into a PRE-RESERVED slot below it (fixed height, single row), so
-                // nothing ever shifts and the block stays short enough for small
-                // landscape screens.
-                <View style={{ alignItems: 'center' }}>
-                  <ChoosingMovieLabel />
-                  <View style={{ height: 38, justifyContent: 'center' }}>
-                    {trailerStallMs > 10_000 && (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-                        <Text style={styles.trailerStallText}>
-                          Slow connection — still loading the trailer…
-                        </Text>
-                        {trailerStallMs > 15_000 && (
-                          <TouchableOpacity
-                            style={styles.trailerStallRetryBtn}
-                            onPress={() => setTrailerKey(k => k + 1)}
-                            activeOpacity={0.8}
-                          >
-                            <Text style={styles.trailerStallRetryText}>Retry </Text>
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                    )}
-                  </View>
+                           the accurate countdown keyed to TITLE_CARD_BURN. */}
+            {(() => {
+              const indicatorBottom = insets.bottom + (myTimeline.length > 0 ? PULL_TAB_VISIBLE_H : 0) + 4;
+              return (
+                <View
+                  style={[
+                    { position: 'absolute', left: 0, right: 0, bottom: indicatorBottom, alignItems: 'center', justifyContent: 'center' },
+                    countdownGap ? { top: countdownGap.top } : { height: 64 },
+                  ]}
+                >
+                  {showsVideo && !videoStarted ? (
+                    <ChoosingMovieIndicator
+                      key={`${currentTurn.id}-${trailerKey}`}
+                      onRetry={() => setTrailerKey(k => k + 1)}
+                    />
+                  ) : (
+                    <TrailerCountdown
+                      key={videoStarted ? 'started' : 'sync'}
+                      durationMs={showsVideo ? TITLE_CARD_BURN : remainingPreview}
+                      onExpire={() => setCountdownDone(true)}
+                    />
+                  )}
                 </View>
-              ) : (
-                <TrailerCountdown
-                  key={videoStarted ? 'started' : 'sync'}
-                  durationMs={showsVideo ? TITLE_CARD_BURN : remainingPreview}
-                  onExpire={() => setCountdownDone(true)}
-                />
-              )}
-            </View>
+              );
+            })()}
             {myTimeline.length > 0 && (
               <MyTimelinePanel timeline={myTimeline} cards={myTimelineCards} bottomInset={insets.bottom} screenHeight={screenHeight} />
             )}
@@ -3187,10 +3170,38 @@ function PlayerChips({ players, myId, topInset, rightInset, hasCastFab }: { play
   );
 }
 
-const PULL_TAB_H = 44;
-// Fixed height for the "Choosing a movie…" / TrailerCountdown indicator slot — tall
-// enough for the choosing-phase's label + reserved stall row (its taller content).
-const TRAILER_INDICATOR_H = 76;
+// "Choosing a movie…" until the trailer has stalled 10s, then swapped in place for the
+// slow-connection message (+ Retry after 15s). Owns its stall timer so it only counts
+// while actually on screen; remount (new turn / Retry) restarts it.
+function ChoosingMovieIndicator({ onRetry }: { onRetry: () => void }) {
+  const [stallMs, setStallMs] = useState(0);
+  const stallFade = useRef(new Animated.Value(0)).current;
+  const stalled = stallMs > 10_000;
+  useEffect(() => {
+    const startedAt = Date.now();
+    const id = setInterval(() => setStallMs(Date.now() - startedAt), 1000);
+    return () => clearInterval(id);
+  }, []);
+  useEffect(() => {
+    if (stalled) Animated.timing(stallFade, { toValue: 1, duration: 280, useNativeDriver: true }).start();
+  }, [stalled]);
+  if (!stalled) return <ChoosingMovieLabel />;
+  return (
+    <Animated.View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, opacity: stallFade }}>
+      <Text style={styles.trailerStallText} numberOfLines={1}>
+        Slow connection — still loading the trailer…
+      </Text>
+      {stallMs > 15_000 && (
+        <TouchableOpacity style={styles.trailerStallRetryBtn} onPress={onRetry} activeOpacity={0.8}>
+          <Text style={styles.trailerStallRetryText}>Retry </Text>
+        </TouchableOpacity>
+      )}
+    </Animated.View>
+  );
+}
+
+// Rendered height of the closed "My Timeline" pull tab (padding + handle + 8pt label).
+const PULL_TAB_VISIBLE_H = 28;
 
 function MyTimelinePanel({ timeline, cards, bottomInset, screenHeight }: {
   timeline: number[];
@@ -4466,8 +4477,8 @@ const styles = StyleSheet.create({
     borderRadius: R.btn,
     borderWidth: 2,
     borderColor: C.ink,
-    paddingHorizontal: 20,
-    paddingVertical: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 3,
   },
   trailerStallRetryText: {
     color: C.textOnOchre,
