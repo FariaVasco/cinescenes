@@ -27,5 +27,6 @@ If you no longer have access to the app, email [support@cinescenes.app](mailto:s
 - Your name and email address
 - Your game history and scores
 - Your account credentials
+- Your deck waitlist entry, if you joined it with your account or its email address
 
 Anonymised gameplay records (turns, scores) may be retained without any link to your identity, so other players' game histories remain intact.

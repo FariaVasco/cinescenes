@@ -32,6 +32,24 @@ Deno.serve(async (req: Request) => {
     .update({ user_id: null })
     .eq('user_id', user.id);
 
+  // Remove deck waitlist rows: everything linked to the account, plus any signup
+  // made with the account's email while signed out. Done before deleting the user
+  // (whose SET NULL would orphan them) and fatal on error, so a retry can finish it.
+  const { error: waitlistError } = await adminClient
+    .from('deck_waitlist')
+    .delete()
+    .eq('user_id', user.id);
+  const { error: waitlistEmailError } = user.email
+    ? await adminClient
+        .from('deck_waitlist')
+        .delete()
+        .eq('event', 'signup')
+        .eq('email', user.email.toLowerCase()) // the app stores signups lowercased
+    : { error: null };
+  if (waitlistError || waitlistEmailError) {
+    return new Response('Failed to delete account', { status: 500 });
+  }
+
   // Delete the auth user — CASCADE handles profiles, SET NULL handles feedback
   const { error: deleteError } = await adminClient.auth.admin.deleteUser(user.id);
   if (deleteError) {
