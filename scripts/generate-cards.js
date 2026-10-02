@@ -2,18 +2,24 @@
 /**
  * Cinescenes — Printable Card Generator
  *
- * Fetches all active movies from Supabase and outputs a print-ready HTML file
+ * Fetches all validated Classic-pool movies from Supabase and outputs a print-ready HTML file
  * with front + back sides for physical game cards.
  *
  * Usage:
- *   node scripts/generate-cards.js
+ *   node scripts/generate-cards.js           ← A4 sheets for home printing
+ *   node scripts/generate-cards.js --print   ← one PNG per card face for the print shop
  *
- * Output:
+ * Output (default):
  *   scripts/output/cards.html  ← open in browser → File → Print (A4, 100% scale)
+ *   Card size: 63 × 63 mm (square), 3 × 4 per A4 sheet (12 cards/page)
+ *   Printing:  Print fronts first, flip paper (long-edge), print backs
  *
- * Card size: 63 × 63 mm (square)
- * Grid:      3 × 4 per A4 sheet (12 cards/page)
- * Printing:  Print fronts first, flip paper (long-edge), print backs
+ * Output (--print):
+ *   scripts/output/print/NNN-front.png, NNN-back.png  ← upload to BoardGamesMaker
+ *   scripts/output/print/preview/                      ← first few cards with cut/safe guides
+ *   Product: 2.75" square cards (70 mm), rounded corners, unique front + back per card.
+ *   Each PNG is the 896 × 896 px full-bleed canvas from the template (see PRINT below). Renders with the
+ *   locally installed Google Chrome via puppeteer-core (override with CHROME_PATH).
  */
 
 'use strict';
@@ -28,6 +34,29 @@ const { createClient } = require('@supabase/supabase-js');
 const ENV_FILE    = path.join(__dirname, '../.env');
 const OUTPUT_DIR  = path.join(__dirname, 'output');
 const OUTPUT_FILE = path.join(OUTPUT_DIR, 'cards.html');
+const PRINT_DIR   = path.join(OUTPUT_DIR, 'print');
+
+// ── Print-shop spec (BoardGamesMaker 2.75" square) ────────────────────────────
+// Pixel sizes at 300 DPI, taken from BoardGamesMaker's 2.75" square template
+// (2_75square.pdf): full-bleed canvas 896 px, cut line 830 px, safe area 759 px.
+// Backgrounds run to the canvas edge; text, icons and the QR code stay inside
+// the safe area.
+
+const IN = 25.4; // mm per inch
+const PRINT = {
+  dpi:      300,
+  px:       896, // full-bleed canvas — the size of every uploaded PNG
+  cutPx:    830, // finished card after cutting
+  safePx:   759, // keep text and important elements inside this
+  cornerMm: 4,   // approximate rounded-corner radius, only used for preview guides
+};
+const pxToMm = px => (px / PRINT.dpi) * IN;
+PRINT.canvasIn = PRINT.px / PRINT.dpi;                         // 2.99"
+PRINT.canvasMm = pxToMm(PRINT.px);                             // ≈ 75.9 mm
+PRINT.bleedMm  = pxToMm((PRINT.px - PRINT.cutPx) / 2);         // ≈ 2.8 mm (canvas edge → cut)
+PRINT.insetMm  = pxToMm((PRINT.px - PRINT.safePx) / 2);        // ≈ 5.8 mm (canvas edge → safe)
+
+const PREVIEW_COUNT = 6;
 
 // ── Env ───────────────────────────────────────────────────────────────────────
 
@@ -172,6 +201,132 @@ function backHtml(movie, qrDataUrl, num) {
 </div>`;
 }
 
+// ── Card styles (shared by the A4 sheet and the print-shop export) ─────────────
+
+const CARD_CSS = `
+/* ── Card shell (square) ──────────────────────── */
+.card {
+  width: 63mm;
+  height: 63mm;
+  border-radius: 3.5mm;
+  overflow: hidden;
+  position: relative;
+  font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  outline: 0.25mm solid rgba(0,0,0,0.2);
+}
+
+/* ── Corner icons (shared) ────────────────────── */
+.ci {
+  position: absolute;
+  width: 7.5mm; height: 7.5mm;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.2);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 2;
+}
+.ci svg { width: 4.5mm; height: 4.5mm; display: block; }
+.ci-tl { top: 2mm;   left: 2mm;  }
+.ci-tr { top: 2mm;   right: 2mm; }
+/* bottom icons sit just above the strip / label */
+.ci-bl { bottom: 6mm; left: 2mm;  }
+.ci-br { bottom: 6mm; right: 2mm; }
+
+/* ── Front ────────────────────────────────────── */
+.front {
+  display: flex;
+  flex-direction: column;
+}
+.front-glow {
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse at 50% 50%, rgba(255,255,255,0.12) 0%, transparent 68%);
+  pointer-events: none; z-index: 0;
+}
+.front-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  /* top: clear icons (2mm + 7.5mm + 0.5mm gap = 10mm)
+     bottom: clear bottom icons (6mm) + strip (4.5mm) + 0.5mm gap = 11mm */
+  padding: 10mm 4mm 11mm;
+  position: relative; z-index: 1;
+}
+.f-dir {
+  font-size: 8pt;
+  font-weight: 600;
+  font-style: italic;
+  color: rgba(255,255,255,0.85);
+  text-align: center;
+  line-height: 1.35;
+}
+.f-year {
+  font-size: 44pt;
+  font-weight: 900;
+  color: #fff;
+  line-height: 1;
+  letter-spacing: -0.5pt;
+  text-align: center;
+  text-shadow: 0 3px 12px rgba(0,0,0,0.3);
+}
+.f-title {
+  font-size: 10pt;
+  font-weight: 700;
+  font-style: italic;
+  color: rgba(255,255,255,0.9);
+  text-align: center;
+  line-height: 1.35;
+}
+.front-strip {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 4.5mm;
+  background: rgba(0,0,0,0.28);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 4pt;
+  font-weight: 700;
+  color: rgba(255,255,255,0.45);
+  letter-spacing: 3pt;
+  border-radius: 0 0 3.5mm 3.5mm;
+  z-index: 1;
+}
+
+/* ── Back ─────────────────────────────────────── */
+.back {
+  background: #100a20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* back corner icons: subtle gold-tinted circle */
+.back .ci { background: rgba(245,197,24,0.1); }
+/* back bottom icons sit just above the number label */
+.back .ci-bl, .back .ci-br { bottom: 3.5mm; }
+.qr-box {
+  width: 40mm; height: 40mm;
+  background: #fff;
+  border-radius: 4mm;
+  padding: 2mm;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.5);
+  position: relative; z-index: 1;
+  /* shift up slightly to make room for number label */
+  margin-bottom: 4mm;
+}
+.qr-img { width: 36mm; height: 36mm; display: block; }
+.back-num {
+  position: absolute;
+  bottom: 1.5mm; left: 0; right: 0;
+  text-align: center;
+  font-size: 4pt;
+  font-weight: 600;
+  color: rgba(255,255,255,0.28);
+  letter-spacing: 1.5pt;
+  text-transform: uppercase;
+  z-index: 1;
+}
+`;
+
 // ── Full HTML document ────────────────────────────────────────────────────────
 
 function buildHtml(fronts, backs, total) {
@@ -227,127 +382,7 @@ function buildHtml(fronts, backs, total) {
       margin: 0 auto 24px;
     }
 
-    /* ── Card shell (square) ──────────────────────── */
-    .card {
-      width: 63mm;
-      height: 63mm;
-      border-radius: 3.5mm;
-      overflow: hidden;
-      position: relative;
-      font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
-      outline: 0.25mm solid rgba(0,0,0,0.2);
-    }
-
-    /* ── Corner icons (shared) ────────────────────── */
-    .ci {
-      position: absolute;
-      width: 7.5mm; height: 7.5mm;
-      border-radius: 50%;
-      background: rgba(0,0,0,0.2);
-      display: flex; align-items: center; justify-content: center;
-      z-index: 2;
-    }
-    .ci svg { width: 4.5mm; height: 4.5mm; display: block; }
-    .ci-tl { top: 2mm;   left: 2mm;  }
-    .ci-tr { top: 2mm;   right: 2mm; }
-    /* bottom icons sit just above the strip / label */
-    .ci-bl { bottom: 6mm; left: 2mm;  }
-    .ci-br { bottom: 6mm; right: 2mm; }
-
-    /* ── Front ────────────────────────────────────── */
-    .front {
-      display: flex;
-      flex-direction: column;
-    }
-    .front-glow {
-      position: absolute; inset: 0;
-      background: radial-gradient(ellipse at 50% 50%, rgba(255,255,255,0.12) 0%, transparent 68%);
-      pointer-events: none; z-index: 0;
-    }
-    .front-body {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: space-between;
-      /* top: clear icons (2mm + 7.5mm + 0.5mm gap = 10mm)
-         bottom: clear bottom icons (6mm) + strip (4.5mm) + 0.5mm gap = 11mm */
-      padding: 10mm 4mm 11mm;
-      position: relative; z-index: 1;
-    }
-    .f-dir {
-      font-size: 8pt;
-      font-weight: 600;
-      font-style: italic;
-      color: rgba(255,255,255,0.85);
-      text-align: center;
-      line-height: 1.35;
-    }
-    .f-year {
-      font-size: 44pt;
-      font-weight: 900;
-      color: #fff;
-      line-height: 1;
-      letter-spacing: -0.5pt;
-      text-align: center;
-      text-shadow: 0 3px 12px rgba(0,0,0,0.3);
-    }
-    .f-title {
-      font-size: 10pt;
-      font-weight: 700;
-      font-style: italic;
-      color: rgba(255,255,255,0.9);
-      text-align: center;
-      line-height: 1.35;
-    }
-    .front-strip {
-      position: absolute;
-      bottom: 0; left: 0; right: 0;
-      height: 4.5mm;
-      background: rgba(0,0,0,0.28);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 4pt;
-      font-weight: 700;
-      color: rgba(255,255,255,0.45);
-      letter-spacing: 3pt;
-      border-radius: 0 0 3.5mm 3.5mm;
-      z-index: 1;
-    }
-
-    /* ── Back ─────────────────────────────────────── */
-    .back {
-      background: #100a20;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    /* back corner icons: subtle gold-tinted circle */
-    .back .ci { background: rgba(245,197,24,0.1); }
-    /* back bottom icons sit just above the number label */
-    .back .ci-bl, .back .ci-br { bottom: 3.5mm; }
-    .qr-box {
-      width: 40mm; height: 40mm;
-      background: #fff;
-      border-radius: 4mm;
-      padding: 2mm;
-      display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.5);
-      position: relative; z-index: 1;
-      /* shift up slightly to make room for number label */
-      margin-bottom: 4mm;
-    }
-    .qr-img { width: 36mm; height: 36mm; display: block; }
-    .back-num {
-      position: absolute;
-      bottom: 1.5mm; left: 0; right: 0;
-      text-align: center;
-      font-size: 4pt;
-      font-weight: 600;
-      color: rgba(255,255,255,0.28);
-      letter-spacing: 1.5pt;
-      text-transform: uppercase;
-      z-index: 1;
-    }
+    ${CARD_CSS}
 
     /* ── Print ────────────────────────────────────── */
     @media print {
@@ -384,9 +419,117 @@ ${pages(bp, 'backs')}
 </html>`;
 }
 
+// ── Print-shop export ─────────────────────────────────────────────────────────
+// Same card markup as the A4 sheet, re-laid-out on the full-bleed canvas: the card
+// shell grows to the canvas, backgrounds/strip extend into the bleed, and every
+// positioned element is pushed inside the safe area. Sizes are scaled up ~10% from
+// the 63 mm design since the cut card is 70 mm.
+
+function printCss() {
+  const c = PRINT.canvasMm;
+  const s = PRINT.insetMm;              // safe inset from canvas edge
+  const strip = s + 4.5;                // strip runs from the bleed edge up to 4.5 mm above safe
+  return `
+    html, body { margin: 0; padding: 0; background: transparent; }
+    body {
+      width: ${c}mm; height: ${c}mm; overflow: hidden;
+      zoom: ${Math.ceil(PRINT.canvasIn * 96) / (PRINT.canvasIn * 96)};
+    }
+
+    .print .card {
+      width: ${c}mm; height: ${c}mm;
+      border-radius: 0; outline: none;
+    }
+    .print .ci { width: 8mm; height: 8mm; }
+    .print .ci svg { width: 4.8mm; height: 4.8mm; }
+    .print .ci-tl { top: ${s}mm; left: ${s}mm; }
+    .print .ci-tr { top: ${s}mm; right: ${s}mm; }
+    .print .ci-bl { bottom: ${strip + 1.5}mm; left: ${s}mm; }
+    .print .ci-br { bottom: ${strip + 1.5}mm; right: ${s}mm; }
+
+    .print .front-body { padding: ${s + 8.5}mm ${s + 1}mm ${strip + 6.5}mm; }
+    .print .f-dir   { font-size: 9pt; }
+    .print .f-year  { font-size: 49pt; }
+    .print .f-title { font-size: 11pt; }
+    .print .front-strip {
+      height: ${strip}mm;
+      padding-bottom: ${s}mm;
+      border-radius: 0;
+      font-size: 4.5pt;
+    }
+
+    .print .back .ci-bl, .print .back .ci-br { bottom: ${s}mm; }
+    .print .qr-box { width: 44mm; height: 44mm; padding: 2.2mm; border-radius: 4.4mm; margin-bottom: 4.4mm; }
+    .print .qr-img { width: 39.6mm; height: 39.6mm; image-rendering: pixelated; }
+    .print .back-num { bottom: ${s + 1.5}mm; font-size: 4.5pt; }
+
+    /* Preview-only guides: bleed edge = canvas edge, cut line, safe area. */
+    .guide { position: absolute; z-index: 10; pointer-events: none; }
+    .guide-cut  { inset: ${PRINT.bleedMm}mm; border: 0.3mm solid #00e5ff; border-radius: ${PRINT.cornerMm}mm; }
+    .guide-safe { inset: ${s}mm; border: 0.3mm dashed #ff2d55; }
+  `;
+}
+
+function printDocHtml(cardHtml, withGuides) {
+  const guides = withGuides
+    ? '<div class="guide guide-cut"></div><div class="guide guide-safe"></div>'
+    : '';
+  return `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+${CARD_CSS}
+${printCss()}
+</style></head>
+<body class="print"><div style="position:relative">${cardHtml}${guides}</div></body></html>`;
+}
+
+function chromePath() {
+  const candidates = [
+    process.env.CHROME_PATH,
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '/usr/bin/google-chrome',
+    '/usr/bin/chromium',
+  ].filter(Boolean);
+  const found = candidates.find(p => fs.existsSync(p));
+  if (!found) { console.error('Google Chrome not found — set CHROME_PATH'); process.exit(1); }
+  return found;
+}
+
+async function renderPrintPngs(faces) {
+  const puppeteer = require('puppeteer-core');
+  const browser = await puppeteer.launch({ executablePath: chromePath(), headless: true });
+  try {
+    const page = await browser.newPage();
+    // CSS px are 1/96": size the viewport to the canvas and scale to hit 300 DPI.
+    // The mm-based canvas isn't a whole number of CSS px, so use a whole-px viewport
+    // and zoom the layout by the remainder (see printCss) — the PNG is then exactly
+    // PRINT.px square.
+    const viewPx = Math.ceil(PRINT.canvasIn * 96);
+    await page.setViewport({ width: viewPx, height: viewPx, deviceScaleFactor: PRINT.px / viewPx });
+
+    fs.rmSync(PRINT_DIR, { recursive: true, force: true });
+    fs.mkdirSync(path.join(PRINT_DIR, 'preview'), { recursive: true });
+
+    for (let i = 0; i < faces.length; i++) {
+      const { name, html } = faces[i];
+      process.stdout.write(`  [${String(i + 1).padStart(4)}/${faces.length}] ${name}\r`);
+      await page.setContent(printDocHtml(html, false), { waitUntil: 'load' });
+      await page.screenshot({ path: path.join(PRINT_DIR, `${name}.png`) });
+      if (i < PREVIEW_COUNT * 2) {
+        await page.setContent(printDocHtml(html, true), { waitUntil: 'load' });
+        await page.screenshot({ path: path.join(PRINT_DIR, 'preview', `${name}.png`) });
+      }
+    }
+    process.stdout.write('\n');
+  } finally {
+    await browser.close();
+  }
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
+  const printMode = process.argv.includes('--print');
   const env = loadEnv();
   const url = env['EXPO_PUBLIC_SUPABASE_URL'];
   const key = env['EXPO_PUBLIC_SUPABASE_ANON_KEY'];
@@ -394,15 +537,19 @@ async function main() {
 
   const supabase = createClient(url, key);
 
-  console.log('Fetching active movies from Supabase…');
-  const { data: movies, error } = await supabase
+  console.log('Fetching validated Classic-pool movies from Supabase…');
+  const { data: allMovies, error } = await supabase
     .from('movies')
     .select('id, title, year, director')
     .eq('scan_status', 'validated')
+    .eq('classic_pool', true)
     .order('year', { ascending: true });
 
   if (error) { console.error('Supabase error:', error.message); process.exit(1); }
-  if (!movies?.length) { console.error('No active movies found'); process.exit(1); }
+  // --limit N renders only the first N cards (quick test runs).
+  const limitArg = process.argv.indexOf('--limit');
+  const movies = limitArg > -1 ? allMovies?.slice(0, Number(process.argv[limitArg + 1])) : allMovies;
+  if (!movies?.length) { console.error('No validated Classic-pool movies found'); process.exit(1); }
 
   console.log(`Found ${movies.length} movies. Generating QR codes…`);
 
@@ -416,7 +563,7 @@ async function main() {
     const qr = await QRCode.toDataURL(`cinescenes://movie/${movie.id}`, {
       errorCorrectionLevel: 'M',
       margin: 1,
-      width: 500, // ~270 DPI at 44mm print size — plenty for scanning
+      width: 600, // ≥300 DPI at the ~40 mm print size — plenty for scanning
       color: { dark: '#0a0a14', light: '#ffffff' },
     });
 
@@ -425,6 +572,23 @@ async function main() {
   }
 
   process.stdout.write('\n');
+
+  if (printMode) {
+    const pad = n => String(n).padStart(3, '0');
+    const faces = [];
+    for (let i = 0; i < movies.length; i++) {
+      faces.push({ name: `${pad(i + 1)}-front`, html: fronts[i] });
+      faces.push({ name: `${pad(i + 1)}-back`,  html: backs[i] });
+    }
+    console.log(`Rendering ${faces.length} PNGs (${PRINT.px} × ${PRINT.px} px, ${PRINT.dpi} DPI)…`);
+    await renderPrintPngs(faces);
+    console.log(`\n✓  ${movies.length} cards → ${PRINT_DIR}`);
+    console.log(`   ${faces.length} files: NNN-front.png + NNN-back.png (same number = same card)`);
+    console.log(`   Guide previews for the first ${PREVIEW_COUNT} cards → ${path.join(PRINT_DIR, 'preview')}`);
+    console.log('   Upload the main folder only — the previews show the cut/safe lines.');
+    return;
+  }
+
   console.log('Building HTML…');
 
   if (!fs.existsSync(OUTPUT_DIR)) fs.mkdirSync(OUTPUT_DIR, { recursive: true });

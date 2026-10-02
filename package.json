@@ -75,6 +75,7 @@
     "@types/jest": "^30.0.0",
     "@types/react": "~19.1.0",
     "jest": "^30.3.0",
+    "puppeteer-core": "^24.43.1",
     "qrcode": "^1.5.4",
     "ts-jest": "^29.4.6",
     "typescript": "~5.9.2"
