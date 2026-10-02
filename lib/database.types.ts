@@ -224,6 +224,31 @@ export interface Database {
         };
         Update: Partial<Database['public']['Tables']['feedback']['Insert']>;
       };
+      deck_waitlist: {
+        Row: {
+          id: string;
+          event: 'tap' | 'signup';
+          email: string | null;
+          user_id: string | null;
+          app_version: string | null;
+          platform: 'ios' | 'android' | 'web' | null;
+          locale: string | null;
+          device_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          event: 'tap' | 'signup';
+          email?: string | null;
+          user_id?: string | null;
+          app_version?: string | null;
+          platform?: 'ios' | 'android' | 'web' | null;
+          locale?: string | null;
+          device_id?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['deck_waitlist']['Insert']>;
+      };
       app_config: {
         Row: {
           id: number;

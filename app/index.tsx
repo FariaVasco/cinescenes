@@ -22,6 +22,7 @@ import { presentCustomerCenter } from '@/lib/revenuecat';
 import * as Sentry from '@sentry/react-native';
 import { RulesCarousel } from '@/components/RulesCarousel';
 import { FeedbackSheet } from '@/components/FeedbackSheet';
+import { DeckWaitlistSheet, logDeckTap } from '@/components/DeckWaitlistSheet';
 
 const lcLogo            = require('@/assets/lc-logo-without-background.png');
 const lcClapperboard    = require('@/assets/lc-clapperboard.png');
@@ -38,7 +39,14 @@ type MenuView = 'play' | 'rules' | 'settings';
 export default function LandingScreen() {
   const [view, setView] = useState<MenuView>('play');
   const [feedbackVisible, setFeedbackVisible] = useState(false);
-  const { setActiveMovies } = useAppStore();
+  const [deckVisible, setDeckVisible] = useState(false);
+  const { setActiveMovies, authUser } = useAppStore();
+  const router = useRouter();
+
+  function handleDeckPress() {
+    logDeckTap(authUser?.id ?? null);
+    setDeckVisible(true);
+  }
 
   useFocusEffect(
     useCallback(() => {
@@ -63,12 +71,17 @@ export default function LandingScreen() {
       <View style={styles.row}>
         <SideMenu view={view} setView={setView} onFeedback={() => setFeedbackVisible(true)} />
         <View style={styles.right}>
-          {view === 'play' && <PlayView />}
+          {view === 'play' && <PlayView onDeck={handleDeckPress} />}
           {view === 'rules' && <RulesView />}
           {view === 'settings' && <SettingsView />}
         </View>
       </View>
       <FeedbackSheet visible={feedbackVisible} onClose={() => setFeedbackVisible(false)} />
+      <DeckWaitlistSheet
+        visible={deckVisible}
+        onClose={() => setDeckVisible(false)}
+        onHaveDeck={() => { setDeckVisible(false); router.push('/scanner'); }}
+      />
     </SafeAreaView>
   );
 }
@@ -136,7 +149,7 @@ function MenuItem({ icon, image, label, active, compact, onPress }: { icon?: str
 
 // ── Right panel: Play ───────────────────────────────────────────────────────
 
-function PlayView() {
+function PlayView({ onDeck }: { onDeck: () => void }) {
   const router = useRouter();
   const [gridH, setGridH] = useState(0);
   const [imageKey, setImageKey] = useState(0);
@@ -177,8 +190,9 @@ function PlayView() {
             key={`deck-${imageKey}`}
             label="USE DECK"
             image={lcFriendsCardsW}
-            onPress={() => router.push('/scanner')}
+            onPress={onDeck}
             style={{ width: wideW, height: square }}
+            badge
           />
         </View>
       </View>
@@ -186,7 +200,9 @@ function PlayView() {
   );
 }
 
-function ModeCard({ label, image, onPress, style, comingSoon }: { label: string; image: any; onPress: () => void; style?: any; comingSoon?: boolean }) {
+// `comingSoon` dims and disables the card; `badge` shows the same COMING SOON
+// tag but keeps the card tappable (e.g. to open a waitlist).
+function ModeCard({ label, image, onPress, style, comingSoon, badge }: { label: string; image: any; onPress: () => void; style?: any; comingSoon?: boolean; badge?: boolean }) {
   return (
     <TouchableOpacity
       activeOpacity={0.85}
@@ -198,7 +214,7 @@ function ModeCard({ label, image, onPress, style, comingSoon }: { label: string;
       <View style={styles.modeLabelBand}>
         <Text style={styles.modeLabel}>{label}</Text>
       </View>
-      {comingSoon && (
+      {(comingSoon || badge) && (
         <View style={styles.comingSoonBadge}>
           <Text style={styles.comingSoonText}>COMING SOON</Text>
         </View>
