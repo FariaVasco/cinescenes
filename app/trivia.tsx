@@ -91,7 +91,9 @@ function withShuffledOptions(q: Q): Q {
   };
 }
 
-const SELECT_COLS = 'id,question,options,correct_index,difficulty_band,difficulty_score,category,movies(*)';
+const SELECT_COLS = 'id,question,options,correct_index,difficulty_band,difficulty_score,category,movies!inner(*)';
+// Same playable set multiplayer uses — skips questions whose trailer is flagged or unusable.
+const PLAYABLE_SCAN_STATUSES = ['validated', 'unvalidated'];
 function mapRow(r: any): Q {
   return {
     id: r.id, question: r.question, options: r.options, correct_index: r.correct_index,
@@ -171,10 +173,13 @@ export default function TriviaScreen() {
 
   useEffect(() => {
     (async () => {
+      // Load the whole playable bank (no limit) so every question can appear — an
+      // unordered limit returned the same subset each time. Supabase caps responses at
+      // 1000 rows by default; paginate if the bank grows past that.
       const { data, error } = await db
         .from('trivia_questions')
         .select(SELECT_COLS)
-        .limit(200);
+        .in('movies.scan_status', PLAYABLE_SCAN_STATUSES);
       if (error) { setError(error.message); setLoading(false); return; }
       const all: Q[] = (data ?? []).map((r: any) => withShuffledOptions(mapRow(r)));
       // At most one question per movie in a run — a film never repeats within a game (the
@@ -365,6 +370,7 @@ export default function TriviaScreen() {
     // about a film that's already appeared this game.
     const usedMovies = new Set(questions.map(x => x.movie?.id).filter(Boolean) as string[]);
     const { data } = await db.from('trivia_questions').select(SELECT_COLS)
+      .in('movies.scan_status', PLAYABLE_SCAN_STATUSES)
       .eq('difficulty_band', q.difficulty_band).limit(30);
     const pool = ((data ?? []) as any[]).map(mapRow)
       .filter((x: Q) => !usedIds.has(x.id) && !usedMovies.has(x.movie?.id ?? ''));
